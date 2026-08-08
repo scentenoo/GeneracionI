@@ -6,6 +6,10 @@ from ui.login_screen import LoginScreen
 from ui.home_screen import HomeScreen
 from ui.planeacion_screen import PlaneacionScreen
 from ui.dashboard_screen import DashboardScreen
+from ui.informe_screen import InformeScreen
+from ui.grupo_screen import GrupoScreen
+from ui.usuario_screen import UsuarioScreen
+from ui.password_screen import PasswordScreen
 
 
 class App(ctk.CTk):
@@ -42,6 +46,10 @@ class App(ctk.CTk):
             self.sesion,
             on_nueva_planeacion=self._mostrar_planeacion,
             on_dashboard=self._mostrar_dashboard,
+            on_informe=self._mostrar_informe,
+            on_grupo=self._mostrar_grupo,
+            on_crear_usuario=self._mostrar_crear_usuario,
+            on_cambiar_password=self._mostrar_password,
         )
         self.pantalla_actual.pack(fill="both", expand=True)
 
@@ -53,4 +61,24 @@ class App(ctk.CTk):
     def _mostrar_dashboard(self):
         self._limpiar()
         self.pantalla_actual = DashboardScreen(self, self.sesion, on_volver=self._mostrar_home)
+        self.pantalla_actual.pack(fill="both", expand=True)
+
+    def _mostrar_informe(self):
+        self._limpiar()
+        self.pantalla_actual = InformeScreen(self, self.sesion, on_volver=self._mostrar_home)
+        self.pantalla_actual.pack(fill="both", expand=True)
+
+    def _mostrar_grupo(self):
+        self._limpiar()
+        self.pantalla_actual = GrupoScreen(self, self.sesion, on_volver=self._mostrar_home)
+        self.pantalla_actual.pack(fill="both", expand=True)
+
+    def _mostrar_crear_usuario(self):
+        self._limpiar()
+        self.pantalla_actual = UsuarioScreen(self, self.sesion, on_volver=self._mostrar_home)
+        self.pantalla_actual.pack(fill="both", expand=True)
+
+    def _mostrar_password(self):
+        self._limpiar()
+        self.pantalla_actual = PasswordScreen(self, self.sesion, on_volver=self._mostrar_home)
         self.pantalla_actual.pack(fill="both", expand=True)
