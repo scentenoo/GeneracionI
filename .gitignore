@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+
+# PyInstaller
+*.spec.bak
+
+# Node / clasp
+node_modules/
+.clasp.json
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Secretos locales (tokens, credenciales de prueba)
+*.env
+.env.*
+credentials*.json
+token*.json

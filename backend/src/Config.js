@@ -1,0 +1,49 @@
+/**
+ * Configuración central del backend. Los IDs reales de Sheet/Drive se
+ * guardan en Script Properties (Project Settings > Script properties en el
+ * editor de Apps Script), nunca hardcodeados aquí, para no exponerlos en git.
+ */
+
+const SHEET_NAMES = {
+  USUARIOS: 'Usuarios',
+  PLANEACIONES: 'Planeaciones',
+  ESTUDIANTES: 'Estudiantes',
+  HORAS_GESTION: 'HorasGestion',
+  HISTORIAL: 'Historial',
+  CONFIG: 'Config',
+};
+
+const ROLES = {
+  DOCENTE: 'docente',
+  DIRECTIVO: 'directivo',
+  AMBOS: 'ambos',
+};
+
+/** Token de sesión propio de la app (no OAuth de Google). Vive en cache, no en Sheets. */
+const SESSION_TTL_SECONDS = 60 * 60 * 8; // 8 horas, cubre una jornada
+
+function getScriptProperty_(key) {
+  const value = PropertiesService.getScriptProperties().getProperty(key);
+  if (!value) {
+    throw new Error(
+      `Falta la Script Property "${key}". Configúrala en Project Settings > Script properties.`
+    );
+  }
+  return value;
+}
+
+function getSpreadsheet_() {
+  return SpreadsheetApp.openById(getScriptProperty_('SHEET_ID'));
+}
+
+function getDriveRootFolder_() {
+  return DriveApp.getFolderById(getScriptProperty_('DRIVE_ROOT_FOLDER_ID'));
+}
+
+/** Subcarpeta dentro de la raíz dedicada, se crea si no existe. */
+function getOrCreateDriveSubfolder_(name) {
+  const root = getDriveRootFolder_();
+  const existing = root.getFoldersByName(name);
+  if (existing.hasNext()) return existing.next();
+  return root.createFolder(name);
+}

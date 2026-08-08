@@ -1,0 +1,15 @@
+{
+  "name": "generacion-i-backend",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Backend Apps Script para la app de planeaciones de Generación-i",
+  "scripts": {
+    "login": "clasp login",
+    "push": "clasp push",
+    "pull": "clasp pull",
+    "open": "clasp open-script"
+  },
+  "devDependencies": {
+    "@google/clasp": "^3.0.0"
+  }
+}
