@@ -48,5 +48,13 @@ class ListaDinamica(ctk.CTkFrame):
         if self.on_change:
             self.on_change()
 
+    def limpiar(self):
+        """Vacía la lista y deja una fila en blanco, sin tocar el orden de
+        empaquetado del contenedor."""
+        for w in self.contenedor.winfo_children():
+            w.destroy()
+        self.filas = []
+        self.agregar_fila()
+
     def valores(self) -> list[str]:
         return [e.get().strip() for e in self.filas if e.get().strip()]

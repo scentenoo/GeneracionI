@@ -122,10 +122,11 @@ class PlaneacionesDocenteScreen(ctk.CTkScrollableFrame):
         self.fecha_entry.insert(0, p["fecha"][:10])
         self.fecha_entry.pack(fill="x", pady=(2, 8))
 
-        ctk.CTkLabel(self.contenido, text="Grupo").pack(anchor="w")
-        self.grupo_entry = ctk.CTkEntry(self.contenido)
-        self.grupo_entry.insert(0, p["grupo"])
-        self.grupo_entry.pack(fill="x", pady=(2, 8))
+        # El curso no se edita acá: viene de la asignación del docente y
+        # cambiarlo movería la planeación de curso, con su asistencia y todo.
+        ctk.CTkLabel(
+            self.contenido, text=f"Curso: {p.get('grupo') or '—'}", text_color="gray"
+        ).pack(anchor="w", pady=(2, 8))
 
         ctk.CTkLabel(self.contenido, text="Objetivo").pack(anchor="w")
         self.objetivo_box = ctk.CTkTextbox(self.contenido, height=70)
@@ -155,6 +156,7 @@ class PlaneacionesDocenteScreen(ctk.CTkScrollableFrame):
         bloque = BloqueEditor(self.bloques_contenedor, len(self.bloques) + 1, self._quitar_bloque)
         if datos:
             bloque.momento_entry.insert(0, datos.get("momento", ""))
+            bloque.minutos_entry.insert(0, str(datos.get("minutos", "") or ""))
             bloque.observacion.set(datos.get("observacion", ""))
             bloque.avance.set(datos.get("avance", ""))
         bloque.pack(fill="x", pady=6)
@@ -169,7 +171,6 @@ class PlaneacionesDocenteScreen(ctk.CTkScrollableFrame):
     def _guardar(self):
         cambios = {
             "fecha": self.fecha_entry.get().strip(),
-            "grupo": self.grupo_entry.get().strip(),
             "objetivo": self.objetivo_box.get("1.0", "end").strip(),
             "temas_vistos": self.temas_lista.valores(),
             "bloques": [b.a_dict() for b in self.bloques],

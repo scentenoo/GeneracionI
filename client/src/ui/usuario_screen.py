@@ -8,7 +8,11 @@ from typing import Callable
 import customtkinter as ctk
 
 import api_client
-from ui.usuario_form_fields import construir_campos_perfil, leer_campos_perfil
+from ui.usuario_form_fields import (
+    construir_campos_perfil,
+    leer_campos_perfil,
+    limpiar_campos_perfil,
+)
 
 ROLES = ["docente", "directivo", "ambos"]
 
@@ -32,9 +36,17 @@ class UsuarioScreen(ctk.CTkScrollableFrame):
                      text_color="gray").pack(anchor="w", pady=(16, 4))
         self.campos_perfil = construir_campos_perfil(self)
 
+        ctk.CTkLabel(
+            self,
+            text="Los cursos se asignan aparte, en la pantalla de Cursos.",
+            text_color="gray",
+            font=ctk.CTkFont(size=11),
+        ).pack(anchor="w", pady=(10, 0))
+
         self.error_label = ctk.CTkLabel(self, text="", text_color="#c0392b", wraplength=450, justify="left")
         self.error_label.pack(fill="x", pady=(16, 4))
-        ctk.CTkButton(self, text="Crear usuario", command=self._crear).pack(pady=10)
+        self.crear_boton = ctk.CTkButton(self, text="Crear usuario", command=self._crear)
+        self.crear_boton.pack(pady=10)
 
     def _campo(self, etiqueta: str) -> ctk.CTkEntry:
         ctk.CTkLabel(self, text=etiqueta, anchor="w").pack(fill="x", pady=(8, 0))
@@ -55,12 +67,23 @@ class UsuarioScreen(ctk.CTkScrollableFrame):
             **leer_campos_perfil(self.campos_perfil),
         }
 
+        self.crear_boton.configure(state="disabled")
+        self.error_label.configure(text="Creando...", text_color="gray")
+        self.update_idletasks()
         try:
             resultado = api_client.crear_usuario(self.sesion["token"], datos)
         except api_client.ApiError as exc:
             self.error_label.configure(text=str(exc), text_color="#c0392b")
             return
+        finally:
+            self.crear_boton.configure(state="normal")
 
-        self.error_label.configure(text=f"Usuario creado (id {resultado['id']}) ✓", text_color="#2fa84f")
+        nombre_creado = datos["nombre"]
+        self.nombre_entry.delete(0, "end")
         self.usuario_entry.delete(0, "end")
         self.password_entry.delete(0, "end")
+        limpiar_campos_perfil(self.campos_perfil)
+
+        self.error_label.configure(
+            text=f"{nombre_creado} creado (id {resultado['id']}) ✓", text_color="#2fa84f"
+        )

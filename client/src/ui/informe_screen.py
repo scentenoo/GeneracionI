@@ -39,20 +39,28 @@ class InformeScreen(ctk.CTkScrollableFrame):
         self.mes_entry.insert(0, date_utils.hoy_iso()[:7])
         self.mes_entry.pack(anchor="w", pady=(2, 10))
 
-        self.docente_id = self.sesion["id"]
-        if self.sesion["rol"] == "directivo":
-            # un directivo puro genera el informe de otro docente, no el suyo
-            ctk.CTkLabel(self, text="Docente").pack(anchor="w")
-            try:
-                docentes = [
-                    u for u in api_client.listar_usuarios(self.sesion["token"])
-                    if u["rol"] in ("docente", "ambos")
-                ]
-            except api_client.ApiError:
-                docentes = []
-            self._docentes_por_nombre = {d["nombre"]: d["id"] for d in docentes}
-            self.docente_menu = ctk.CTkOptionMenu(self, values=list(self._docentes_por_nombre) or ["(sin docentes)"])
-            self.docente_menu.pack(anchor="w", pady=(2, 10))
+        # El informe va por curso: quien tiene dos cursos entrega dos.
+        ctk.CTkLabel(self, text="Curso").pack(anchor="w")
+        self._cursos_por_etiqueta: dict[str, dict] = {}
+        try:
+            if self.es_directivo:
+                cursos = api_client.listar_todos_los_cursos(self.sesion["token"])
+                usuarios = {u["id"]: u["nombre"] for u in api_client.listar_usuarios(self.sesion["token"])}
+                self._cursos_por_etiqueta = {
+                    f"{c['nombre']} — {usuarios.get(c['docente_id'], '')}": c
+                    for c in cursos if c.get("activo")
+                }
+            else:
+                self._cursos_por_etiqueta = {
+                    c["nombre"]: c for c in api_client.listar_cursos(self.sesion["token"])
+                }
+        except api_client.ApiError:
+            self._cursos_por_etiqueta = {}
+
+        etiquetas = list(self._cursos_por_etiqueta) or ["(sin cursos)"]
+        self.curso_menu = ctk.CTkOptionMenu(self, values=etiquetas)
+        self.curso_menu.set(etiquetas[0])
+        self.curso_menu.pack(fill="x", pady=(2, 10))
 
     def _campo(self, etiqueta: str) -> ctk.CTkTextbox:
         ctk.CTkLabel(self, text=etiqueta, anchor="w").pack(fill="x", pady=(10, 0))
@@ -75,26 +83,74 @@ class InformeScreen(ctk.CTkScrollableFrame):
         ctk.CTkLabel(self, text="Evaluación de avance por tema", font=ctk.CTkFont(weight="bold")).pack(
             anchor="w", pady=(16, 4)
         )
+        ctk.CTkLabel(
+            self,
+            text="Las semanas y sus temas salen de tus planeaciones del mes.",
+            text_color="gray",
+            font=ctk.CTkFont(size=11),
+        ).pack(anchor="w")
+
+        fila = ctk.CTkFrame(self, fg_color="transparent")
+        fila.pack(fill="x", pady=(4, 0))
+        ctk.CTkButton(fila, text="Cargar semanas del mes", command=self._cargar_avance).pack(side="left")
+
         self.avances_contenedor = ctk.CTkFrame(self, fg_color="transparent")
-        self.avances_contenedor.pack(fill="x")
-        ctk.CTkButton(self, text="+ Agregar semana", command=self._agregar_avance).pack(anchor="w", pady=(6, 0))
-        self._agregar_avance()
+        self.avances_contenedor.pack(fill="x", pady=(6, 0))
 
-    def _agregar_avance(self):
-        editor = AvanceSemanaEditor(self.avances_contenedor, len(self.avances) + 1, self._quitar_avance)
-        editor.pack(fill="x", pady=3)
-        self.avances.append(editor)
+    def _cargar_avance(self):
+        """Trae del backend las semanas del mes con sus temas, para que el
+        docente solo complete nivel y observaciones."""
+        for w in self.avances_contenedor.winfo_children():
+            w.destroy()
+        self.avances = []
 
-    def _quitar_avance(self, editor: AvanceSemanaEditor):
-        if len(self.avances) <= 1:
+        curso = self._curso_seleccionado()
+        if not curso:
+            self.error_label.configure(text="Elegí un curso primero.", text_color="#c0392b")
             return
-        self.avances.remove(editor)
-        editor.destroy()
+
+        self.error_label.configure(text="Cargando semanas...", text_color="gray")
+        self.update_idletasks()
+        try:
+            semanas = api_client.obtener_avance_sugerido(
+                self.sesion["token"], curso["id"], self.mes_entry.get().strip()
+            )
+        except api_client.ApiError as exc:
+            self.error_label.configure(text=str(exc), text_color="#c0392b")
+            return
+        self.error_label.configure(text="")
+
+        if not semanas:
+            ctk.CTkLabel(
+                self.avances_contenedor,
+                text="No hay planeaciones de ese mes todavía.",
+                text_color="gray",
+            ).pack(anchor="w")
+            return
+
+        for s in semanas:
+            editor = AvanceSemanaEditor(self.avances_contenedor, s["semana"], s.get("temas", []))
+            editor.pack(fill="x", pady=3)
+            self.avances.append(editor)
 
     def _construir_gestion(self):
         ctk.CTkLabel(self, text="Gestión institucional (tu parte como directivo)", font=ctk.CTkFont(weight="bold")).pack(
             anchor="w", pady=(16, 0)
         )
+        # Si tenés varios cursos, las horas de gestión van en UNO solo de los
+        # informes del mes; si no, se cobrarían dos veces.
+        self.incluir_gestion_var = ctk.BooleanVar(value=True)
+        ctk.CTkCheckBox(
+            self,
+            text="Incluir mis horas de gestión en este informe",
+            variable=self.incluir_gestion_var,
+        ).pack(anchor="w", pady=(6, 0))
+        ctk.CTkLabel(
+            self,
+            text="Si tenés varios cursos, marcalo en uno solo del mes.",
+            text_color="gray",
+            font=ctk.CTkFont(size=11),
+        ).pack(anchor="w")
         self.gestion_objetivos_box = self._campo("Objetivos y metas del mes")
         self.gestion_logros_box = self._campo("Principales logros, avances y entregables clave")
         self.gestion_novedades_box = self._campo("Novedades, obstáculos o riesgos identificados")
@@ -111,16 +167,13 @@ class InformeScreen(ctk.CTkScrollableFrame):
     def _texto(self, box: ctk.CTkTextbox) -> str:
         return box.get("1.0", "end").strip()
 
-    def _docente_id_seleccionado(self) -> int | None:
-        if self.sesion["rol"] != "directivo":
-            return self.docente_id
-        nombre = self.docente_menu.get()
-        return self._docentes_por_nombre.get(nombre)
+    def _curso_seleccionado(self) -> dict | None:
+        return self._cursos_por_etiqueta.get(self.curso_menu.get())
 
     def _generar(self):
-        docente_id = self._docente_id_seleccionado()
-        if docente_id is None:
-            self.error_label.configure(text="No hay docente seleccionado.")
+        curso = self._curso_seleccionado()
+        if not curso:
+            self.error_label.configure(text="No hay curso seleccionado.", text_color="#c0392b")
             return
 
         narrativa = {
@@ -147,7 +200,9 @@ class InformeScreen(ctk.CTkScrollableFrame):
 
         try:
             contexto = api_client.generar_informe_mensual(
-                self.sesion["token"], docente_id, self.mes_entry.get().strip(), narrativa, gestion_narrativa
+                self.sesion["token"], curso["id"], self.mes_entry.get().strip(),
+                narrativa, gestion_narrativa,
+                incluir_gestion=bool(self.incluir_gestion_var.get()) if self.es_directivo else False,
             )
         except api_client.ApiError as exc:
             self.error_label.configure(text=str(exc), text_color="#c0392b")

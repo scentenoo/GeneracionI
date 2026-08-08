@@ -1,14 +1,16 @@
 /**
- * Planeaciones de clase (rol docente). Cada clase son 2 horas fijas (ver
- * spec sección 4) — no se guarda un campo de duración.
+ * Planeaciones de clase (rol docente). Las horas salen de sumar los
+ * minutos de los bloques, con un mínimo de 2 horas por clase — antes eran
+ * 2 fijas y el tiempo iba escrito dentro del texto del momento, así que no
+ * se podía ni sumar ni validar.
  */
-
-const HORAS_POR_CLASE = 2;
 
 function guardar_planeacion(token, datos, fotos) {
   const sesion = requireSession_(token);
   requireRole_(sesion, [ROLES.DOCENTE, ROLES.AMBOS]);
-  validarPlaneacion_(datos, fotos);
+  validarPlaneacion_(datos, fotos, esDirectivo_(sesion));
+
+  const curso = requireCursoDelDocente_(datos.curso_id, sesion.id);
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
@@ -22,8 +24,11 @@ function guardar_planeacion(token, datos, fotos) {
 
     const fila = appendRow_(SHEET_NAMES.PLANEACIONES, {
       docente_id: sesion.id,
+      curso_id: curso.id,
       fecha: datos.fecha,
-      grupo: datos.grupo,
+      // Copia del nombre del curso tal como estaba ese día, para que la
+      // Sheet se pueda leer sin cruzar referencias a mano.
+      grupo: curso.nombre,
       objetivo: datos.objetivo,
       temas_vistos: JSON.stringify(datos.temas_vistos || []),
       bloques: JSON.stringify(datos.bloques),
@@ -31,7 +36,7 @@ function guardar_planeacion(token, datos, fotos) {
       // Snapshot: la asistencia queda tal cual estaba ese día, no referencia
       // viva al grupo actual (evita que cambios posteriores alteren planeaciones ya guardadas).
       asistencia: JSON.stringify(datos.asistencia || []),
-      horas: HORAS_POR_CLASE,
+      horas: sumarMinutosBloques_(datos.bloques) / 60,
       creado_en: new Date().toISOString(),
     });
 
@@ -41,8 +46,12 @@ function guardar_planeacion(token, datos, fotos) {
   }
 }
 
-/** Docente ve solo las suyas; directivo puede pedir las de cualquiera. */
-function obtener_planeaciones(token, docente_id) {
+/**
+ * Docente ve solo las suyas; directivo puede pedir las de cualquiera.
+ * Con `curso_id` se acota a un curso — que es lo que necesita el informe
+ * mensual, ya que va por curso y no por persona.
+ */
+function obtener_planeaciones(token, docente_id, curso_id) {
   const sesion = requireSession_(token);
   const targetId = docente_id || sesion.id;
 
@@ -50,9 +59,12 @@ function obtener_planeaciones(token, docente_id) {
     throw new Error('No tienes permiso para ver planeaciones de otro docente');
   }
 
-  return readRowsWhere_(SHEET_NAMES.PLANEACIONES, (p) => String(p.docente_id) === String(targetId)).map(
-    parsePlaneacionRow_
-  );
+  return readRowsWhere_(
+    SHEET_NAMES.PLANEACIONES,
+    (p) =>
+      String(p.docente_id) === String(targetId) &&
+      (!curso_id || String(p.curso_id) === String(curso_id))
+  ).map(parsePlaneacionRow_);
 }
 
 function parsePlaneacionRow_(p) {
@@ -120,23 +132,29 @@ function eliminar_planeacion(token, id) {
 }
 
 /**
- * Cuántas planeaciones lleva el docente en el mes vs las esperadas.
+ * Cuántas planeaciones lleva un CURSO en el mes vs las esperadas.
+ * Va por curso y no por docente porque el informe mensual también va por
+ * curso: quien tiene dos cursos puede ir al día en uno y atrasado en otro.
  * mes en formato 'YYYY-MM'.
  */
-function obtener_estado_mes(token, docente_id, mes) {
+function obtener_estado_mes(token, curso_id, mes) {
   const sesion = requireSession_(token);
-  const targetId = docente_id || sesion.id;
-  if (String(targetId) !== String(sesion.id) && !esDirectivo_(sesion)) {
-    throw new Error('No tienes permiso para ver el estado de otro docente');
+
+  const curso = findRowById_(SHEET_NAMES.CURSOS, curso_id);
+  if (!curso) throw new Error('Curso no encontrado');
+  if (String(curso.docente_id) !== String(sesion.id) && !esDirectivo_(sesion)) {
+    throw new Error('No tienes permiso para ver el estado de ese curso');
   }
 
   const planeaciones = readRowsWhere_(
     SHEET_NAMES.PLANEACIONES,
-    (p) => String(p.docente_id) === String(targetId) && mesDeFecha_(p.fecha) === mes
+    (p) => String(p.curso_id) === String(curso_id) && mesDeFecha_(p.fecha) === mes
   );
 
   return {
-    docente_id: targetId,
+    curso_id: curso.id,
+    curso: curso.nombre,
+    docente_id: curso.docente_id,
     mes: mes,
     registradas: planeaciones.length,
     esperadas: CLASES_ESPERADAS_POR_MES,

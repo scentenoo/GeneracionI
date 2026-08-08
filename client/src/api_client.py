@@ -66,8 +66,10 @@ def guardar_planeacion(token: str, datos: dict, fotos: dict) -> dict:
     return _call("guardar_planeacion", token, datos, fotos)
 
 
-def obtener_planeaciones(token: str, docente_id: int | None = None) -> list[dict]:
-    return _call("obtener_planeaciones", token, docente_id)
+def obtener_planeaciones(
+    token: str, docente_id: int | None = None, curso_id: int | None = None
+) -> list[dict]:
+    return _call("obtener_planeaciones", token, docente_id, curso_id)
 
 
 def editar_planeacion(token: str, id_: int, cambios: dict) -> dict:
@@ -79,24 +81,53 @@ def eliminar_planeacion(token: str, id_: int) -> dict:
     return _call("eliminar_planeacion", token, id_)
 
 
-def obtener_estado_mes(token: str, docente_id: int | None, mes: str) -> dict:
-    """mes en formato 'YYYY-MM'."""
-    return _call("obtener_estado_mes", token, docente_id, mes)
+def obtener_estado_mes(token: str, curso_id: int, mes: str) -> dict:
+    """El estado va por curso, no por docente. mes en formato 'YYYY-MM'."""
+    return _call("obtener_estado_mes", token, curso_id, mes)
+
+
+# --- Cursos -------------------------------------------------------------------
+
+def crear_curso(token: str, datos: dict) -> dict:
+    """datos: docente_id, nombre, nucleo, edad_desde, edad_hasta. Solo directivo."""
+    return _call("crear_curso", token, datos)
+
+
+def listar_cursos(
+    token: str, docente_id: int | None = None, incluir_inactivos: bool = False
+) -> list[dict]:
+    """Sin docente_id devuelve los cursos del propio usuario."""
+    return _call("listar_cursos", token, docente_id, incluir_inactivos)
+
+
+def listar_todos_los_cursos(token: str) -> list[dict]:
+    """Todos los cursos del programa. Solo directivo."""
+    return _call("listar_todos_los_cursos", token)
+
+
+def editar_curso(token: str, curso_id: int, cambios: dict) -> dict:
+    return _call("editar_curso", token, curso_id, cambios)
+
+
+def desactivar_curso(token: str, curso_id: int) -> dict:
+    """No borra el curso: lo marca inactivo, para no romper informes viejos."""
+    return _call("desactivar_curso", token, curso_id)
 
 
 # --- Estudiantes / grupo ------------------------------------------------------
 
-def importar_estudiantes(token: str, docente_id: int, csv_texto: str) -> dict:
-    return _call("importar_estudiantes", token, docente_id, csv_texto)
+def importar_estudiantes(token: str, curso_id: int, csv_texto: str) -> dict:
+    return _call("importar_estudiantes", token, curso_id, csv_texto)
 
 
-def obtener_estudiantes(token: str, docente_id: int | None = None) -> list[dict]:
-    return _call("obtener_estudiantes", token, docente_id)
+def obtener_estudiantes(token: str, curso_id: int) -> list[dict]:
+    """Los estudiantes cuelgan del curso, no del docente."""
+    return _call("obtener_estudiantes", token, curso_id)
 
 
-def modificar_grupo(token: str, docente_id: int, cambios: dict) -> dict:
+def modificar_grupo(token: str, curso_id: int, cambios: dict) -> dict:
     """cambios: {"agregar": [{"nombre": ...}], "quitar": [id, ...]}"""
-    return _call("modificar_grupo", token, docente_id, cambios)
+    return _call("modificar_grupo", token, curso_id, cambios)
 
 
 # --- Horas de gestión (rol directivo) -----------------------------------------
@@ -113,16 +144,27 @@ def obtener_horas_gestion(token: str, directivo_id: int | None = None) -> list[d
 
 def generar_informe_mensual(
     token: str,
-    docente_id: int | None,
+    curso_id: int,
     mes: str,
     narrativa: dict,
     gestion_narrativa: dict | None = None,
+    incluir_gestion: bool = True,
 ) -> dict:
     """Devuelve el contexto JSON listo para rellenar con docxtpl
-    (ver client/src/services/docx_generator.py)."""
+    (ver client/src/services/docx_generator.py).
+
+    El informe va por curso: quien tiene dos cursos entrega dos informes.
+    `incluir_gestion` decide si este informe se lleva la sección 5 — hay que
+    marcarlo en uno solo del mes para no cobrar dos veces esas horas."""
     return _call(
-        "generar_informe_mensual", token, docente_id, mes, narrativa, gestion_narrativa or {}
+        "generar_informe_mensual", token, curso_id, mes,
+        narrativa, gestion_narrativa or {}, incluir_gestion,
     )
+
+
+def obtener_avance_sugerido(token: str, curso_id: int, mes: str) -> list[dict]:
+    """Las semanas del mes con sus temas, para prellenar la sección 3."""
+    return _call("obtener_avance_sugerido", token, curso_id, mes)
 
 
 # --- Administración de usuarios (rol directivo) --------------------------------

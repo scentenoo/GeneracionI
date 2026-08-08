@@ -34,10 +34,7 @@ function crear_usuario(token, datos) {
     valor_hora_docente: datos.valor_hora_docente || '',
     valor_hora_directivo: datos.valor_hora_directivo || '',
     cedula: datos.cedula || '',
-    curso: datos.curso || '',
-    nucleo: datos.nucleo || '',
-    edad_desde: datos.edad_desde || '',
-    edad_hasta: datos.edad_hasta || '',
+    // curso/nucleo/edades ya no viven acá: se cargan por separado con crear_curso.
     numero_cuenta: datos.numero_cuenta || '',
     tipo_cuenta: datos.tipo_cuenta || '',
     entidad_bancaria: datos.entidad_bancaria || '',
@@ -49,7 +46,6 @@ function crear_usuario(token, datos) {
 
 const CAMPOS_EDITABLES_USUARIO_ = [
   'nombre', 'rol', 'valor_hora_docente', 'valor_hora_directivo', 'cedula',
-  'curso', 'nucleo', 'edad_desde', 'edad_hasta',
   'numero_cuenta', 'tipo_cuenta', 'entidad_bancaria',
 ];
 
@@ -214,14 +210,22 @@ function subir_firma(token, usuario_id, imagen) {
   }
 }
 
-/** Dashboard directivo: qué docente lleva cuántas planeaciones este mes. */
+/**
+ * Dashboard directivo: una fila por CURSO, no por docente, porque quien
+ * tiene dos cursos puede ir al día en uno y atrasado en el otro.
+ */
 function obtener_dashboard_directivo(token, mes) {
   const sesion = requireSession_(token);
   requireRole_(sesion, [ROLES.DIRECTIVO, ROLES.AMBOS]);
 
-  const docentes = readAllRows_(SHEET_NAMES.USUARIOS).filter(
-    (u) => u.rol === ROLES.DOCENTE || u.rol === ROLES.AMBOS
-  );
+  const nombrePorId = {};
+  readAllRows_(SHEET_NAMES.USUARIOS).forEach((u) => {
+    nombrePorId[String(u.id)] = u.nombre;
+  });
 
-  return docentes.map((d) => obtener_estado_mes(token, d.id, mes));
+  return readRowsWhere_(SHEET_NAMES.CURSOS, (c) => c.activo === true).map((curso) => {
+    const estado = obtener_estado_mes(token, curso.id, mes);
+    estado.docente = nombrePorId[String(curso.docente_id)] || `id ${curso.docente_id}`;
+    return estado;
+  });
 }

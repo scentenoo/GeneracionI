@@ -37,17 +37,21 @@ function inicializarProyecto() {
 }
 
 const ESQUEMA_SHEETS_ = {
+  // curso/nucleo/edades ya no viven acá: se movieron a Cursos, porque una
+  // misma persona puede tener varios cursos con distinto núcleo y edades.
   [SHEET_NAMES.USUARIOS]: [
     'id', 'nombre', 'usuario', 'password_hash', 'rol', 'es_admin',
     'valor_hora_docente', 'valor_hora_directivo', 'cedula',
-    'curso', 'nucleo', 'edad_desde', 'edad_hasta',
     'numero_cuenta', 'tipo_cuenta', 'entidad_bancaria', 'firma_drive_id',
   ],
+  [SHEET_NAMES.CURSOS]: [
+    'id', 'docente_id', 'nombre', 'nucleo', 'edad_desde', 'edad_hasta', 'activo',
+  ],
   [SHEET_NAMES.PLANEACIONES]: [
-    'id', 'docente_id', 'fecha', 'grupo', 'objetivo', 'temas_vistos',
+    'id', 'docente_id', 'curso_id', 'fecha', 'grupo', 'objetivo', 'temas_vistos',
     'bloques', 'foto_clase_drive_id', 'asistencia', 'horas', 'creado_en',
   ],
-  [SHEET_NAMES.ESTUDIANTES]: ['id', 'nombre', 'docente_id'],
+  [SHEET_NAMES.ESTUDIANTES]: ['id', 'nombre', 'curso_id'],
   [SHEET_NAMES.HORAS_GESTION]: [
     'id', 'directivo_id', 'fecha', 'actividad', 'horas_sede',
     'entregable', 'link_soporte', 'creado_en',
@@ -58,6 +62,13 @@ const ESQUEMA_SHEETS_ = {
   [SHEET_NAMES.CONFIG]: ['key', 'value'],
 };
 
+/**
+ * Crea las pestañas que falten y agrega al final las columnas nuevas del
+ * esquema. Nunca reordena ni pisa encabezados existentes: escribir la fila
+ * 1 completa sobre una hoja con datos desalinearía los valores, que
+ * quedarían bajo la columna equivocada. Quitar columnas es tarea de las
+ * migraciones, no de esto.
+ */
 function setupSheets() {
   const ss = getSpreadsheet_();
 
@@ -65,8 +76,20 @@ function setupSheets() {
     let sheet = ss.getSheetByName(nombre);
     if (!sheet) {
       sheet = ss.insertSheet(nombre);
+      sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+      sheet.setFrozenRows(1);
+      return;
     }
-    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+
+    const actuales = sheet.getLastColumn() > 0
+      ? sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].filter(String)
+      : [];
+
+    const faltantes = headers.filter((h) => actuales.indexOf(h) === -1);
+    if (faltantes.length > 0) {
+      sheet.getRange(1, actuales.length + 1, 1, faltantes.length).setValues([faltantes]);
+      Logger.log('%s: columnas agregadas -> %s', nombre, faltantes.join(', '));
+    }
     sheet.setFrozenRows(1);
   });
 

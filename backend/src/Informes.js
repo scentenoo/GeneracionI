@@ -40,9 +40,23 @@ function archivoABase64_(fileId) {
   };
 }
 
-function generar_informe_mensual(token, docente_id, mes, narrativa, gestionNarrativa) {
+/**
+ * El informe va por CURSO, no por persona: quien tiene dos cursos entrega
+ * dos informes al mes, cada uno con sus clases y su cuenta de cobro, tal
+ * como la nómina los paga por separado.
+ *
+ * `incluirGestion` decide si este informe se lleva la sección 5 y las
+ * horas de gestión del mes. Solo aplica a quien tiene rol directivo, y hay
+ * que marcarlo en UN solo informe del mes para no cobrar dos veces las
+ * mismas horas de gestión.
+ */
+function generar_informe_mensual(token, curso_id, mes, narrativa, gestionNarrativa, incluirGestion) {
   const sesion = requireSession_(token);
-  const targetId = docente_id || sesion.id;
+
+  const curso = findRowById_(SHEET_NAMES.CURSOS, curso_id);
+  if (!curso) throw new Error('Curso no encontrado');
+
+  const targetId = curso.docente_id;
   if (String(targetId) !== String(sesion.id) && !esDirectivo_(sesion)) {
     throw new Error('No tienes permiso para generar el informe de otro docente');
   }
@@ -52,7 +66,7 @@ function generar_informe_mensual(token, docente_id, mes, narrativa, gestionNarra
 
   const planeacionesDelMes = readRowsWhere_(
     SHEET_NAMES.PLANEACIONES,
-    (p) => String(p.docente_id) === String(targetId) && mesDeFecha_(p.fecha) === mes
+    (p) => String(p.curso_id) === String(curso_id) && mesDeFecha_(p.fecha) === mes
   ).map(parsePlaneacionRow_);
 
   const actividades = planeacionesDelMes.map((p) => {
@@ -61,7 +75,7 @@ function generar_informe_mensual(token, docente_id, mes, narrativa, gestionNarra
       // No hay un campo "título corto" en la planeación — se usa el objetivo.
       actividad: p.objetivo,
       nro_semana: String(Math.ceil(diaDeFecha_(p.fecha) / 7)),
-      horas_sede: String(HORAS_POR_CLASE),
+      horas_sede: String(p.horas || 0),
       horas_externas: '',
       cantidad_asistentes: String(asistentes),
       fecha: fechaCorta_(p.fecha),
@@ -69,7 +83,7 @@ function generar_informe_mensual(token, docente_id, mes, narrativa, gestionNarra
     };
   });
 
-  const totalHorasDocente = planeacionesDelMes.length * HORAS_POR_CLASE;
+  const totalHorasDocente = planeacionesDelMes.reduce((sum, p) => sum + (Number(p.horas) || 0), 0);
   const totalAsistentes = actividades.reduce((sum, a) => sum + Number(a.cantidad_asistentes), 0);
 
   const encuentros = planeacionesDelMes.map((p, i) => {
@@ -82,9 +96,9 @@ function generar_informe_mensual(token, docente_id, mes, narrativa, gestionNarra
 
   const context = {
     periodo_evaluado: `${nombreMes_(mes)} ${mes.split('-')[0]}`,
-    nucleo: usuario.nucleo || '',
+    nucleo: curso.nucleo || '',
     nombre_docente: usuario.nombre,
-    curso: usuario.curso || '',
+    curso: curso.nombre,
     actividades: actividades,
     total_horas: String(totalHorasDocente),
     total_asistentes: String(totalAsistentes),
@@ -95,17 +109,19 @@ function generar_informe_mensual(token, docente_id, mes, narrativa, gestionNarra
     estrategias: narrativa.estrategias,
     situacion_positiva: narrativa.situacion_positiva,
     ctei_integracion: narrativa.ctei_integracion,
-    avance_semanal: narrativa.avance_semanal || [],
+    // La "unidad trabajada" se arma sola desde las planeaciones (semana +
+    // temas vistos); el docente solo aporta nivel y observaciones.
+    avance_semanal: armarAvanceSemanal_(planeacionesDelMes, narrativa.avance_semanal || []),
 
     encuentros: encuentros,
     cedula_docente: usuario.cedula || '',
     fecha_entrega: Utilities.formatDate(new Date(), 'America/Bogota', 'dd/MM/yyyy'),
 
     fecha_emision: Utilities.formatDate(new Date(), 'America/Bogota', 'dd/MM/yyyy'),
-    cuenta_cobro_no: String(planeacionesDelMes.length ? contarInformesPrevios_(targetId, mes) + 1 : 1),
+    cuenta_cobro_no: String(contarInformesPrevios_(curso_id, mes) + 1),
     mes_a_cobrar: nombreMes_(mes),
-    edad_desde: usuario.edad_desde || '',
-    edad_hasta: usuario.edad_hasta || '',
+    edad_desde: curso.edad_desde || '',
+    edad_hasta: curso.edad_hasta || '',
     num_encuentros: String(planeacionesDelMes.length),
     horas_totales: String(totalHorasDocente),
     periodo_cobro: `(Del 01-${mes.split('-')[1]}-${mes.split('-')[0]} al ${ultimoDiaDelMes_(mes)}-${mes.split('-')[1]}-${mes.split('-')[0]})`,
@@ -113,7 +129,9 @@ function generar_informe_mensual(token, docente_id, mes, narrativa, gestionNarra
     tipo_cuenta: usuario.tipo_cuenta || '',
     entidad_bancaria: usuario.entidad_bancaria || '',
 
-    es_directivo: esDirectivo_({ rol: usuario.rol }),
+    // Controla la sección 5 de la plantilla. Un directivo con dos cursos
+    // marca la gestión en uno solo, así que acá pesa también su elección.
+    es_directivo: esDirectivo_({ rol: usuario.rol }) && incluirGestion !== false,
   };
 
   if (context.es_directivo) {
@@ -153,14 +171,78 @@ function generar_informe_mensual(token, docente_id, mes, narrativa, gestionNarra
   return context;
 }
 
-/** Heurística simple: cuántos meses distintos con planeaciones tiene el docente antes de `mes`. */
-function contarInformesPrevios_(docente_id, mes) {
+/** Heurística simple: cuántos meses distintos con planeaciones tiene el curso antes de `mes`. */
+function contarInformesPrevios_(curso_id, mes) {
   const meses = new Set(
-    readRowsWhere_(SHEET_NAMES.PLANEACIONES, (p) => String(p.docente_id) === String(docente_id))
+    readRowsWhere_(SHEET_NAMES.PLANEACIONES, (p) => String(p.curso_id) === String(curso_id))
       .map((p) => mesDeFecha_(p.fecha))
       .filter((m) => m < mes)
   );
   return meses.size;
+}
+
+/**
+ * Agrupa las planeaciones del mes por semana y arma la columna "unidad
+ * trabajada" de la sección 3 juntando los temas vistos de esa semana.
+ * `respuestas` trae el nivel y las observaciones que escribió el docente,
+ * emparejadas por número de semana.
+ */
+function armarAvanceSemanal_(planeaciones, respuestas) {
+  const porSemana = {};
+  planeaciones.forEach((p) => {
+    const semana = Math.ceil(diaDeFecha_(p.fecha) / 7);
+    if (!porSemana[semana]) porSemana[semana] = [];
+    porSemana[semana] = porSemana[semana].concat(p.temas_vistos || []);
+  });
+
+  const respuestaDeSemana = {};
+  (respuestas || []).forEach((r) => {
+    respuestaDeSemana[String(r.semana)] = r;
+  });
+
+  return Object.keys(porSemana)
+    .map(Number)
+    .sort((a, b) => a - b)
+    .map((semana) => {
+      const r = respuestaDeSemana[String(semana)] || {};
+      return {
+        semana: `Semana ${semana}\n${porSemana[semana].join('\n')}`,
+        nivel: r.nivel || '',
+        observaciones: r.observaciones || '',
+      };
+    });
+}
+
+/**
+ * Las semanas del mes con sus temas, para que el cliente prellene el
+ * formulario de la sección 3 y el docente solo complete nivel y
+ * observaciones.
+ */
+function obtener_avance_sugerido(token, curso_id, mes) {
+  const sesion = requireSession_(token);
+
+  const curso = findRowById_(SHEET_NAMES.CURSOS, curso_id);
+  if (!curso) throw new Error('Curso no encontrado');
+  if (String(curso.docente_id) !== String(sesion.id) && !esDirectivo_(sesion)) {
+    throw new Error('No tienes permiso para ver ese curso');
+  }
+
+  const planeaciones = readRowsWhere_(
+    SHEET_NAMES.PLANEACIONES,
+    (p) => String(p.curso_id) === String(curso_id) && mesDeFecha_(p.fecha) === mes
+  ).map(parsePlaneacionRow_);
+
+  const porSemana = {};
+  planeaciones.forEach((p) => {
+    const semana = Math.ceil(diaDeFecha_(p.fecha) / 7);
+    if (!porSemana[semana]) porSemana[semana] = [];
+    porSemana[semana] = porSemana[semana].concat(p.temas_vistos || []);
+  });
+
+  return Object.keys(porSemana)
+    .map(Number)
+    .sort((a, b) => a - b)
+    .map((semana) => ({ semana: semana, temas: porSemana[semana] }));
 }
 
 function version_actual() {

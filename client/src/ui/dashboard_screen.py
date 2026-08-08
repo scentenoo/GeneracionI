@@ -41,29 +41,35 @@ class DashboardScreen(ctk.CTkScrollableFrame):
             w.destroy()
         self.error_label.configure(text="")
 
+        self.error_label.configure(text="Cargando...", text_color="gray")
+        self.update_idletasks()
         try:
             estados = api_client.obtener_dashboard_directivo(self.sesion["token"], self.mes_entry.get().strip())
-            usuarios = {u["id"]: u["nombre"] for u in api_client.listar_usuarios(self.sesion["token"])}
         except api_client.ApiError as exc:
-            self.error_label.configure(text=str(exc))
+            self.error_label.configure(text=str(exc), text_color="#c0392b")
             return
+        self.error_label.configure(text="")
 
+        # Una fila por curso: quien tiene dos puede ir al día en uno y
+        # atrasado en el otro.
         encabezado = ctk.CTkFrame(self.tabla_contenedor, fg_color="transparent")
         encabezado.pack(fill="x")
-        for texto, ancho in [("Docente", 220), ("Registradas", 90), ("Esperadas", 90), ("Faltan", 70)]:
-            ctk.CTkLabel(encabezado, text=texto, width=ancho, font=ctk.CTkFont(weight="bold")).pack(side="left")
+        for texto, ancho in [("Curso", 180), ("Docente", 160), ("Hechas", 70), ("Esperadas", 80), ("Faltan", 70)]:
+            ctk.CTkLabel(encabezado, text=texto, width=ancho, anchor="w", font=ctk.CTkFont(weight="bold")).pack(
+                side="left"
+            )
 
         for estado in estados:
             fila = ctk.CTkFrame(self.tabla_contenedor, fg_color="transparent")
             fila.pack(fill="x", pady=2)
-            nombre = usuarios.get(estado["docente_id"], f"id {estado['docente_id']}")
             color = "#2fa84f" if estado["faltantes"] == 0 else "#c0392b"
-            ctk.CTkLabel(fila, text=nombre, width=220, anchor="w").pack(side="left")
-            ctk.CTkLabel(fila, text=str(estado["registradas"]), width=90).pack(side="left")
-            ctk.CTkLabel(fila, text=str(estado["esperadas"]), width=90).pack(side="left")
-            ctk.CTkLabel(fila, text=str(estado["faltantes"]), width=70, text_color=color).pack(side="left")
+            ctk.CTkLabel(fila, text=estado.get("curso", ""), width=180, anchor="w").pack(side="left")
+            ctk.CTkLabel(fila, text=estado.get("docente", ""), width=160, anchor="w").pack(side="left")
+            ctk.CTkLabel(fila, text=str(estado["registradas"]), width=70, anchor="w").pack(side="left")
+            ctk.CTkLabel(fila, text=str(estado["esperadas"]), width=80, anchor="w").pack(side="left")
+            ctk.CTkLabel(fila, text=str(estado["faltantes"]), width=70, anchor="w", text_color=color).pack(side="left")
 
         if not estados:
-            ctk.CTkLabel(self.tabla_contenedor, text="No hay docentes registrados todavía.", text_color="gray").pack(
+            ctk.CTkLabel(self.tabla_contenedor, text="No hay cursos registrados todavía.", text_color="gray").pack(
                 anchor="w", pady=10
             )

@@ -1,6 +1,10 @@
 """Formulario de planeación de clase por bloques + checklist de asistencia
 (spec sección 8). Punto de partida funcional para que Generación-I lo
 termine de diseñar — hoy ya guarda de verdad contra el backend.
+
+El curso sale de un desplegable con los cursos de ese docente: no se
+escribe a mano, y quien tiene varios elige cuál. Al cambiar de curso se
+recarga la lista de estudiantes, porque la asistencia es por curso.
 """
 
 from __future__ import annotations
@@ -14,7 +18,9 @@ import api_client
 from services import date_utils, image_utils
 from ui.bloque_editor import BloqueEditor
 from ui.lista_dinamica import ListaDinamica
-from ui.widgets import CampoConContador, MIN_PALABRAS, contar_palabras
+from ui.widgets import CampoConContador, MIN_PALABRAS
+
+MINUTOS_MINIMOS = 120
 
 
 class PlaneacionScreen(ctk.CTkScrollableFrame):
@@ -24,6 +30,7 @@ class PlaneacionScreen(ctk.CTkScrollableFrame):
         self.on_volver = on_volver
         self.foto_path: str | None = None
         self.bloques: list[BloqueEditor] = []
+        self._cursos_por_nombre: dict[str, dict] = {}
 
         self._construir_encabezado()
         self._construir_temas_vistos()
@@ -32,60 +39,89 @@ class PlaneacionScreen(ctk.CTkScrollableFrame):
         self._construir_asistencia()
         self._construir_acciones()
 
+        self._cargar_cursos()
+
     # --- secciones -----------------------------------------------------
 
     def _construir_encabezado(self):
         ctk.CTkButton(self, text="← Volver", width=90, command=self.on_volver).pack(anchor="w", pady=(0, 10))
 
-        fila_fecha_grupo = ctk.CTkFrame(self, fg_color="transparent")
-        fila_fecha_grupo.pack(fill="x", pady=4)
-
-        ctk.CTkLabel(fila_fecha_grupo, text="Fecha (AAAA-MM-DD)").pack(anchor="w")
-        self.fecha_entry = ctk.CTkEntry(fila_fecha_grupo)
+        ctk.CTkLabel(self, text="Fecha (AAAA-MM-DD)", anchor="w").pack(fill="x")
+        self.fecha_entry = ctk.CTkEntry(self)
         self.fecha_entry.insert(0, date_utils.hoy_iso())
         self.fecha_entry.pack(fill="x", pady=(2, 8))
 
-        ctk.CTkLabel(fila_fecha_grupo, text="Grupo").pack(anchor="w")
-        self.grupo_entry = ctk.CTkEntry(fila_fecha_grupo, placeholder_text="Ej: Desarrollo de aplicaciones")
-        self.grupo_entry.pack(fill="x", pady=(2, 8))
+        ctk.CTkLabel(self, text="Curso", anchor="w").pack(fill="x")
+        self.curso_menu = ctk.CTkOptionMenu(
+            self, values=["(cargando...)"], command=lambda _v: self._cargar_asistencia()
+        )
+        self.curso_menu.pack(fill="x", pady=(2, 8))
 
         self.objetivo = CampoConContador(self, "Objetivo de la clase")
         self.objetivo.pack(fill="x", pady=4)
 
+    def _cargar_cursos(self):
+        try:
+            cursos = api_client.listar_cursos(self.sesion["token"])
+        except api_client.ApiError as exc:
+            self.error_label.configure(text=str(exc))
+            return
+
+        self._cursos_por_nombre = {c["nombre"]: c for c in cursos}
+        nombres = list(self._cursos_por_nombre)
+        if not nombres:
+            self.curso_menu.configure(values=["(no tenés cursos asignados)"])
+            self.curso_menu.set("(no tenés cursos asignados)")
+            self.error_label.configure(
+                text="No tenés ningún curso asignado. Pedile al equipo directivo que te cree uno."
+            )
+            return
+
+        self.curso_menu.configure(values=nombres)
+        self.curso_menu.set(nombres[0])
+        self._cargar_asistencia()
+
+    def _curso_actual(self) -> dict | None:
+        return self._cursos_por_nombre.get(self.curso_menu.get())
+
     def _construir_temas_vistos(self):
         ctk.CTkLabel(self, text="Temas vistos (uno por renglón)", anchor="w").pack(fill="x", pady=(10, 0))
-        self.temas_contador = ctk.CTkLabel(self, text="", anchor="e", font=ctk.CTkFont(size=11))
-        self.temas_lista = ListaDinamica(self, placeholder="Tema visto", on_change=self._actualizar_contador_temas)
+        self.temas_lista = ListaDinamica(self, placeholder="Tema visto")
         self.temas_lista.pack(fill="x", pady=(2, 0))
-        self.temas_contador.pack(fill="x")
-        self._actualizar_contador_temas()
-
-    def _actualizar_contador_temas(self):
-        if not hasattr(self, "temas_lista"):
-            return  # se dispara una vez durante la construcción, antes de que exista el atributo
-        n = contar_palabras(" ".join(self.temas_lista.valores()))
-        color = "#2fa84f" if n >= MIN_PALABRAS else "#c0392b"
-        self.temas_contador.configure(text=f"{n} palabras en total (mínimo {MIN_PALABRAS})", text_color=color)
 
     def _construir_bloques(self):
-        ctk.CTkLabel(self, text="Momentos de la clase", anchor="w", font=ctk.CTkFont(weight="bold")).pack(
-            fill="x", pady=(16, 4)
-        )
+        encabezado = ctk.CTkFrame(self, fg_color="transparent")
+        encabezado.pack(fill="x", pady=(16, 4))
+        ctk.CTkLabel(encabezado, text="Momentos de la clase", font=ctk.CTkFont(weight="bold")).pack(side="left")
+        self.minutos_label = ctk.CTkLabel(encabezado, text="", font=ctk.CTkFont(size=12))
+        self.minutos_label.pack(side="right")
+
         self.bloques_contenedor = ctk.CTkFrame(self, fg_color="transparent")
         self.bloques_contenedor.pack(fill="x")
         ctk.CTkButton(self, text="+ Agregar bloque", command=self._agregar_bloque).pack(anchor="w", pady=(6, 0))
         self._agregar_bloque()
 
     def _agregar_bloque(self):
-        bloque = BloqueEditor(self.bloques_contenedor, len(self.bloques) + 1, self._quitar_bloque)
+        bloque = BloqueEditor(
+            self.bloques_contenedor, len(self.bloques) + 1, self._quitar_bloque, self._actualizar_minutos
+        )
         bloque.pack(fill="x", pady=6)
         self.bloques.append(bloque)
+        self._actualizar_minutos()
 
     def _quitar_bloque(self, bloque: BloqueEditor):
         if len(self.bloques) <= 1:
             return  # siempre tiene que quedar al menos un bloque
         self.bloques.remove(bloque)
         bloque.destroy()
+        self._actualizar_minutos()
+
+    def _actualizar_minutos(self):
+        total = sum(b.minutos() for b in self.bloques)
+        color = "#2fa84f" if total >= MINUTOS_MINIMOS else "#c0392b"
+        self.minutos_label.configure(
+            text=f"{total} de {MINUTOS_MINIMOS} min mínimos", text_color=color
+        )
 
     def _construir_foto(self):
         ctk.CTkLabel(self, text="Foto de la clase", anchor="w", font=ctk.CTkFont(weight="bold")).pack(
@@ -111,62 +147,88 @@ class PlaneacionScreen(ctk.CTkScrollableFrame):
             fill="x", pady=(16, 4)
         )
         self.asistencia_vars: dict[str, ctk.BooleanVar] = {}
-        contenedor = ctk.CTkFrame(self, fg_color="transparent")
-        contenedor.pack(fill="x")
+        self.asistencia_contenedor = ctk.CTkFrame(self, fg_color="transparent")
+        self.asistencia_contenedor.pack(fill="x")
+
+    def _cargar_asistencia(self):
+        for w in self.asistencia_contenedor.winfo_children():
+            w.destroy()
+        self.asistencia_vars = {}
+
+        curso = self._curso_actual()
+        if not curso:
+            return
 
         try:
-            estudiantes = api_client.obtener_estudiantes(self.sesion["token"])
+            estudiantes = api_client.obtener_estudiantes(self.sesion["token"], curso["id"])
         except api_client.ApiError as exc:
-            ctk.CTkLabel(contenedor, text=f"No se pudo cargar el grupo: {exc}", text_color="#c0392b").pack(
-                anchor="w"
-            )
+            ctk.CTkLabel(
+                self.asistencia_contenedor, text=f"No se pudo cargar el grupo: {exc}", text_color="#c0392b"
+            ).pack(anchor="w")
             return
 
         if not estudiantes:
             ctk.CTkLabel(
-                contenedor, text="Todavía no hay estudiantes en tu grupo (lo carga el directivo).", text_color="gray"
+                self.asistencia_contenedor,
+                text="Este curso todavía no tiene estudiantes (los carga el directivo).",
+                text_color="gray",
             ).pack(anchor="w")
             return
 
         for est in estudiantes:
             var = ctk.BooleanVar(value=True)
-            ctk.CTkCheckBox(contenedor, text=est["nombre"], variable=var).pack(anchor="w", pady=2)
+            ctk.CTkCheckBox(self.asistencia_contenedor, text=est["nombre"], variable=var).pack(anchor="w", pady=2)
             self.asistencia_vars[est["nombre"]] = var
 
     def _construir_acciones(self):
-        self.error_label = ctk.CTkLabel(self, text="", text_color="#c0392b", wraplength=400, justify="left")
+        self.error_label = ctk.CTkLabel(self, text="", text_color="#c0392b", wraplength=450, justify="left")
         self.error_label.pack(fill="x", pady=(16, 4))
-        ctk.CTkButton(self, text="Guardar planeación", command=self._guardar).pack(pady=10)
+        self.guardar_boton = ctk.CTkButton(self, text="Guardar planeación", command=self._guardar)
+        self.guardar_boton.pack(pady=10)
 
     # --- guardar ---------------------------------------------------------
 
     def _validar(self) -> str | None:
         if not self.fecha_entry.get().strip():
             return "Falta la fecha"
-        if not self.grupo_entry.get().strip():
-            return "Falta el grupo"
+        if not self._curso_actual():
+            return "Elegí un curso"
         if not self.objetivo.es_valido():
             return f"El objetivo necesita mínimo {MIN_PALABRAS} palabras"
-        if contar_palabras(" ".join(self.temas_lista.valores())) < MIN_PALABRAS:
-            return f"Los temas vistos necesitan mínimo {MIN_PALABRAS} palabras en total"
+        if not self.temas_lista.valores():
+            return "Agregá al menos un tema visto"
         for i, bloque in enumerate(self.bloques, start=1):
-            if not bloque.es_valido():
-                return f"Revisá el bloque {i}: falta el momento o no llega a {MIN_PALABRAS} palabras"
+            if not bloque.momento_entry.get().strip():
+                return f"Bloque {i}: falta el momento"
+            if bloque.minutos() <= 0:
+                return f"Bloque {i}: falta cuántos minutos duró"
+            if not bloque.observacion.es_valido() or not bloque.avance.es_valido():
+                return f"Bloque {i}: la observación y los avances necesitan {MIN_PALABRAS} palabras cada uno"
+        total_minutos = sum(b.minutos() for b in self.bloques)
+        if total_minutos < MINUTOS_MINIMOS:
+            return f"Los bloques suman {total_minutos} min y la clase necesita al menos {MINUTOS_MINIMOS}"
         if not self.foto_path:
             return "Falta la foto de la clase"
+
+        presentes = sum(1 for v in self.asistencia_vars.values() if v.get())
+        es_directivo = self.sesion["rol"] in ("directivo", "ambos")
+        if presentes == 0 and not es_directivo:
+            return "No podés guardar una clase sin ningún estudiante presente"
         return None
 
     def _guardar(self):
         error = self._validar()
         if error:
-            self.error_label.configure(text=error)
+            self.error_label.configure(text=error, text_color="#c0392b")
             return
 
-        self.error_label.configure(text="Guardando...", text_color="gray")
+        self.guardar_boton.configure(state="disabled", text="Guardando...")
+        self.error_label.configure(text="Subiendo la foto y guardando...", text_color="gray")
+        self.update_idletasks()
 
         datos = {
             "fecha": self.fecha_entry.get().strip(),
-            "grupo": self.grupo_entry.get().strip(),
+            "curso_id": self._curso_actual()["id"],
             "objetivo": self.objetivo.get(),
             "temas_vistos": self.temas_lista.valores(),
             "bloques": [b.a_dict() for b in self.bloques],
@@ -181,5 +243,24 @@ class PlaneacionScreen(ctk.CTkScrollableFrame):
         except api_client.ApiError as exc:
             self.error_label.configure(text=str(exc), text_color="#c0392b")
             return
+        finally:
+            self.guardar_boton.configure(state="normal", text="Guardar planeación")
 
         self.error_label.configure(text=f"Planeación guardada (id {resultado['id']}) ✓", text_color="#2fa84f")
+        self._limpiar_formulario()
+
+    def _limpiar_formulario(self):
+        """Deja el formulario listo para la siguiente clase, conservando la
+        fecha y el curso porque suelen repetirse en la misma sesión."""
+        self.objetivo.set("")
+        self.temas_lista.limpiar()
+
+        for bloque in self.bloques:
+            bloque.destroy()
+        self.bloques = []
+        self._agregar_bloque()
+
+        self.foto_path = None
+        self.foto_label.configure(text="Ninguna foto seleccionada", text_color="gray")
+
+        self._cargar_asistencia()

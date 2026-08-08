@@ -17,6 +17,7 @@ class HomeScreen(ctk.CTkFrame):
         on_dashboard: Callable[[], None],
         on_informe: Callable[[], None],
         on_grupo: Callable[[], None],
+        on_cursos: Callable[[], None],
         on_horas_gestion: Callable[[], None],
         on_planeaciones_docente: Callable[[], None],
         on_crear_usuario: Callable[[], None],
@@ -43,7 +44,8 @@ class HomeScreen(ctk.CTkFrame):
         ctk.CTkButton(self, text="Generar informe mensual", width=260, command=on_informe).pack(pady=6)
         if es_directivo:
             ctk.CTkButton(self, text="Dashboard directivo", width=260, command=on_dashboard).pack(pady=6)
-            ctk.CTkButton(self, text="Grupo de estudiantes", width=260, command=on_grupo).pack(pady=6)
+            ctk.CTkButton(self, text="Cursos", width=260, command=on_cursos).pack(pady=6)
+            ctk.CTkButton(self, text="Estudiantes de un curso", width=260, command=on_grupo).pack(pady=6)
             ctk.CTkButton(self, text="Horas de gestión", width=260, command=on_horas_gestion).pack(pady=6)
             ctk.CTkButton(
                 self, text="Planeaciones de un docente", width=260, command=on_planeaciones_docente

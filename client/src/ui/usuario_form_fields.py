@@ -6,14 +6,13 @@ from __future__ import annotations
 
 import customtkinter as ctk
 
+# Curso, núcleo y edades ya no están acá: se cargan por curso, en la
+# pantalla de Cursos, porque un docente puede tener varios y cada uno con
+# su propio núcleo y rango de edades.
 CAMPOS_PERFIL = [
-    ("curso", "Curso"),
-    ("nucleo", "Núcleo"),
     ("cedula", "Cédula"),
     ("valor_hora_docente", "Valor hora docente"),
     ("valor_hora_directivo", "Valor hora directivo"),
-    ("edad_desde", "Edad desde"),
-    ("edad_hasta", "Edad hasta"),
     ("numero_cuenta", "Número de cuenta"),
     ("tipo_cuenta", "Tipo de cuenta"),
     ("entidad_bancaria", "Entidad bancaria"),
@@ -34,3 +33,8 @@ def construir_campos_perfil(parent: ctk.CTkBaseClass) -> dict[str, ctk.CTkEntry]
 
 def leer_campos_perfil(entradas: dict[str, ctk.CTkEntry]) -> dict[str, str]:
     return {clave: entry.get().strip() for clave, entry in entradas.items()}
+
+
+def limpiar_campos_perfil(entradas: dict[str, ctk.CTkEntry]):
+    for entry in entradas.values():
+        entry.delete(0, "end")

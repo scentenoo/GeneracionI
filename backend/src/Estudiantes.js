@@ -1,12 +1,16 @@
 /**
- * Grupo de estudiantes por docente. Lo gestiona el directivo (puede
- * modificarlo cuando quiera); el docente solo lo consulta y marca
- * asistencia sobre él.
+ * Estudiantes de cada curso. Los gestiona el directivo; el docente solo
+ * los consulta y marca asistencia sobre ellos.
+ *
+ * Cuelgan del curso, no del docente: un docente con dos cursos tiene dos
+ * listas separadas de estudiantes.
  */
 
-function importar_estudiantes(token, docente_id, csv) {
+function importar_estudiantes(token, curso_id, csv) {
   const sesion = requireSession_(token);
   requireRole_(sesion, [ROLES.DIRECTIVO, ROLES.AMBOS]);
+
+  if (!findRowById_(SHEET_NAMES.CURSOS, curso_id)) throw new Error('Curso no encontrado');
 
   const filas = Utilities.parseCsv(csv);
   const encabezado = filas[0].map((h) => h.trim().toLowerCase());
@@ -19,11 +23,11 @@ function importar_estudiantes(token, docente_id, csv) {
     const creados = filas.slice(1).filter((fila) => fila[idxNombre]).map((fila) =>
       appendRow_(SHEET_NAMES.ESTUDIANTES, {
         nombre: fila[idxNombre].trim(),
-        docente_id: docente_id,
+        curso_id: curso_id,
       })
     );
 
-    registrarHistorial_(sesion.usuario, 'grupo_estudiantes', docente_id, [
+    registrarHistorial_(sesion.usuario, 'grupo_estudiantes', curso_id, [
       { campo: 'importacion_csv', antes: '', despues: `${creados.length} estudiantes` },
     ]);
 
@@ -33,23 +37,31 @@ function importar_estudiantes(token, docente_id, csv) {
   }
 }
 
-function obtener_estudiantes(token, docente_id) {
+/** El docente solo puede ver los estudiantes de sus propios cursos. */
+function obtener_estudiantes(token, curso_id) {
   const sesion = requireSession_(token);
-  const targetId = docente_id || sesion.id;
-  if (String(targetId) !== String(sesion.id) && !esDirectivo_(sesion)) {
-    throw new Error('No tienes permiso para ver el grupo de otro docente');
+  if (!curso_id) throw new Error('Falta indicar el curso');
+
+  const curso = findRowById_(SHEET_NAMES.CURSOS, curso_id);
+  if (!curso) throw new Error('Curso no encontrado');
+
+  if (String(curso.docente_id) !== String(sesion.id) && !esDirectivo_(sesion)) {
+    throw new Error('No tienes permiso para ver los estudiantes de ese curso');
   }
-  return readRowsWhere_(SHEET_NAMES.ESTUDIANTES, (e) => String(e.docente_id) === String(targetId));
+
+  return readRowsWhere_(SHEET_NAMES.ESTUDIANTES, (e) => String(e.curso_id) === String(curso_id));
 }
 
 /**
  * cambios = { agregar: [{nombre}], quitar: [id, ...] }
  * Nunca modifica planeaciones ya guardadas (esas tienen su propio snapshot
- * de asistencia) — solo afecta el grupo "actual" del docente.
+ * de asistencia) — solo afecta la lista "actual" del curso.
  */
-function modificar_grupo(token, docente_id, cambios) {
+function modificar_grupo(token, curso_id, cambios) {
   const sesion = requireSession_(token);
   requireRole_(sesion, [ROLES.DIRECTIVO, ROLES.AMBOS]);
+
+  if (!findRowById_(SHEET_NAMES.CURSOS, curso_id)) throw new Error('Curso no encontrado');
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
@@ -57,7 +69,7 @@ function modificar_grupo(token, docente_id, cambios) {
     const cambiosHistorial = [];
 
     (cambios.agregar || []).forEach((est) => {
-      const fila = appendRow_(SHEET_NAMES.ESTUDIANTES, { nombre: est.nombre, docente_id: docente_id });
+      const fila = appendRow_(SHEET_NAMES.ESTUDIANTES, { nombre: est.nombre, curso_id: curso_id });
       cambiosHistorial.push({ campo: 'estudiante_agregado', antes: '', despues: `${fila.nombre} (id ${fila.id})` });
     });
 
@@ -69,7 +81,7 @@ function modificar_grupo(token, docente_id, cambios) {
       }
     });
 
-    registrarHistorial_(sesion.usuario, 'grupo_estudiantes', docente_id, cambiosHistorial);
+    registrarHistorial_(sesion.usuario, 'grupo_estudiantes', curso_id, cambiosHistorial);
     return { ok: true, cambios: cambiosHistorial.length };
   } finally {
     lock.releaseLock();
