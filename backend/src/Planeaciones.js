@@ -99,7 +99,7 @@ function obtener_estado_mes(token, docente_id, mes) {
 
   const planeaciones = readRowsWhere_(
     SHEET_NAMES.PLANEACIONES,
-    (p) => String(p.docente_id) === String(targetId) && String(p.fecha).slice(0, 7) === mes
+    (p) => String(p.docente_id) === String(targetId) && mesDeFecha_(p.fecha) === mes
   );
 
   return {

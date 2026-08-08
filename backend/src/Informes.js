@@ -52,20 +52,19 @@ function generar_informe_mensual(token, docente_id, mes, narrativa, gestionNarra
 
   const planeacionesDelMes = readRowsWhere_(
     SHEET_NAMES.PLANEACIONES,
-    (p) => String(p.docente_id) === String(targetId) && String(p.fecha).slice(0, 7) === mes
+    (p) => String(p.docente_id) === String(targetId) && mesDeFecha_(p.fecha) === mes
   ).map(parsePlaneacionRow_);
 
   const actividades = planeacionesDelMes.map((p) => {
-    const dia = new Date(p.fecha).getDate();
     const asistentes = p.asistencia.filter((a) => a.presente).length;
     return {
       // No hay un campo "título corto" en la planeación — se usa el objetivo.
       actividad: p.objetivo,
-      nro_semana: String(Math.ceil(dia / 7)),
+      nro_semana: String(Math.ceil(diaDeFecha_(p.fecha) / 7)),
       horas_sede: String(HORAS_POR_CLASE),
       horas_externas: '',
       cantidad_asistentes: String(asistentes),
-      fecha: p.fecha,
+      fecha: fechaCorta_(p.fecha),
       link_planeacion: '', // pendiente: no hay visor de planeaciones con URL propia todavía
     };
   });
@@ -120,7 +119,7 @@ function generar_informe_mensual(token, docente_id, mes, narrativa, gestionNarra
   if (context.es_directivo) {
     const horasGestionDelMes = readRowsWhere_(
       SHEET_NAMES.HORAS_GESTION,
-      (h) => String(h.directivo_id) === String(targetId) && String(h.fecha).slice(0, 7) === mes
+      (h) => String(h.directivo_id) === String(targetId) && mesDeFecha_(h.fecha) === mes
     );
     const totalHorasGestion = horasGestionDelMes.reduce((sum, h) => sum + Number(h.horas_sede || 0), 0);
     const valorHoraDirectivo = Number(usuario.valor_hora_directivo) || 0;
@@ -128,7 +127,7 @@ function generar_informe_mensual(token, docente_id, mes, narrativa, gestionNarra
 
     context.horas_gestion = horasGestionDelMes.map((h) => ({
       actividad: h.actividad,
-      nro_semana: String(Math.ceil(new Date(h.fecha).getDate() / 7)),
+      nro_semana: String(Math.ceil(diaDeFecha_(h.fecha) / 7)),
       horas_sede: String(h.horas_sede),
       entregable: h.entregable,
       link_soporte: h.link_soporte,
@@ -158,7 +157,7 @@ function generar_informe_mensual(token, docente_id, mes, narrativa, gestionNarra
 function contarInformesPrevios_(docente_id, mes) {
   const meses = new Set(
     readRowsWhere_(SHEET_NAMES.PLANEACIONES, (p) => String(p.docente_id) === String(docente_id))
-      .map((p) => String(p.fecha).slice(0, 7))
+      .map((p) => mesDeFecha_(p.fecha))
       .filter((m) => m < mes)
   );
   return meses.size;
