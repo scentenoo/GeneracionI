@@ -30,6 +30,7 @@ function crear_usuario(token, datos) {
     usuario: datos.usuario,
     password_hash: crearHashConSalt_(datos.password_inicial),
     rol: datos.rol,
+    es_admin: false,
     valor_hora_docente: datos.valor_hora_docente || '',
     valor_hora_directivo: datos.valor_hora_directivo || '',
     cedula: datos.cedula || '',
@@ -44,6 +45,139 @@ function crear_usuario(token, datos) {
   });
 
   return { ok: true, id: fila.id };
+}
+
+const CAMPOS_EDITABLES_USUARIO_ = [
+  'nombre', 'rol', 'valor_hora_docente', 'valor_hora_directivo', 'cedula',
+  'curso', 'nucleo', 'edad_desde', 'edad_hasta',
+  'numero_cuenta', 'tipo_cuenta', 'entidad_bancaria',
+];
+
+/**
+ * Solo el directivo edita el perfil de un usuario (cédula, curso, tarifas,
+ * cuenta bancaria, etc.) — un docente no toca sus propios datos, los pide
+ * al equipo directivo. La contraseña tiene su propio flujo
+ * (cambiarPassword) y no se toca acá.
+ */
+function editar_usuario(token, usuario_id, cambios) {
+  const sesion = requireSession_(token);
+  requireRole_(sesion, [ROLES.DIRECTIVO, ROLES.AMBOS]);
+
+  const cambiosFiltrados = {};
+  Object.keys(cambios).forEach((campo) => {
+    if (CAMPOS_EDITABLES_USUARIO_.includes(campo)) {
+      cambiosFiltrados[campo] = cambios[campo];
+    }
+  });
+
+  if (cambiosFiltrados.rol && !Object.values(ROLES).includes(cambiosFiltrados.rol)) {
+    throw new Error(`Rol inválido: ${cambiosFiltrados.rol}`);
+  }
+
+  const cambiosReales = updateRowById_(SHEET_NAMES.USUARIOS, usuario_id, cambiosFiltrados);
+  registrarHistorial_(sesion.usuario, 'usuario', usuario_id, cambiosReales);
+  return { ok: true, cambios: cambiosReales.length };
+}
+
+/**
+ * Administrador único: no es un rol más (docente/directivo/ambos), es un
+ * privilegio aparte sobre un usuario existente, reservado para acciones
+ * irreversibles como eliminar usuarios. Se transfiere, nunca se duplica —
+ * a lo sumo hay un usuario con es_admin=true a la vez.
+ */
+
+function hayAdministrador_() {
+  return readAllRows_(SHEET_NAMES.USUARIOS).some((u) => u.es_admin === true);
+}
+
+function esAdministrador_(usuarioId) {
+  const fila = findRowById_(SHEET_NAMES.USUARIOS, usuarioId);
+  return !!fila && fila.es_admin === true;
+}
+
+function requireAdministrador_(sesion) {
+  if (!esAdministrador_(sesion.id)) {
+    throw new Error('Esta acción requiere ser el usuario administrador');
+  }
+}
+
+/** Bootstrap: mientras no exista ningún administrador, cualquier directivo puede autoproclamarse. Se cierra solo apenas hay uno. */
+function convertirme_administrador(token) {
+  const sesion = requireSession_(token);
+  requireRole_(sesion, [ROLES.DIRECTIVO, ROLES.AMBOS]);
+
+  if (hayAdministrador_()) {
+    throw new Error('Ya hay un administrador asignado — pedile que te transfiera el cargo');
+  }
+
+  updateRowById_(SHEET_NAMES.USUARIOS, sesion.id, { es_admin: true });
+  registrarHistorial_(sesion.usuario, 'usuario', sesion.id, [
+    { campo: 'es_admin', antes: false, despues: true },
+  ]);
+  return { ok: true };
+}
+
+/** El administrador actual le pasa el cargo a otro usuario (directivo o ambos). Nunca hay dos a la vez. */
+function transferir_administrador(token, nuevo_admin_id) {
+  const sesion = requireSession_(token);
+  requireAdministrador_(sesion);
+
+  const nuevoAdmin = findRowById_(SHEET_NAMES.USUARIOS, nuevo_admin_id);
+  if (!nuevoAdmin) throw new Error('Usuario no encontrado');
+  if (![ROLES.DIRECTIVO, ROLES.AMBOS].includes(nuevoAdmin.rol)) {
+    throw new Error('El administrador tiene que ser directivo o ambos');
+  }
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    updateRowById_(SHEET_NAMES.USUARIOS, sesion.id, { es_admin: false });
+    updateRowById_(SHEET_NAMES.USUARIOS, nuevo_admin_id, { es_admin: true });
+    registrarHistorial_(sesion.usuario, 'usuario', nuevo_admin_id, [
+      { campo: 'es_admin', antes: false, despues: true },
+    ]);
+    return { ok: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Elimina el LOGIN de un usuario. Un directivo puede eliminar docentes
+ * (rol exactamente 'docente'); eliminar a otro directivo/ambos requiere
+ * ser el administrador — así un directivo cualquiera no puede sacar a
+ * otro directivo de encima. Las planeaciones y horas de gestión que haya
+ * generado NO se borran — quedan como registro histórico con un
+ * docente_id/directivo_id que ya no tiene login.
+ */
+function eliminar_usuario(token, usuario_id) {
+  const sesion = requireSession_(token);
+
+  if (String(usuario_id) === String(sesion.id)) {
+    throw new Error('No podés eliminarte a vos mismo — transferí el cargo de administrador primero si hace falta');
+  }
+
+  const fila = findRowById_(SHEET_NAMES.USUARIOS, usuario_id);
+  if (!fila) throw new Error('Usuario no encontrado');
+
+  if (!esAdministrador_(sesion.id)) {
+    requireRole_(sesion, [ROLES.DIRECTIVO, ROLES.AMBOS]);
+    if (fila.rol !== ROLES.DOCENTE) {
+      throw new Error('Un directivo solo puede eliminar usuarios con rol docente — para eliminar un directivo hace falta el administrador');
+    }
+  }
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    getSheet_(SHEET_NAMES.USUARIOS).deleteRow(fila._row);
+    registrarHistorial_(sesion.usuario, 'usuario', usuario_id, [
+      { campo: 'eliminado', antes: `${fila.nombre} (${fila.usuario})`, despues: '' },
+    ]);
+    return { ok: true };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function listar_usuarios(token) {

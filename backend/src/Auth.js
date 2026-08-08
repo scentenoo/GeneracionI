@@ -37,6 +37,10 @@ function login(usuario, password) {
     nombre: fila.nombre,
     usuario: fila.usuario,
     rol: fila.rol,
+    // El backend siempre revalida es_admin contra la Sheet en las acciones
+    // sensibles (ver requireAdministrador_) — esto es solo para que el
+    // cliente sepa qué botones mostrar, no es la fuente de verdad.
+    es_admin: fila.es_admin === true,
   };
   CacheService.getScriptCache().put(`session:${token}`, JSON.stringify(sesion), SESSION_TTL_SECONDS);
 

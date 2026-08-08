@@ -131,8 +131,28 @@ def crear_usuario(token: str, datos: dict) -> dict:
     return _call("crear_usuario", token, datos)
 
 
+def editar_usuario(token: str, usuario_id: int, cambios: dict) -> dict:
+    """Solo rol directivo. La contraseña no se toca acá (ver cambiar_password)."""
+    return _call("editar_usuario", token, usuario_id, cambios)
+
+
 def listar_usuarios(token: str) -> list[dict]:
     return _call("listar_usuarios", token)
+
+
+def eliminar_usuario(token: str, usuario_id: int) -> dict:
+    """Directivo: solo usuarios con rol 'docente'. Administrador: cualquiera."""
+    return _call("eliminar_usuario", token, usuario_id)
+
+
+def convertirme_administrador(token: str) -> dict:
+    """Bootstrap: solo funciona mientras no exista ya un administrador."""
+    return _call("convertirme_administrador", token)
+
+
+def transferir_administrador(token: str, nuevo_admin_id: int) -> dict:
+    """Solo el administrador actual puede llamar esto."""
+    return _call("transferir_administrador", token, nuevo_admin_id)
 
 
 def subir_firma(token: str, usuario_id: int, imagen: dict) -> dict:

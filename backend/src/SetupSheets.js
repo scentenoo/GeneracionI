@@ -38,7 +38,7 @@ function inicializarProyecto() {
 
 const ESQUEMA_SHEETS_ = {
   [SHEET_NAMES.USUARIOS]: [
-    'id', 'nombre', 'usuario', 'password_hash', 'rol',
+    'id', 'nombre', 'usuario', 'password_hash', 'rol', 'es_admin',
     'valor_hora_docente', 'valor_hora_directivo', 'cedula',
     'curso', 'nucleo', 'edad_desde', 'edad_hasta',
     'numero_cuenta', 'tipo_cuenta', 'entidad_bancaria', 'firma_drive_id',

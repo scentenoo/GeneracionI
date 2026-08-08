@@ -16,6 +16,9 @@ node_modules/
 .clasp.json
 *.log
 
+# graphify (se regenera con `graphify .`)
+graphify-out/
+
 # OS
 .DS_Store
 Thumbs.db

@@ -8,6 +8,7 @@ from typing import Callable
 import customtkinter as ctk
 
 import api_client
+from ui.usuario_form_fields import construir_campos_perfil, leer_campos_perfil
 
 ROLES = ["docente", "directivo", "ambos"]
 
@@ -29,17 +30,7 @@ class UsuarioScreen(ctk.CTkScrollableFrame):
 
         ctk.CTkLabel(self, text="Datos para el informe mensual (opcionales, se pueden completar después)",
                      text_color="gray").pack(anchor="w", pady=(16, 4))
-
-        self.curso_entry = self._campo("Curso")
-        self.nucleo_entry = self._campo("Núcleo")
-        self.cedula_entry = self._campo("Cédula")
-        self.valor_hora_docente_entry = self._campo("Valor hora docente")
-        self.valor_hora_directivo_entry = self._campo("Valor hora directivo")
-        self.edad_desde_entry = self._campo("Edad desde")
-        self.edad_hasta_entry = self._campo("Edad hasta")
-        self.numero_cuenta_entry = self._campo("Número de cuenta")
-        self.tipo_cuenta_entry = self._campo("Tipo de cuenta")
-        self.entidad_bancaria_entry = self._campo("Entidad bancaria")
+        self.campos_perfil = construir_campos_perfil(self)
 
         self.error_label = ctk.CTkLabel(self, text="", text_color="#c0392b", wraplength=450, justify="left")
         self.error_label.pack(fill="x", pady=(16, 4))
@@ -61,16 +52,7 @@ class UsuarioScreen(ctk.CTkScrollableFrame):
             "usuario": self.usuario_entry.get().strip(),
             "password_inicial": self.password_entry.get(),
             "rol": self.rol_menu.get(),
-            "curso": self.curso_entry.get().strip(),
-            "nucleo": self.nucleo_entry.get().strip(),
-            "cedula": self.cedula_entry.get().strip(),
-            "valor_hora_docente": self.valor_hora_docente_entry.get().strip(),
-            "valor_hora_directivo": self.valor_hora_directivo_entry.get().strip(),
-            "edad_desde": self.edad_desde_entry.get().strip(),
-            "edad_hasta": self.edad_hasta_entry.get().strip(),
-            "numero_cuenta": self.numero_cuenta_entry.get().strip(),
-            "tipo_cuenta": self.tipo_cuenta_entry.get().strip(),
-            "entidad_bancaria": self.entidad_bancaria_entry.get().strip(),
+            **leer_campos_perfil(self.campos_perfil),
         }
 
         try:

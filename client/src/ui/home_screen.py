@@ -13,10 +13,14 @@ class HomeScreen(ctk.CTkFrame):
         master,
         sesion: dict,
         on_nueva_planeacion: Callable[[], None],
+        on_mis_planeaciones: Callable[[], None],
         on_dashboard: Callable[[], None],
         on_informe: Callable[[], None],
         on_grupo: Callable[[], None],
+        on_horas_gestion: Callable[[], None],
+        on_planeaciones_docente: Callable[[], None],
         on_crear_usuario: Callable[[], None],
+        on_editar_usuario: Callable[[], None],
         on_cambiar_password: Callable[[], None],
     ):
         super().__init__(master)
@@ -35,9 +39,15 @@ class HomeScreen(ctk.CTkFrame):
             ctk.CTkButton(self, text="Nueva planeación de clase", width=260, command=on_nueva_planeacion).pack(
                 pady=6
             )
+            ctk.CTkButton(self, text="Mis planeaciones", width=260, command=on_mis_planeaciones).pack(pady=6)
         ctk.CTkButton(self, text="Generar informe mensual", width=260, command=on_informe).pack(pady=6)
         if es_directivo:
             ctk.CTkButton(self, text="Dashboard directivo", width=260, command=on_dashboard).pack(pady=6)
             ctk.CTkButton(self, text="Grupo de estudiantes", width=260, command=on_grupo).pack(pady=6)
+            ctk.CTkButton(self, text="Horas de gestión", width=260, command=on_horas_gestion).pack(pady=6)
+            ctk.CTkButton(
+                self, text="Planeaciones de un docente", width=260, command=on_planeaciones_docente
+            ).pack(pady=6)
             ctk.CTkButton(self, text="Crear usuario", width=260, command=on_crear_usuario).pack(pady=6)
+            ctk.CTkButton(self, text="Editar usuario", width=260, command=on_editar_usuario).pack(pady=6)
         ctk.CTkButton(self, text="Cambiar contraseña", width=260, command=on_cambiar_password).pack(pady=6)

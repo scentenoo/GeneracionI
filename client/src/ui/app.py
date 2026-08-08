@@ -5,10 +5,14 @@ import customtkinter as ctk
 from ui.login_screen import LoginScreen
 from ui.home_screen import HomeScreen
 from ui.planeacion_screen import PlaneacionScreen
+from ui.planeacion_list_screen import PlaneacionListScreen
 from ui.dashboard_screen import DashboardScreen
 from ui.informe_screen import InformeScreen
 from ui.grupo_screen import GrupoScreen
+from ui.horas_gestion_screen import HorasGestionScreen
+from ui.planeaciones_docente_screen import PlaneacionesDocenteScreen
 from ui.usuario_screen import UsuarioScreen
+from ui.editar_usuario_screen import EditarUsuarioScreen
 from ui.password_screen import PasswordScreen
 
 
@@ -45,10 +49,14 @@ class App(ctk.CTk):
             self,
             self.sesion,
             on_nueva_planeacion=self._mostrar_planeacion,
+            on_mis_planeaciones=self._mostrar_mis_planeaciones,
             on_dashboard=self._mostrar_dashboard,
             on_informe=self._mostrar_informe,
             on_grupo=self._mostrar_grupo,
+            on_horas_gestion=self._mostrar_horas_gestion,
+            on_planeaciones_docente=self._mostrar_planeaciones_docente,
             on_crear_usuario=self._mostrar_crear_usuario,
+            on_editar_usuario=self._mostrar_editar_usuario,
             on_cambiar_password=self._mostrar_password,
         )
         self.pantalla_actual.pack(fill="both", expand=True)
@@ -56,6 +64,11 @@ class App(ctk.CTk):
     def _mostrar_planeacion(self):
         self._limpiar()
         self.pantalla_actual = PlaneacionScreen(self, self.sesion, on_volver=self._mostrar_home)
+        self.pantalla_actual.pack(fill="both", expand=True)
+
+    def _mostrar_mis_planeaciones(self):
+        self._limpiar()
+        self.pantalla_actual = PlaneacionListScreen(self, self.sesion, on_volver=self._mostrar_home)
         self.pantalla_actual.pack(fill="both", expand=True)
 
     def _mostrar_dashboard(self):
@@ -73,9 +86,24 @@ class App(ctk.CTk):
         self.pantalla_actual = GrupoScreen(self, self.sesion, on_volver=self._mostrar_home)
         self.pantalla_actual.pack(fill="both", expand=True)
 
+    def _mostrar_horas_gestion(self):
+        self._limpiar()
+        self.pantalla_actual = HorasGestionScreen(self, self.sesion, on_volver=self._mostrar_home)
+        self.pantalla_actual.pack(fill="both", expand=True)
+
+    def _mostrar_planeaciones_docente(self):
+        self._limpiar()
+        self.pantalla_actual = PlaneacionesDocenteScreen(self, self.sesion, on_volver=self._mostrar_home)
+        self.pantalla_actual.pack(fill="both", expand=True)
+
     def _mostrar_crear_usuario(self):
         self._limpiar()
         self.pantalla_actual = UsuarioScreen(self, self.sesion, on_volver=self._mostrar_home)
+        self.pantalla_actual.pack(fill="both", expand=True)
+
+    def _mostrar_editar_usuario(self):
+        self._limpiar()
+        self.pantalla_actual = EditarUsuarioScreen(self, self.sesion, on_volver=self._mostrar_home)
         self.pantalla_actual.pack(fill="both", expand=True)
 
     def _mostrar_password(self):
