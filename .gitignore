@@ -7,7 +7,8 @@ venv/
 build/
 dist/
 
-# PyInstaller
+# PyInstaller (se regenera con el comando del README, no hace falta versionarlo)
+*.spec
 *.spec.bak
 
 # Node / clasp
