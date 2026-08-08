@@ -25,9 +25,11 @@ _IMG_WIDTH_GRANDE_MM = 90
 _IMG_WIDTH_CHICA_MM = 55
 
 
-def _imagen_desde_base64(tpl: DocxTemplate, base64_str: str | None, ancho_mm: int) -> InlineImage | None:
+def _imagen_desde_base64(tpl: DocxTemplate, base64_str: str | None, ancho_mm: int) -> InlineImage | str:
+    """Si no hay imagen (ej. todavía no se subió la firma), devuelve '' en
+    vez de None — con None, docxtpl renderiza el texto literal "None"."""
     if not base64_str:
-        return None
+        return ""
     data = base64.b64decode(base64_str)
     return InlineImage(tpl, io.BytesIO(data), width=Mm(ancho_mm))
 
