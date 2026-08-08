@@ -5,6 +5,37 @@
  * existentes, así que es seguro volver a correrlo si se agrega una columna.
  */
 
+/**
+ * Primer setup completo: crea la Sheet y la carpeta de Drive raíz si no
+ * existen todavía, guarda sus IDs en Script Properties y arma las pestañas.
+ * Idempotente — correrlo de nuevo no duplica nada, así que es seguro darle
+ * Run más de una vez.
+ */
+function inicializarProyecto() {
+  const props = PropertiesService.getScriptProperties();
+
+  let sheetId = props.getProperty('SHEET_ID');
+  if (!sheetId) {
+    const ss = SpreadsheetApp.create('Generación-I - Base de datos');
+    sheetId = ss.getId();
+    props.setProperty('SHEET_ID', sheetId);
+    Logger.log('Sheet creada: %s', ss.getUrl());
+  }
+
+  let folderId = props.getProperty('DRIVE_ROOT_FOLDER_ID');
+  if (!folderId) {
+    const folder = DriveApp.createFolder('Generación-I');
+    folderId = folder.getId();
+    props.setProperty('DRIVE_ROOT_FOLDER_ID', folderId);
+    Logger.log('Carpeta de Drive creada: %s', folder.getUrl());
+  }
+
+  setupSheets();
+
+  Logger.log('Listo. Sheet: https://docs.google.com/spreadsheets/d/%s/edit', sheetId);
+  Logger.log('Carpeta Drive: https://drive.google.com/drive/folders/%s', folderId);
+}
+
 const ESQUEMA_SHEETS_ = {
   [SHEET_NAMES.USUARIOS]: [
     'id', 'nombre', 'usuario', 'password_hash', 'rol',
