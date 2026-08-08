@@ -5,8 +5,7 @@ login() con su propio token (ver spec sección 2)."""
 import sys
 from pathlib import Path
 
-# TODO: reemplazar por la URL real una vez desplegado el Web App de Apps Script.
-BACKEND_URL = "https://script.google.com/macros/s/TU_DEPLOYMENT_ID/exec"
+BACKEND_URL = "https://script.google.com/macros/s/AKfycbys9dPldfgtNcO8J51jsroJkC2Ic-_qn7jkVyp_G9w0UgEjaqGH4VsN_K7bteJMEOE-/exec"
 
 APP_VERSION = "1.0.0"
 

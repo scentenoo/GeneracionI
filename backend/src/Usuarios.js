@@ -5,8 +5,15 @@
  */
 
 function crear_usuario(token, datos) {
-  const sesion = requireSession_(token);
-  requireRole_(sesion, [ROLES.DIRECTIVO, ROLES.AMBOS]);
+  // Bootstrap: si todavía no existe ningún usuario, no hay nadie con quien
+  // loguearse para crear al primero — se permite sin sesión, pero solo
+  // mientras la pestaña Usuarios esté vacía. Apenas exista uno, esta
+  // ventana se cierra sola y vuelve a exigir sesión de directivo.
+  const usuariosExistentes = readAllRows_(SHEET_NAMES.USUARIOS).length;
+  if (usuariosExistentes > 0) {
+    const sesion = requireSession_(token);
+    requireRole_(sesion, [ROLES.DIRECTIVO, ROLES.AMBOS]);
+  }
 
   if (!datos.nombre || !datos.usuario || !datos.password_inicial || !datos.rol) {
     throw new Error('Faltan datos obligatorios (nombre, usuario, password_inicial, rol)');
