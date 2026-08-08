@@ -1,24 +1,26 @@
-"""Punto de entrada de la app de escritorio. Chequea versión antes que nada
-(spec sección 6: la app se bloquea si la versión local no coincide con
-`Config.version_actual` del backend) y recién después abre el login."""
+"""Punto de entrada de la app de escritorio.
+
+La ventana aparece de una y el chequeo de versión corre de fondo (spec
+sección 6: la app se bloquea si la versión local no coincide con
+`Config.version_actual`). Antes se consultaba el backend *antes* de dibujar
+nada, así que la app parecía trabada 1 a 3 segundos al abrirla.
+
+Mientras el chequeo corre, el botón de ingresar queda deshabilitado: no
+tendría sentido dejar entrar a alguien y bloquearlo un segundo después.
+"""
 
 from __future__ import annotations
-
-import sys
 
 import customtkinter as ctk
 
 import api_client
 from config import APP_VERSION
+from ui.app import App
+from ui.tareas import en_segundo_plano
 
 
-def _chequear_version() -> str | None:
-    """Devuelve un mensaje de error si hay que bloquear el uso, o None si está OK."""
-    try:
-        version_backend = api_client.version_actual()
-    except api_client.ApiError as exc:
-        return f"No se pudo verificar la versión de la app: {exc}"
-
+def _mensaje_de_bloqueo(version_backend: str) -> str | None:
+    """El texto a mostrar si hay que bloquear el uso, o None si está OK."""
     if version_backend != APP_VERSION:
         return (
             f"Esta versión de la app ({APP_VERSION}) quedó desactualizada "
@@ -31,21 +33,21 @@ def main():
     ctk.set_appearance_mode("system")
     ctk.set_default_color_theme("green")
 
-    error_version = _chequear_version()
-    if error_version:
-        # Ventana mínima solo para mostrar el bloqueo, sin dar acceso al resto de la app.
-        root = ctk.CTk()
-        root.title("Generación-I")
-        root.geometry("420x180")
-        ctk.CTkLabel(root, text=error_version, wraplength=380, justify="left").pack(
-            padx=20, pady=40, fill="both", expand=True
-        )
-        root.mainloop()
-        sys.exit(1)
+    app = App()
 
-    from ui.app import App  # import diferido: solo hace falta si pasó el chequeo de versión
+    def al_responder(version_backend):
+        bloqueo = _mensaje_de_bloqueo(str(version_backend))
+        if bloqueo:
+            app.bloquear(bloqueo)
+        else:
+            app.version_verificada()
 
-    App().mainloop()
+    def al_fallar(exc):
+        app.bloquear(f"No se pudo verificar la versión de la app:\n{exc}")
+
+    en_segundo_plano(app, api_client.version_actual, al_responder, al_fallar)
+
+    app.mainloop()
 
 
 if __name__ == "__main__":

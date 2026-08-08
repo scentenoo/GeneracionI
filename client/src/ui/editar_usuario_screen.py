@@ -16,6 +16,7 @@ from typing import Callable
 import customtkinter as ctk
 
 import api_client
+from ui.tareas import cache
 from services import image_utils
 from ui.usuario_form_fields import construir_campos_perfil, leer_campos_perfil
 
@@ -173,6 +174,7 @@ class EditarUsuarioScreen(ctk.CTkScrollableFrame):
 
         try:
             api_client.eliminar_usuario(self.sesion["token"], usuario["id"])
+            cache.invalidar("usuarios")
         except api_client.ApiError as exc:
             self.error_label.configure(text=str(exc), text_color="#c0392b")
             return
@@ -213,6 +215,7 @@ class EditarUsuarioScreen(ctk.CTkScrollableFrame):
 
         try:
             resultado = api_client.editar_usuario(self.sesion["token"], usuario["id"], cambios)
+            cache.invalidar("usuarios")
         except api_client.ApiError as exc:
             self.error_label.configure(text=str(exc), text_color="#c0392b")
             return

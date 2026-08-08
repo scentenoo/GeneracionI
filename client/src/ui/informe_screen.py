@@ -10,6 +10,7 @@ from typing import Callable
 import customtkinter as ctk
 
 import api_client
+from ui.tareas import cache
 from services import date_utils, docx_generator, pdf_converter
 from ui.avance_semana_editor import AvanceSemanaEditor
 
@@ -44,8 +45,8 @@ class InformeScreen(ctk.CTkScrollableFrame):
         self._cursos_por_etiqueta: dict[str, dict] = {}
         try:
             if self.es_directivo:
-                cursos = api_client.listar_todos_los_cursos(self.sesion["token"])
-                usuarios = {u["id"]: u["nombre"] for u in api_client.listar_usuarios(self.sesion["token"])}
+                cursos = cache.cursos(self.sesion["token"])
+                usuarios = cache.nombres_de_usuarios(self.sesion["token"])
                 self._cursos_por_etiqueta = {
                     f"{c['nombre']} — {usuarios.get(c['docente_id'], '')}": c
                     for c in cursos if c.get("activo")

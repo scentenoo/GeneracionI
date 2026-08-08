@@ -15,6 +15,7 @@ from typing import Callable
 import customtkinter as ctk
 
 import api_client
+from ui.tareas import cache
 
 
 class CursosScreen(ctk.CTkScrollableFrame):
@@ -72,7 +73,7 @@ class CursosScreen(ctk.CTkScrollableFrame):
     def _cargar_docentes(self):
         self._trabajando("Cargando...")
         try:
-            usuarios = api_client.listar_usuarios(self.sesion["token"])
+            usuarios = cache.usuarios(self.sesion["token"])
         except api_client.ApiError as exc:
             self.error_label.configure(text=str(exc), text_color="#c0392b")
             return
@@ -92,7 +93,7 @@ class CursosScreen(ctk.CTkScrollableFrame):
             w.destroy()
 
         try:
-            cursos = api_client.listar_todos_los_cursos(self.sesion["token"])
+            cursos = cache.cursos(self.sesion["token"])
         except api_client.ApiError as exc:
             self.error_label.configure(text=str(exc), text_color="#c0392b")
             return
@@ -146,6 +147,8 @@ class CursosScreen(ctk.CTkScrollableFrame):
         finally:
             self.crear_boton.configure(state="normal")
 
+        cache.invalidar("cursos")
+
         for entry in (self.nombre_entry, self.nucleo_entry, self.edad_desde_entry, self.edad_hasta_entry):
             entry.delete(0, "end")
 
@@ -164,6 +167,7 @@ class CursosScreen(ctk.CTkScrollableFrame):
         self._trabajando("Desactivando...")
         try:
             api_client.desactivar_curso(self.sesion["token"], curso["id"])
+            cache.invalidar("cursos")
         except api_client.ApiError as exc:
             self.error_label.configure(text=str(exc), text_color="#c0392b")
             return

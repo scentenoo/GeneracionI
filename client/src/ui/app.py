@@ -40,6 +40,24 @@ class App(ctk.CTk):
         self.pantalla_actual = LoginScreen(self, on_login_exitoso=self._on_login_exitoso)
         self.pantalla_actual.pack(fill="both", expand=True)
 
+    # --- chequeo de versión, que corre de fondo al abrir (ver main.py) ---
+
+    def version_verificada(self):
+        """La versión coincide: se habilita el login."""
+        if isinstance(self.pantalla_actual, LoginScreen):
+            self.pantalla_actual.habilitar()
+
+    def bloquear(self, mensaje: str):
+        """Reemplaza todo por el aviso: la app no se puede usar con una
+        versión vieja ni sin poder verificarla."""
+        self._limpiar()
+        aviso = ctk.CTkFrame(self)
+        aviso.pack(fill="both", expand=True)
+        ctk.CTkLabel(
+            aviso, text=mensaje, wraplength=400, justify="left", text_color="#c0392b"
+        ).pack(padx=30, pady=60, fill="both", expand=True)
+        self.pantalla_actual = aviso
+
     def _on_login_exitoso(self, sesion: dict):
         self.sesion = sesion
         self._mostrar_home()

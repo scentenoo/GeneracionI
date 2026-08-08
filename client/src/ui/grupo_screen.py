@@ -12,6 +12,7 @@ from typing import Callable
 import customtkinter as ctk
 
 import api_client
+from ui.tareas import cache, en_segundo_plano
 
 
 class GrupoScreen(ctk.CTkScrollableFrame):
@@ -71,23 +72,28 @@ class GrupoScreen(ctk.CTkScrollableFrame):
 
     def _cargar_cursos(self):
         self._trabajando("Cargando cursos...")
-        try:
-            cursos = api_client.listar_todos_los_cursos(self.sesion["token"])
-            usuarios = {u["id"]: u["nombre"] for u in api_client.listar_usuarios(self.sesion["token"])}
-        except api_client.ApiError as exc:
-            self.error_label.configure(text=str(exc), text_color="#c0392b")
-            return
 
-        activos = [c for c in cursos if c.get("activo")]
-        self._cursos_por_etiqueta = {
-            f"{c['nombre']} — {usuarios.get(c['docente_id'], 'docente ' + str(c['docente_id']))}": c
-            for c in activos
-        }
-        etiquetas = list(self._cursos_por_etiqueta) or ["(sin cursos)"]
-        self.curso_menu.configure(values=etiquetas)
-        self.curso_menu.set(etiquetas[0])
-        self.error_label.configure(text="")
-        self._cargar()
+        def traer():
+            token = self.sesion["token"]
+            return cache.cursos(token), cache.nombres_de_usuarios(token)
+
+        def listo(datos):
+            cursos, usuarios = datos
+            activos = [c for c in cursos if c.get("activo")]
+            self._cursos_por_etiqueta = {
+                f"{c['nombre']} — {usuarios.get(c['docente_id'], 'docente ' + str(c['docente_id']))}": c
+                for c in activos
+            }
+            etiquetas = list(self._cursos_por_etiqueta) or ["(sin cursos)"]
+            self.curso_menu.configure(values=etiquetas)
+            self.curso_menu.set(etiquetas[0])
+            self.error_label.configure(text="")
+            self._cargar()
+
+        en_segundo_plano(self, traer, listo, self._mostrar_error)
+
+    def _mostrar_error(self, exc):
+        self.error_label.configure(text=str(exc), text_color="#c0392b")
 
     def _curso_actual(self) -> dict | None:
         return self._cursos_por_etiqueta.get(self.curso_menu.get())
@@ -102,24 +108,26 @@ class GrupoScreen(ctk.CTkScrollableFrame):
             return
 
         self._trabajando("Cargando estudiantes...")
-        try:
-            estudiantes = api_client.obtener_estudiantes(self.sesion["token"], curso["id"])
-        except api_client.ApiError as exc:
-            self.error_label.configure(text=str(exc), text_color="#c0392b")
-            return
-        self.error_label.configure(text="")
 
-        if not estudiantes:
-            ctk.CTkLabel(self.lista_contenedor, text="Todavía no hay estudiantes.", text_color="gray").pack(
-                anchor="w"
-            )
-            return
+        def listo(estudiantes):
+            self.error_label.configure(text="")
+            if not estudiantes:
+                ctk.CTkLabel(
+                    self.lista_contenedor, text="Todavía no hay estudiantes.", text_color="gray"
+                ).pack(anchor="w")
+                return
+            for est in estudiantes:
+                var = ctk.BooleanVar(value=False)
+                cb = ctk.CTkCheckBox(self.lista_contenedor, text=est["nombre"], variable=var)
+                cb.pack(anchor="w", pady=2)
+                self._checkboxes[est["id"]] = (cb, var)
 
-        for est in estudiantes:
-            var = ctk.BooleanVar(value=False)
-            cb = ctk.CTkCheckBox(self.lista_contenedor, text=est["nombre"], variable=var)
-            cb.pack(anchor="w", pady=2)
-            self._checkboxes[est["id"]] = (cb, var)
+        en_segundo_plano(
+            self,
+            lambda: api_client.obtener_estudiantes(self.sesion["token"], curso["id"]),
+            listo,
+            self._mostrar_error,
+        )
 
     # --- acciones ---------------------------------------------------------
 
@@ -137,14 +145,19 @@ class GrupoScreen(ctk.CTkScrollableFrame):
             contenido = f.read()
 
         self._trabajando("Importando...")
-        try:
-            resultado = api_client.importar_estudiantes(self.sesion["token"], curso["id"], contenido)
-        except api_client.ApiError as exc:
-            self.error_label.configure(text=str(exc), text_color="#c0392b")
-            return
 
-        self._cargar()
-        self.error_label.configure(text=f"Se importaron {resultado['creados']} estudiantes.", text_color="#2fa84f")
+        def listo(resultado):
+            self._cargar()
+            self.error_label.configure(
+                text=f"Se importaron {resultado['creados']} estudiantes.", text_color="#2fa84f"
+            )
+
+        en_segundo_plano(
+            self,
+            lambda: api_client.importar_estudiantes(self.sesion["token"], curso["id"], contenido),
+            listo,
+            self._mostrar_error,
+        )
 
     def _agregar_uno(self):
         curso = self._curso_actual()
@@ -155,17 +168,25 @@ class GrupoScreen(ctk.CTkScrollableFrame):
 
         self.agregar_boton.configure(state="disabled")
         self._trabajando(f"Agregando a {nombre}...")
-        try:
-            api_client.modificar_grupo(self.sesion["token"], curso["id"], {"agregar": [{"nombre": nombre}]})
-        except api_client.ApiError as exc:
-            self.error_label.configure(text=str(exc), text_color="#c0392b")
-            return
-        finally:
-            self.agregar_boton.configure(state="normal")
 
-        self.nuevo_nombre_entry.delete(0, "end")
-        self._cargar()
-        self.error_label.configure(text=f"{nombre} agregado ✓", text_color="#2fa84f")
+        def listo(_resultado):
+            self.agregar_boton.configure(state="normal")
+            self.nuevo_nombre_entry.delete(0, "end")
+            self._cargar()
+            self.error_label.configure(text=f"{nombre} agregado ✓", text_color="#2fa84f")
+
+        def fallo(exc):
+            self.agregar_boton.configure(state="normal")
+            self._mostrar_error(exc)
+
+        en_segundo_plano(
+            self,
+            lambda: api_client.modificar_grupo(
+                self.sesion["token"], curso["id"], {"agregar": [{"nombre": nombre}]}
+            ),
+            listo,
+            fallo,
+        )
 
     def _quitar_seleccionados(self):
         curso = self._curso_actual()
@@ -176,13 +197,21 @@ class GrupoScreen(ctk.CTkScrollableFrame):
 
         self.quitar_boton.configure(state="disabled")
         self._trabajando("Quitando...")
-        try:
-            api_client.modificar_grupo(self.sesion["token"], curso["id"], {"quitar": ids_a_quitar})
-        except api_client.ApiError as exc:
-            self.error_label.configure(text=str(exc), text_color="#c0392b")
-            return
-        finally:
-            self.quitar_boton.configure(state="normal")
 
-        self._cargar()
-        self.error_label.configure(text=f"Se quitaron {len(ids_a_quitar)} estudiantes.", text_color="#2fa84f")
+        def listo(_resultado):
+            self.quitar_boton.configure(state="normal")
+            self._cargar()
+            self.error_label.configure(
+                text=f"Se quitaron {len(ids_a_quitar)} estudiantes.", text_color="#2fa84f"
+            )
+
+        def fallo(exc):
+            self.quitar_boton.configure(state="normal")
+            self._mostrar_error(exc)
+
+        en_segundo_plano(
+            self,
+            lambda: api_client.modificar_grupo(self.sesion["token"], curso["id"], {"quitar": ids_a_quitar}),
+            listo,
+            fallo,
+        )

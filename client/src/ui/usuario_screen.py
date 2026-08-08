@@ -8,6 +8,7 @@ from typing import Callable
 import customtkinter as ctk
 
 import api_client
+from ui.tareas import cache
 from ui.usuario_form_fields import (
     construir_campos_perfil,
     leer_campos_perfil,
@@ -72,6 +73,7 @@ class UsuarioScreen(ctk.CTkScrollableFrame):
         self.update_idletasks()
         try:
             resultado = api_client.crear_usuario(self.sesion["token"], datos)
+            cache.invalidar("usuarios")
         except api_client.ApiError as exc:
             self.error_label.configure(text=str(exc), text_color="#c0392b")
             return

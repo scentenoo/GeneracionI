@@ -2,6 +2,9 @@
 diseñar (logo, eslogan, frases motivadoras elegidas por votación, ver spec
 sección 8). Funcionalmente ya llama al backend real; lo que falta es
 estética y pulir la experiencia.
+
+El botón arranca deshabilitado hasta que el chequeo de versión que corre
+de fondo confirme que la app está al día (ver main.py).
 """
 
 from __future__ import annotations
@@ -11,6 +14,7 @@ from typing import Callable
 import customtkinter as ctk
 
 import api_client
+from ui.tareas import en_segundo_plano
 
 
 class LoginScreen(ctk.CTkFrame):
@@ -28,23 +32,40 @@ class LoginScreen(ctk.CTkFrame):
         self.password_entry.pack(pady=8)
         self.password_entry.bind("<Return>", lambda _e: self._intentar_login())
 
-        self.error_label = ctk.CTkLabel(self, text="", text_color="red")
+        self.error_label = ctk.CTkLabel(self, text="Verificando versión...", text_color="gray")
         self.error_label.pack(pady=(4, 0))
 
-        ctk.CTkButton(self, text="Ingresar", command=self._intentar_login, width=260).pack(pady=20)
+        self.boton = ctk.CTkButton(
+            self, text="Ingresar", command=self._intentar_login, width=260, state="disabled"
+        )
+        self.boton.pack(pady=20)
+
+    def habilitar(self):
+        """La llama App cuando el chequeo de versión terminó bien."""
+        self.boton.configure(state="normal")
+        self.error_label.configure(text="")
+        self.usuario_entry.focus_set()
 
     def _intentar_login(self):
         usuario = self.usuario_entry.get().strip()
         password = self.password_entry.get()
         if not usuario or not password:
-            self.error_label.configure(text="Completá usuario y contraseña")
+            self.error_label.configure(text="Completá usuario y contraseña", text_color="#c0392b")
             return
 
-        self.error_label.configure(text="Ingresando...")
-        try:
-            sesion = api_client.login(usuario, password)
-        except api_client.ApiError as exc:
-            self.error_label.configure(text=str(exc))
-            return
+        self.boton.configure(state="disabled", text="Ingresando...")
+        self.error_label.configure(text="", text_color="gray")
 
+        en_segundo_plano(
+            self,
+            lambda: api_client.login(usuario, password),
+            self._al_entrar,
+            self._al_fallar,
+        )
+
+    def _al_entrar(self, sesion):
         self.on_login_exitoso(sesion)
+
+    def _al_fallar(self, exc):
+        self.boton.configure(state="normal", text="Ingresar")
+        self.error_label.configure(text=str(exc), text_color="#c0392b")
