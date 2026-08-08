@@ -71,10 +71,12 @@ function setupSheets() {
   });
 
   const config = ss.getSheetByName(SHEET_NAMES.CONFIG);
-  const yaTieneVersion = config
-    .getRange(2, 1, Math.max(config.getLastRow() - 1, 0), 1)
-    .getValues()
-    .some((r) => r[0] === 'version_actual');
+  const yaTieneVersion =
+    config.getLastRow() > 1 &&
+    config
+      .getRange(2, 1, config.getLastRow() - 1, 1)
+      .getValues()
+      .some((r) => r[0] === 'version_actual');
   if (!yaTieneVersion) {
     config.appendRow(['version_actual', '1.0.0']);
   }
