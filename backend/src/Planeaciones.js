@@ -87,6 +87,39 @@ function editar_planeacion(token, id, cambios) {
 }
 
 /**
+ * Solo el docente dueño puede eliminar su propia planeación (spec sección
+ * 3: "Docente: CRUD de sus propias planeaciones"). El directivo edita pero
+ * nunca elimina — ver editar_planeacion.
+ */
+function eliminar_planeacion(token, id) {
+  const sesion = requireSession_(token);
+  const fila = findRowById_(SHEET_NAMES.PLANEACIONES, id);
+  if (!fila) throw new Error(`No se encontró la planeación ${id}`);
+  if (String(fila.docente_id) !== String(sesion.id)) {
+    throw new Error('Solo podés eliminar tus propias planeaciones');
+  }
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    if (fila.foto_clase_drive_id) {
+      try {
+        DriveApp.getFileById(fila.foto_clase_drive_id).setTrashed(true);
+      } catch (e) {
+        // La foto ya no existe o no es accesible: no bloquea el borrado de la fila.
+      }
+    }
+    getSheet_(SHEET_NAMES.PLANEACIONES).deleteRow(fila._row);
+    registrarHistorial_(sesion.usuario, 'planeacion', id, [
+      { campo: 'eliminada', antes: `${fila.fecha} - ${fila.grupo}`, despues: '' },
+    ]);
+    return { ok: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
  * Cuántas planeaciones lleva el docente en el mes vs las esperadas.
  * mes en formato 'YYYY-MM'.
  */

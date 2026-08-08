@@ -13,6 +13,7 @@ const ACCIONES_PERMITIDAS_ = {
   guardar_planeacion,
   obtener_planeaciones,
   editar_planeacion,
+  eliminar_planeacion,
   obtener_estado_mes,
   importar_estudiantes,
   obtener_estudiantes,

@@ -74,6 +74,11 @@ def editar_planeacion(token: str, id_: int, cambios: dict) -> dict:
     return _call("editar_planeacion", token, id_, cambios)
 
 
+def eliminar_planeacion(token: str, id_: int) -> dict:
+    """Solo el docente dueño puede eliminar su propia planeación."""
+    return _call("eliminar_planeacion", token, id_)
+
+
 def obtener_estado_mes(token: str, docente_id: int | None, mes: str) -> dict:
     """mes en formato 'YYYY-MM'."""
     return _call("obtener_estado_mes", token, docente_id, mes)
