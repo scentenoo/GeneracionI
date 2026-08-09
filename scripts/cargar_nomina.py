@@ -71,6 +71,14 @@ def contrasena_al_azar() -> str:
 
 def leer_nomina() -> dict[str, dict]:
     """Devuelve {nombre: {cursos: [...], cargos: [...], valor_hora_*}}."""
+    if not NOMINA.exists():
+        raise SystemExit(
+            f"No encontré la nómina en {NOMINA}.\n\n"
+            "No está en el repo a propósito: trae los sueldos de todo el equipo.\n"
+            "Pedísela al equipo directivo y ponela ahí.\n"
+            "Ver docs/formatos-del-programa.md."
+        )
+
     hoja = openpyxl.load_workbook(NOMINA, data_only=True)["Nómina"]
 
     personas: dict[str, dict] = {}
