@@ -12,6 +12,7 @@ uno y atrasado en el otro.
 
 from __future__ import annotations
 
+from tkinter import messagebox
 from typing import Callable
 
 import customtkinter as ctk
@@ -53,6 +54,8 @@ class DashboardScreen(ctk.CTkScrollableFrame):
         self.detalle_label = ctk.CTkLabel(self, text="", text_color=GRIS, anchor="w", justify="left")
         self.detalle_label.pack(fill="x", pady=(0, 10))
 
+        self._construir_corte()
+
         self.tarjetas = ctk.CTkFrame(self, fg_color="transparent")
         self.tarjetas.pack(fill="both", expand=True)
 
@@ -60,6 +63,79 @@ class DashboardScreen(ctk.CTkScrollableFrame):
         # última, el directivo termina viendo el mes que ya no pidió.
         self.consulta = 0
         self._cargar()
+
+    # --- cierre del mes -------------------------------------------------
+
+    def _construir_corte(self):
+        """El día de corte vive acá y no en una pantalla aparte: es el
+        mismo lugar donde el directivo mira quién va atrasado y decide a
+        quién reabrirle el mes."""
+        marco = ctk.CTkFrame(self, corner_radius=8)
+        marco.pack(fill="x", pady=(0, 12))
+
+        fila = ctk.CTkFrame(marco, fg_color="transparent")
+        fila.pack(fill="x", padx=12, pady=10)
+
+        ctk.CTkLabel(fila, text="El mes se cierra el día").pack(side="left")
+        self.corte_entry = ctk.CTkEntry(fila, width=45)
+        self.corte_entry.pack(side="left", padx=6)
+        ctk.CTkLabel(fila, text="del mes siguiente").pack(side="left")
+        ctk.CTkButton(fila, text="Guardar", width=80, command=self._guardar_corte).pack(
+            side="right"
+        )
+
+        self.corte_aviso = ctk.CTkLabel(
+            marco,
+            text="Pasada esa fecha los docentes no pueden cargar, editar ni borrar "
+                 "nada de ese mes. Ustedes sí.",
+            text_color=GRIS, font=ctk.CTkFont(size=11),
+            anchor="w", justify="left", wraplength=600,
+        )
+        self.corte_aviso.pack(fill="x", padx=12, pady=(0, 10))
+
+    def _guardar_corte(self):
+        dia = self.corte_entry.get().strip()
+        self.corte_aviso.configure(text="Guardando...", text_color=GRIS)
+
+        def listo(r):
+            self.corte_aviso.configure(
+                text=f"Listo: los meses se cierran el día {r['dia_de_corte']} del mes siguiente.",
+                text_color=VERDE,
+            )
+            self._cargar()
+
+        en_segundo_plano(
+            self,
+            lambda: api_client.fijar_dia_de_corte(self.sesion["token"], dia),
+            listo,
+            lambda exc: self.corte_aviso.configure(text=str(exc), text_color=ROJO),
+        )
+
+    def _alternar_cierre(self, estado: dict, abrir: bool):
+        curso, mes = estado["curso_id"], estado["mes"]
+        nombre = estado.get("curso", "")
+        if not abrir and not messagebox.askyesno(
+            "Cerrar el mes",
+            f"¿Cerrar {mes} para «{nombre}»?\n\n"
+            "El docente no va a poder cambiar nada más de ese mes.",
+        ):
+            return
+
+        self.corte_aviso.configure(text="Guardando...", text_color=GRIS)
+
+        def listo(_r):
+            self.corte_aviso.configure(
+                text=f"{'Reabierto' if abrir else 'Cerrado'} {mes} para «{nombre}».",
+                text_color=VERDE,
+            )
+            self._cargar()
+
+        en_segundo_plano(
+            self,
+            lambda: api_client.reabrir_mes(self.sesion["token"], curso, mes, abrir),
+            listo,
+            lambda exc: self.corte_aviso.configure(text=str(exc), text_color=ROJO),
+        )
 
     # --- estado de cada curso ------------------------------------------
 
@@ -98,6 +174,10 @@ class DashboardScreen(ctk.CTkScrollableFrame):
             self.detalle_label.configure(
                 text=f"{al_dia} de {len(estados)} cursos con todas las clases cargadas  ·  {mes}"
             )
+
+            corte = estados[0].get("dia_de_corte")
+            if corte and not self.corte_entry.get().strip():
+                self.corte_entry.insert(0, str(corte))
 
             for estado in sorted(estados, key=lambda e: (self._clasificar(e)[0], e.get("curso", ""))):
                 self._tarjeta(estado)
@@ -141,6 +221,21 @@ class DashboardScreen(ctk.CTkScrollableFrame):
         )
         self._chip(estados_fila, texto_clases, VERDE if faltan == 0 else ROJO)
         self._chip(estados_fila, texto_informe, color)
+
+        # Reabrir un mes cerrado es lo que hace que el corte no sea una
+        # pared: el docente pide, el directivo abre acá mismo.
+        if estado.get("cerrado"):
+            self._chip(estados_fila, "mes cerrado", GRIS)
+            ctk.CTkButton(
+                estados_fila, text="Reabrir", width=80, fg_color="transparent", border_width=1,
+                command=lambda: self._alternar_cierre(estado, True),
+            ).pack(side="left", padx=(6, 0))
+        elif estado.get("reabierto"):
+            self._chip(estados_fila, "reabierto", AMBAR)
+            ctk.CTkButton(
+                estados_fila, text="Cerrar", width=80, fg_color="transparent", border_width=1,
+                command=lambda: self._alternar_cierre(estado, False),
+            ).pack(side="left", padx=(6, 0))
 
     def _chip(self, padre, texto: str, color: str):
         ctk.CTkLabel(

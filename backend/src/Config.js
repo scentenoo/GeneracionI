@@ -12,6 +12,7 @@ const SHEET_NAMES = {
   INFORMES: 'InformesMensuales',
   ESTUDIANTES: 'Estudiantes',
   HORAS_GESTION: 'HorasGestion',
+  REAPERTURAS: 'Reaperturas',
   HISTORIAL: 'Historial',
   CONFIG: 'Config',
 };

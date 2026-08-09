@@ -76,6 +76,11 @@ const ESQUEMA_SHEETS_ = {
     'id', 'directivo_id', 'fecha', 'actividad', 'horas_sede',
     'entregable', 'link_soporte', 'creado_en',
   ],
+  // Un mes que el equipo directivo volvió a abrir para un curso puntual,
+  // después de la fecha de corte.
+  [SHEET_NAMES.REAPERTURAS]: [
+    'id', 'curso_id', 'mes', 'abierta', 'abierto_por', 'actualizado_en',
+  ],
   [SHEET_NAMES.HISTORIAL]: [
     'timestamp', 'usuario', 'tipo', 'id_afectado', 'campo', 'valor_anterior', 'valor_nuevo',
   ],

@@ -286,10 +286,24 @@ function obtener_dashboard_directivo(token, mes) {
     informePorCurso[String(i.curso_id)] = i;
   });
 
+  // Las reaperturas se leen una vez y no por curso: mesCerrado_ relee la
+  // pestaña entera cada vez que se lo llama.
+  const reabierto = {};
+  readAllRows_(SHEET_NAMES.REAPERTURAS).forEach((r) => {
+    if (mesDeFecha_(r.mes) === mes && r.abierta === true) reabierto[String(r.curso_id)] = true;
+  });
+  const fechaCierre = fechaDeCierre_(mes);
+  const yaPasoElCorte = fechaISO_(new Date()) >= fechaCierre;
+
   return readRowsWhere_(SHEET_NAMES.CURSOS, (c) => c.activo === true).map((curso) => {
     const registradas = clasesPorCurso[String(curso.id)] || 0;
     const informe = informePorCurso[String(curso.id)];
+    const abierto = !!reabierto[String(curso.id)];
     return {
+      cerrado: yaPasoElCorte && !abierto,
+      reabierto: abierto,
+      dia_de_corte: diaDeCorte_(),
+      fecha_cierre: fechaCierre,
       curso_id: curso.id,
       curso: curso.nombre,
       docente_id: curso.docente_id,

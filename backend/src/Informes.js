@@ -51,6 +51,8 @@ function guardar_informe_mensual(token, curso_id, mes, narrativa, gestionNarrati
     throw new Error('No tienes permiso para entregar el informe de ese curso');
   }
 
+  requireMesAbierto_(sesion, curso_id, mes);
+
   const estado = obtener_estado_mes(token, curso_id, mes);
   if (estado.faltantes > 0) {
     throw new Error(

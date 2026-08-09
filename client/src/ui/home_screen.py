@@ -35,7 +35,11 @@ class HomeScreen(ctk.CTkFrame):
         ctk.CTkLabel(self, text=f"Rol: {sesion['rol']}", text_color="gray").pack(pady=(0, 20))
 
         es_docente = sesion["rol"] in ("docente", "ambos")
-        es_directivo = sesion["rol"] in ("directivo", "ambos")
+        # El administrador entra a las pantallas de gestión aunque su rol
+        # sea docente. Eso no lo vuelve directivo: su informe mensual sigue
+        # siendo el de docente, porque administrar la app no es un cargo del
+        # programa y no se cobran horas de gestión por eso.
+        es_directivo = sesion["rol"] in ("directivo", "ambos") or bool(sesion.get("es_admin"))
 
         if es_docente:
             ctk.CTkButton(self, text="Nueva planeación de clase", width=260, command=on_nueva_planeacion).pack(

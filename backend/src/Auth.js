@@ -69,10 +69,20 @@ function requireSession_(token) {
   return JSON.parse(raw);
 }
 
+/**
+ * El administrador entra a todo lo que entra un directivo, aunque su rol
+ * sea docente: es quien tiene que poder arreglar las cosas.
+ *
+ * Ojo con la diferencia: esto es sobre lo que se PUEDE HACER. Lo que la
+ * persona ES sigue saliendo del rol, y eso es lo que decide la estructura
+ * de su informe mensual y si el cierre de mes lo alcanza. Samir da clase y
+ * además administra la app; administrar no es un cargo del programa, así
+ * que no cobra horas de gestión y su informe es el de cualquier docente.
+ */
 function requireRole_(sesion, rolesPermitidos) {
-  if (!rolesPermitidos.includes(sesion.rol)) {
-    throw new Error(`Esta acción requiere rol ${rolesPermitidos.join(' o ')}`);
-  }
+  if (rolesPermitidos.includes(sesion.rol)) return;
+  if (rolesPermitidos.includes(ROLES.DIRECTIVO) && esAdministrador_(sesion.id)) return;
+  throw new Error(`Esta acción requiere rol ${rolesPermitidos.join(' o ')}`);
 }
 
 /** true si el usuario tiene componente docente (rol docente o ambos). */

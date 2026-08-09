@@ -34,6 +34,10 @@ class InformeScreen(ctk.CTkScrollableFrame):
             self._construir_gestion()
         self._construir_acciones()
 
+        # Recién acá, con los botones ya creados, se puede saber si este
+        # curso y mes están en condiciones de generar informe.
+        self._cargar_entregado()
+
     # --- secciones -----------------------------------------------------
 
     def _construir_encabezado(self):
@@ -67,8 +71,18 @@ class InformeScreen(ctk.CTkScrollableFrame):
         self.curso_menu.set(etiquetas[0])
         self.curso_menu.pack(fill="x", pady=(2, 10))
 
+        # Cambiar el mes también cambia si el informe se puede armar, así
+        # que se revisa al salir del campo y no solo al elegir curso.
+        self.mes_entry.bind("<FocusOut>", lambda _e: self._cargar_entregado())
+        self.mes_entry.bind("<Return>", lambda _e: self._cargar_entregado())
+
         self.entregado_label = ctk.CTkLabel(self, text="", text_color="gray", anchor="w")
         self.entregado_label.pack(fill="x")
+
+        self.faltantes_label = ctk.CTkLabel(
+            self, text="", text_color="#c0392b", anchor="w", justify="left", wraplength=560
+        )
+        self.faltantes_label.pack(fill="x", pady=(4, 0))
 
     def _campo(self, etiqueta: str) -> ctk.CTkTextbox:
         ctk.CTkLabel(self, text=etiqueta, anchor="w").pack(fill="x", pady=(10, 0))
@@ -332,12 +346,49 @@ class InformeScreen(ctk.CTkScrollableFrame):
             fallo,
         )
 
+    def _permitir(self, permitido: bool):
+        """El informe del mes se arma con las planeaciones del mes: si
+        faltan clases por cargar, no hay nada que generar todavía. Se
+        bloquea acá además de en el backend para que el docente no llene
+        seis campos largos y recién ahí se entere."""
+        estado = "normal" if permitido else "disabled"
+        self.previsualizar_boton.configure(state=estado)
+        if permitido:
+            self.guardar_boton.configure(state="disabled")  # se habilita tras la vista previa
+        else:
+            self.guardar_boton.configure(state="disabled")
+
     def _cargar_entregado(self):
         """Si el informe de ese curso y mes ya se entregó, trae las
-        respuestas para poder revisarlas o corregirlas."""
+        respuestas para poder revisarlas o corregirlas. De paso comprueba
+        que estén todas las planeaciones del mes."""
         curso = self._curso_seleccionado()
         if not curso:
             return
+
+        mes = self.mes_entry.get().strip()
+
+        def estado_listo(estado):
+            if isinstance(estado, Exception):
+                return
+            faltan = estado.get("faltantes", 0)
+            if faltan > 0:
+                self.faltantes_label.configure(
+                    text=f"Te faltan {faltan} de {estado['esperadas']} planeaciones de {mes} "
+                         f"para este curso.\nCargalas desde «Nueva planeación de clase» y "
+                         "volvé acá: el informe del mes se arma con ellas.",
+                    text_color="#c0392b",
+                )
+            else:
+                self.faltantes_label.configure(text="")
+            self._permitir(faltan == 0)
+
+        en_segundo_plano(
+            self,
+            lambda: api_client.obtener_estado_mes(self.sesion["token"], curso["id"], mes),
+            estado_listo,
+            lambda _exc: None,
+        )
 
         def listo(guardado):
             if not guardado:

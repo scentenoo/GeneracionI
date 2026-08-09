@@ -345,6 +345,22 @@ def subir_firma(token: str, usuario_id: int, imagen: dict) -> dict:
     return _call("subir_firma", token, usuario_id, imagen)
 
 
+def estado_cierre(token: str, curso_id: int, mes: str) -> dict:
+    """Si ese mes sigue abierto para quien pregunta. El docente lo usa para
+    saber si todavía puede editar o borrar."""
+    return _call("estado_cierre", token, curso_id, mes)
+
+
+def fijar_dia_de_corte(token: str, dia: int) -> dict:
+    """El día del mes siguiente en que se cierra el mes anterior. Directivo."""
+    return _call("fijar_dia_de_corte", token, dia)
+
+
+def reabrir_mes(token: str, curso_id: int, mes: str, abierta: bool = True) -> dict:
+    """Vuelve a abrir (o cierra de nuevo) un curso y un mes puntuales."""
+    return _call("reabrir_mes", token, curso_id, mes, abierta)
+
+
 def obtener_dashboard_directivo(token: str, mes: str) -> list[dict]:
     return _call("obtener_dashboard_directivo", token, mes)
 

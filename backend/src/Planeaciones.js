@@ -11,6 +11,9 @@ function guardar_planeacion(token, datos, fotos) {
   validarPlaneacion_(datos, fotos, esDirectivo_(sesion));
 
   const curso = requireCursoDelDocente_(datos.curso_id, sesion.id);
+  // Cargar una clase de un mes ya cerrado también le cambia la cuenta al
+  // equipo directivo, así que se bloquea igual que editar.
+  requireMesAbierto_(sesion, curso.id, mesDeFecha_(datos.fecha));
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
@@ -111,6 +114,11 @@ function obtener_planeaciones(token, docente_id, curso_id, resumen) {
       (!curso_id || String(p.curso_id) === String(curso_id))
   );
 
+  // El cierre se resuelve acá para que la lista pueda esconder editar y
+  // borrar sin pedir una consulta por fila. Se lee Reaperturas una sola
+  // vez y no una por planeación.
+  const cerrado = calculadorDeCierre_(sesion);
+
   if (resumen) {
     return filas.map((p) => ({
       id: p.id,
@@ -120,9 +128,14 @@ function obtener_planeaciones(token, docente_id, curso_id, resumen) {
       grupo: p.grupo,
       objetivo: p.objetivo,
       horas: p.horas,
+      bloqueada: cerrado(p.curso_id, mesDeFecha_(p.fecha)),
     }));
   }
-  return filas.map(parsePlaneacionRow_);
+  return filas.map((p) =>
+    Object.assign(parsePlaneacionRow_(p), {
+      bloqueada: cerrado(p.curso_id, mesDeFecha_(p.fecha)),
+    })
+  );
 }
 
 /** Una sola planeación completa, para abrirla en el editor. */
@@ -160,6 +173,7 @@ function editar_planeacion(token, id, cambios) {
   if (!esDueno && !esDirectivo_(sesion)) {
     throw new Error('Solo podés editar tus propias planeaciones');
   }
+  requireMesAbierto_(sesion, fila.curso_id, mesDeFecha_(fila.fecha));
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
@@ -191,6 +205,7 @@ function eliminar_planeacion(token, id) {
   if (String(fila.docente_id) !== String(sesion.id)) {
     throw new Error('Solo podés eliminar tus propias planeaciones');
   }
+  requireMesAbierto_(sesion, fila.curso_id, mesDeFecha_(fila.fecha));
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
