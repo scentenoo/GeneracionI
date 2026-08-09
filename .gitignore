@@ -32,3 +32,4 @@ Thumbs.db
 .env.*
 credentials*.json
 token*.json
+credenciales_iniciales.txt
