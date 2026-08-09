@@ -5,12 +5,21 @@ aparece dos veces y quien además coordina, tres. El script agrupa por
 persona, deduce el rol de las filas que tenga, y crea un curso por cada
 fila de docencia.
 
-Por defecto NO escribe nada: muestra lo que haría. Para aplicarlo de
-verdad hay que pasar --aplicar, porque esto crea usuarios reales en la
-Sheet de producción y no hay deshacer masivo.
+Por defecto NO escribe nada: se conecta, compara contra la Sheet y
+muestra lo que haría. Para aplicarlo de verdad hay que pasar --aplicar,
+porque esto crea usuarios reales en la Sheet de producción y no hay
+deshacer masivo.
 
     python scripts/cargar_nomina.py                    # ver qué haría
     python scripts/cargar_nomina.py --aplicar          # hacerlo
+    python scripts/cargar_nomina.py --offline          # solo leer la nómina
+
+Los nombres se comparan sin tildes ni mayúsculas, y un curso que ya
+figure en la Sheet con el nombre más largo (la nómina dice "Desarrollo de
+aplicaciones", la Sheet "Desarrollo de aplicaciones y bases de datos") se
+reconoce como el mismo y no se duplica. Ante la duda no crea: un curso de
+más queda pidiendo un informe mensual que nadie debe, y eso ensucia el
+dashboard para siempre; uno de menos se agrega a mano en dos clics.
 
 Las contraseñas se generan al azar y se escriben en un archivo aparte,
 que está en .gitignore. Ese archivo es para repartir a mano y borrar
@@ -48,6 +57,37 @@ def sin_acentos(texto: str) -> str:
     return "".join(
         c for c in unicodedata.normalize("NFD", texto) if unicodedata.category(c) != "Mn"
     )
+
+
+def normalizar(texto: str) -> str:
+    """Para comparar nombres escritos por manos distintas: la nómina y la
+    Sheet no coinciden en tildes, mayúsculas ni espacios de más."""
+    return " ".join(sin_acentos(str(texto or "")).lower().split())
+
+
+def buscar_curso(nombre_nomina: str, cursos_del_docente: list[dict]):
+    """Ubica el curso de la Sheet que corresponde a esa fila de la nómina.
+
+    Devuelve (curso, motivo) con motivo 'igual' o 'parecido', o
+    (None, None) si no hay ninguno.
+
+    Lo de 'parecido' existe por un caso concreto: la nómina dice
+    "Desarrollo de aplicaciones" y en la Sheet el curso está como
+    "Desarrollo de aplicaciones y bases de datos". Son el mismo, pero por
+    nombre exacto se crearían dos.
+    """
+    objetivo = normalizar(nombre_nomina)
+
+    for c in cursos_del_docente:
+        if normalizar(c["nombre"]) == objetivo:
+            return c, "igual"
+
+    for c in cursos_del_docente:
+        existente = normalizar(c["nombre"])
+        if existente.startswith(objetivo) or objetivo.startswith(existente):
+            return c, "parecido"
+
+    return None, None
 
 
 def nombre_de_usuario(nombre_completo: str, tomados: set[str]) -> str:
@@ -120,27 +160,80 @@ def rol_de(persona: dict) -> str:
     return "directivo" if persona["cargos"] else "docente"
 
 
+def planificar(personas: dict[str, dict], usuarios: list[dict], cursos: list[dict]) -> list[dict]:
+    """Qué haría el script, sin tocar nada.
+
+    Lo calculan igual la simulación y la aplicación, para que lo que se ve
+    antes sea exactamente lo que después pasa.
+    """
+    por_nombre = {normalizar(u["nombre"]): u for u in usuarios}
+
+    cursos_por_docente: dict[int, list[dict]] = {}
+    for c in cursos:
+        cursos_por_docente.setdefault(c["docente_id"], []).append(c)
+
+    plan = []
+    for nombre, p in sorted(personas.items()):
+        usuario = por_nombre.get(normalizar(nombre))
+        suyos = cursos_por_docente.get(usuario["id"], []) if usuario else []
+        plan.append({
+            "nombre": nombre,
+            "persona": p,
+            "usuario": usuario,
+            "cursos": [(curso, *buscar_curso(curso, suyos)) for curso in p["cursos"]],
+        })
+    return plan
+
+
+def imprimir_plan(plan: list[dict], comparado: bool):
+    for item in plan:
+        p = item["persona"]
+        print(f"  {item['nombre']}")
+        print(f"      rol: {rol_de(p)}"
+              f"  ·  hora docente: {p['valor_hora_docente'] or '—'}"
+              f"  ·  hora directivo: {p['valor_hora_directivo'] or '—'}")
+
+        if comparado:
+            u = item["usuario"]
+            print(f"      usuario: {'ya existe como ' + u['usuario'] if u else 'se crea'}")
+
+        for curso, existente, motivo in item["cursos"]:
+            if motivo == "igual":
+                print(f"      curso «{curso}»: ya está")
+            elif motivo == "parecido":
+                print(f"      curso «{curso}»: NO lo creo, en la Sheet ya figura como")
+                print(f"                       «{existente['nombre']}» — revisá si es el mismo")
+            else:
+                print(f"      curso «{curso}»: {'se crea' if comparado else '(sin comparar)'}")
+
+        for c in p["cargos"]:
+            print(f"      cargo «{c}»: no se crea como curso")
+
+    parecidos = sum(1 for i in plan for _, _, m in i["cursos"] if m == "parecido")
+    if parecidos:
+        print(f"\n  Ojo: {parecidos} curso(s) se parecen a uno que ya existe y NO se van a crear.")
+        print("  Si alguno era distinto de verdad, crealo a mano desde la pantalla de Cursos.")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--aplicar", action="store_true", help="escribir de verdad en la Sheet")
     parser.add_argument("--usuario", default="samir", help="con qué usuario administrador entrar")
+    parser.add_argument(
+        "--offline", action="store_true",
+        help="solo leer la nómina, sin conectarse a comparar contra la Sheet",
+    )
     args = parser.parse_args()
 
     personas = leer_nomina()
     print(f"La nómina tiene {len(personas)} personas.\n")
 
-    if not args.aplicar:
-        for nombre, p in sorted(personas.items()):
-            print(f"  {nombre}")
-            print(f"      rol: {rol_de(p)}"
-                  f"  ·  hora docente: {p['valor_hora_docente'] or '—'}"
-                  f"  ·  hora directivo: {p['valor_hora_directivo'] or '—'}")
-            for c in p["cursos"]:
-                print(f"      curso:  {c}")
-            for c in p["cargos"]:
-                print(f"      cargo:  {c}  (no se crea como curso)")
-        print("\nEsto fue una simulación. Para aplicarlo:")
-        print("  python scripts/cargar_nomina.py --aplicar")
+    if args.offline:
+        # Sin la Sheet no se puede saber qué falta, así que esto solo sirve
+        # para revisar que la nómina se haya leído bien.
+        imprimir_plan(planificar(personas, [], []), comparado=False)
+        print("\nEsto fue solo la lectura de la nómina, sin comparar contra la Sheet.")
+        print("Sacale --offline para ver qué se crearía de verdad.")
         return
 
     import getpass
@@ -150,16 +243,19 @@ def main():
     token = sesion["token"]
     print(f"Entré como {sesion['nombre']}.\n")
 
-    existentes = {u["usuario"]: u for u in api_client.listar_usuarios(token)}
-    por_nombre = {u["nombre"]: u for u in existentes.values()}
-    cursos_existentes = {
-        (c["docente_id"], c["nombre"]) for c in api_client.listar_todos_los_cursos(token)
-    }
-    tomados = set(existentes)
+    usuarios = api_client.listar_usuarios(token)
+    plan = planificar(personas, usuarios, api_client.listar_todos_los_cursos(token))
 
+    if not args.aplicar:
+        imprimir_plan(plan, comparado=True)
+        print("\nEsto fue una simulación, no se escribió nada. Para aplicarlo:")
+        print("  python scripts/cargar_nomina.py --aplicar")
+        return
+
+    tomados = {u["usuario"] for u in usuarios}
     credenciales = []
-    for nombre, p in sorted(personas.items()):
-        usuario = por_nombre.get(nombre)
+    for item in plan:
+        nombre, p, usuario = item["nombre"], item["persona"], item["usuario"]
 
         if usuario:
             print(f"  {nombre}: ya existe, no lo toco")
@@ -178,12 +274,14 @@ def main():
             credenciales.append((nombre, datos["usuario"], clave, datos["rol"]))
             print(f"  {nombre}: creado como {datos['usuario']} ({datos['rol']})")
 
-        for curso in p["cursos"]:
-            if (usuario["id"], curso) in cursos_existentes:
+        for curso, existente, motivo in item["cursos"]:
+            if motivo == "igual":
                 print(f"      curso «{curso}» ya estaba")
-                continue
-            api_client.crear_curso(token, {"docente_id": usuario["id"], "nombre": curso})
-            print(f"      curso «{curso}» creado")
+            elif motivo == "parecido":
+                print(f"      curso «{curso}» NO creado: ya figura como «{existente['nombre']}»")
+            else:
+                api_client.crear_curso(token, {"docente_id": usuario["id"], "nombre": curso})
+                print(f"      curso «{curso}» creado")
 
     if credenciales:
         with CREDENCIALES.open("w", encoding="utf-8") as f:
