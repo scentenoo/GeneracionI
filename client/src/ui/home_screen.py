@@ -14,6 +14,7 @@ class HomeScreen(ctk.CTkFrame):
         sesion: dict,
         on_nueva_planeacion: Callable[[], None],
         on_mis_planeaciones: Callable[[], None],
+        on_actividades: Callable[[], None],
         on_dashboard: Callable[[], None],
         on_informe: Callable[[], None],
         on_grupo: Callable[[], None],
@@ -41,6 +42,7 @@ class HomeScreen(ctk.CTkFrame):
                 pady=6
             )
             ctk.CTkButton(self, text="Mis planeaciones", width=260, command=on_mis_planeaciones).pack(pady=6)
+            ctk.CTkButton(self, text="Otras actividades del mes", width=260, command=on_actividades).pack(pady=6)
         ctk.CTkButton(self, text="Generar informe mensual", width=260, command=on_informe).pack(pady=6)
         if es_directivo:
             ctk.CTkButton(self, text="Dashboard directivo", width=260, command=on_dashboard).pack(pady=6)

@@ -8,6 +8,7 @@ const SHEET_NAMES = {
   USUARIOS: 'Usuarios',
   CURSOS: 'Cursos',
   PLANEACIONES: 'Planeaciones',
+  ACTIVIDADES: 'Actividades',
   INFORMES: 'InformesMensuales',
   ESTUDIANTES: 'Estudiantes',
   HORAS_GESTION: 'HorasGestion',

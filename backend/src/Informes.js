@@ -186,9 +186,13 @@ function generar_informe_mensual(token, curso_id, mes, narrativa, gestionNarrati
     (p) => String(p.curso_id) === String(curso_id) && mesDeFecha_(p.fecha) === mes
   ).map(parsePlaneacionRow_);
 
-  const actividades = planeacionesDelMes.map((p) => {
+  // La tabla del informe lista las clases Y lo demás que se factura:
+  // reuniones, claustros, informes. En julio esas otras fueron 8 de las 16
+  // horas del mes, así que sin sumarlas la cuenta de cobro sale por mitad.
+  const filasDeClases = planeacionesDelMes.map((p) => {
     const asistentes = p.asistencia.filter((a) => a.presente).length;
     return {
+      _fecha: fechaISO_(p.fecha),
       // No hay un campo "título corto" en la planeación — se usa el objetivo.
       actividad: p.objetivo,
       nro_semana: String(Math.ceil(diaDeFecha_(p.fecha) / 7)),
@@ -200,8 +204,33 @@ function generar_informe_mensual(token, curso_id, mes, narrativa, gestionNarrati
     };
   });
 
-  const totalHorasDocente = planeacionesDelMes.reduce((sum, p) => sum + (Number(p.horas) || 0), 0);
-  const totalAsistentes = actividades.reduce((sum, a) => sum + Number(a.cantidad_asistentes), 0);
+  const otrasDelMes = readRowsWhere_(
+    SHEET_NAMES.ACTIVIDADES,
+    (a) => String(a.curso_id) === String(curso_id) && mesDeFecha_(a.fecha) === mes
+  );
+
+  const filasDeOtras = otrasDelMes.map((a) => ({
+    _fecha: fechaISO_(a.fecha),
+    actividad: a.descripcion,
+    nro_semana: String(Math.ceil(diaDeFecha_(a.fecha) / 7)),
+    horas_sede: Number(a.horas_sede) ? String(a.horas_sede) : '',
+    horas_externas: Number(a.horas_externas) ? String(a.horas_externas) : '',
+    // Una reunión no tiene asistencia de estudiantes ni planeación.
+    cantidad_asistentes: '',
+    fecha: fechaCorta_(a.fecha),
+    link_planeacion: '',
+  }));
+
+  const actividades = filasDeClases
+    .concat(filasDeOtras)
+    .sort((a, b) => (a._fecha < b._fecha ? -1 : a._fecha > b._fecha ? 1 : 0));
+
+  const horasDeClases = planeacionesDelMes.reduce((sum, p) => sum + (Number(p.horas) || 0), 0);
+  const horasDeOtras = otrasDelMes.reduce(
+    (sum, a) => sum + (Number(a.horas_sede) || 0) + (Number(a.horas_externas) || 0), 0
+  );
+  const totalHorasDocente = horasDeClases + horasDeOtras;
+  const totalAsistentes = filasDeClases.reduce((sum, a) => sum + Number(a.cantidad_asistentes), 0);
 
   const encuentros = planeacionesDelMes.map((p, i) => {
     const foto = archivoABase64_(p.foto_clase_drive_id);

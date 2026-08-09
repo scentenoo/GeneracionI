@@ -7,6 +7,7 @@ from ui.home_screen import HomeScreen
 from ui.planeacion_screen import PlaneacionScreen
 from ui.planeacion_list_screen import PlaneacionListScreen
 from ui.planeacion_editor_screen import PlaneacionEditorScreen
+from ui.actividades_screen import ActividadesScreen
 from ui.dashboard_screen import DashboardScreen
 from ui.informe_screen import InformeScreen
 from ui.grupo_screen import GrupoScreen
@@ -85,6 +86,7 @@ class App(ctk.CTk):
             self.sesion,
             on_nueva_planeacion=self._mostrar_planeacion,
             on_mis_planeaciones=self._mostrar_mis_planeaciones,
+            on_actividades=self._mostrar_actividades,
             on_dashboard=self._mostrar_dashboard,
             on_informe=self._mostrar_informe,
             on_grupo=self._mostrar_grupo,
@@ -135,6 +137,11 @@ class App(ctk.CTk):
             listo,
             lambda exc: aviso.configure(text=str(exc), text_color="#c0392b"),
         )
+
+    def _mostrar_actividades(self):
+        self._limpiar()
+        self.pantalla_actual = ActividadesScreen(self, self.sesion, on_volver=self._mostrar_home)
+        self.pantalla_actual.pack(fill="both", expand=True)
 
     def _mostrar_dashboard(self):
         self._limpiar()

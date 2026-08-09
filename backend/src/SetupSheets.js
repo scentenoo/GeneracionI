@@ -51,6 +51,13 @@ const ESQUEMA_SHEETS_ = {
     'id', 'docente_id', 'curso_id', 'fecha', 'grupo', 'objetivo', 'temas_vistos',
     'bloques', 'foto_clase_drive_id', 'asistencia', 'horas', 'creado_en',
   ],
+  // Lo que se factura y no es una clase: reuniones, claustros, informes.
+  // En el informe de julio de Samir eran 8 de las 16 horas del mes, así que
+  // sin esto la cuenta de cobro salía por la mitad.
+  [SHEET_NAMES.ACTIVIDADES]: [
+    'id', 'usuario_id', 'curso_id', 'fecha', 'descripcion',
+    'horas_sede', 'horas_externas', 'creado_en',
+  ],
   // Las respuestas narrativas del mes, que antes se escribían una vez y se
   // perdían. Una fila por curso y mes.
   [SHEET_NAMES.INFORMES]: [

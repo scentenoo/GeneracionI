@@ -1,0 +1,95 @@
+/**
+ * Actividades del mes que NO son clases: reuniones, claustros, informes,
+ * atención a padres.
+ *
+ * En el informe real de julio de Samir, cuatro clases sumaban 8 horas y
+ * las otras tres filas —reunión docente, comité de padres, informe de
+ * respuestas— sumaban las otras 8. Sin poder registrarlas, la cuenta de
+ * cobro salía por la mitad.
+ *
+ * Las clases NO se guardan acá: viven en Planeaciones, que ya lleva sus
+ * horas. El informe mensual junta las dos fuentes. Separarlas evita tener
+ * el mismo dato en dos lados.
+ *
+ * `horas_sede` y `horas_externas` son las dos columnas del formato: dónde
+ * se hizo, no de qué tipo es. Se pagan al mismo valor, así que para la
+ * cuenta de cobro lo único que importa es la suma.
+ */
+
+function guardar_actividad(token, datos) {
+  const sesion = requireSession_(token);
+
+  if (!datos.fecha) throw new Error('Falta la fecha');
+  if (!datos.descripcion) throw new Error('Falta describir la actividad');
+
+  const horasSede = Number(datos.horas_sede) || 0;
+  const horasExternas = Number(datos.horas_externas) || 0;
+  if (horasSede + horasExternas <= 0) {
+    throw new Error('La actividad tiene que tener al menos una hora');
+  }
+
+  // El informe va por curso, así que la actividad tiene que ir en el de
+  // alguno: quien tiene varios elige en cuál la reporta, y así no se
+  // cuenta dos veces.
+  const curso = findRowById_(SHEET_NAMES.CURSOS, datos.curso_id);
+  if (!curso) throw new Error('Elegí en el informe de qué curso va esta actividad');
+  if (String(curso.docente_id) !== String(sesion.id) && !esDirectivo_(sesion)) {
+    throw new Error('Ese curso no es tuyo');
+  }
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const fila = appendRow_(SHEET_NAMES.ACTIVIDADES, {
+      usuario_id: curso.docente_id,
+      curso_id: curso.id,
+      fecha: datos.fecha,
+      descripcion: datos.descripcion,
+      horas_sede: horasSede,
+      horas_externas: horasExternas,
+      creado_en: new Date().toISOString(),
+    });
+    return { ok: true, id: fila.id };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/** Las del curso indicado; con `mes` ('YYYY-MM') se acota al mes. */
+function obtener_actividades(token, curso_id, mes) {
+  const sesion = requireSession_(token);
+
+  const curso = findRowById_(SHEET_NAMES.CURSOS, curso_id);
+  if (!curso) throw new Error('Curso no encontrado');
+  if (String(curso.docente_id) !== String(sesion.id) && !esDirectivo_(sesion)) {
+    throw new Error('No tienes permiso para ver las actividades de ese curso');
+  }
+
+  return readRowsWhere_(
+    SHEET_NAMES.ACTIVIDADES,
+    (a) => String(a.curso_id) === String(curso_id) && (!mes || mesDeFecha_(a.fecha) === mes)
+  );
+}
+
+/** Solo el dueño borra las suyas, igual que con las planeaciones. */
+function eliminar_actividad(token, id) {
+  const sesion = requireSession_(token);
+
+  const fila = findRowById_(SHEET_NAMES.ACTIVIDADES, id);
+  if (!fila) throw new Error(`No se encontró la actividad ${id}`);
+  if (String(fila.usuario_id) !== String(sesion.id)) {
+    throw new Error('Solo podés eliminar tus propias actividades');
+  }
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    getSheet_(SHEET_NAMES.ACTIVIDADES).deleteRow(fila._row);
+    registrarHistorial_(sesion.usuario, 'actividad', id, [
+      { campo: 'eliminada', antes: `${fila.fecha} - ${fila.descripcion}`, despues: '' },
+    ]);
+    return { ok: true };
+  } finally {
+    lock.releaseLock();
+  }
+}

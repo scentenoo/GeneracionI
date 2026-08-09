@@ -168,6 +168,22 @@ def obtener_horas_gestion(token: str, directivo_id: int | None = None) -> list[d
     return _call("obtener_horas_gestion", token, directivo_id)
 
 
+# --- Actividades que no son clases ---------------------------------------------
+
+def guardar_actividad(token: str, datos: dict) -> dict:
+    """Reuniones, claustros, informes: lo que se factura y no es una clase.
+    datos: curso_id, fecha, descripcion, horas_sede, horas_externas."""
+    return _call("guardar_actividad", token, datos)
+
+
+def obtener_actividades(token: str, curso_id: int, mes: str | None = None) -> list[dict]:
+    return _call("obtener_actividades", token, curso_id, mes)
+
+
+def eliminar_actividad(token: str, id_: int) -> dict:
+    return _call("eliminar_actividad", token, id_)
+
+
 # --- Informes ------------------------------------------------------------------
 
 def generar_informe_mensual(
