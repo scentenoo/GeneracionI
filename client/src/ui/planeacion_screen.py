@@ -9,7 +9,9 @@ recarga la lista de estudiantes, porque la asistencia es por curso.
 
 from __future__ import annotations
 
-from tkinter import filedialog
+import sys
+import traceback
+from tkinter import filedialog, messagebox
 from typing import Callable
 
 import customtkinter as ctk
@@ -22,6 +24,10 @@ from ui.tareas import cache, en_segundo_plano
 from ui.widgets import CampoConContador, MIN_PALABRAS
 
 MINUTOS_MINIMOS = 120
+# Una clase dura 2 horas y se cobra por eso. Pasarse no está prohibido
+# —a veces la clase se estira— pero sí suele ser un error de tipeo, y en
+# el informe mensual esas horas se suman y descuadran la cuenta de cobro.
+MINUTOS_ESPERADOS = 120
 
 
 class PlaneacionScreen(ctk.CTkScrollableFrame):
@@ -224,10 +230,31 @@ class PlaneacionScreen(ctk.CTkScrollableFrame):
             ],
         }
 
+    def _confirmar_exceso(self) -> bool:
+        """Avisa si la clase pasa de las 2 horas. Devuelve False si el
+        docente prefiere volver a revisar los minutos."""
+        total = sum(b.minutos() for b in self.bloques)
+        if total <= MINUTOS_ESPERADOS:
+            return True
+
+        horas = total / 60
+        return messagebox.askyesno(
+            "La clase pasa de 2 horas",
+            f"Los bloques suman {total} minutos ({horas:.1f} horas) y una clase "
+            f"son {MINUTOS_ESPERADOS} minutos.\n\n"
+            "Esas horas se suman en el informe del mes y en la cuenta de cobro.\n\n"
+            "¿Los minutos están bien así?",
+            icon="warning",
+            default="no",
+        )
+
     def _previsualizar(self):
         error = self._validar()
         if error:
             self.error_label.configure(text=error, text_color="#c0392b")
+            return
+        if not self._confirmar_exceso():
+            self.error_label.configure(text="Revisá los minutos de cada bloque.", text_color="#8A6114")
             return
 
         self.previsualizar_boton.configure(state="disabled", text="Generando...")
@@ -290,6 +317,11 @@ class PlaneacionScreen(ctk.CTkScrollableFrame):
         if error:
             self.error_label.configure(text=error, text_color="#c0392b")
             return
+        # Se vuelve a preguntar acá y no solo en la vista previa: entre una
+        # cosa y la otra el docente pudo haber corregido los minutos.
+        if not self._confirmar_exceso():
+            self.error_label.configure(text="Revisá los minutos de cada bloque.", text_color="#8A6114")
+            return
 
         self.guardar_boton.configure(state="disabled", text="Guardando...")
         self.previsualizar_boton.configure(state="disabled")
@@ -307,18 +339,41 @@ class PlaneacionScreen(ctk.CTkScrollableFrame):
             ],
         }
 
+        contexto = self._contexto_documento()
+
         def trabajo():
             # La compresión de la foto también tarda, así que va al hilo.
             fotos = {"foto_clase": image_utils.foto_a_payload(self.foto_path)}
-            return api_client.guardar_planeacion(self.sesion["token"], datos, fotos)
+            resultado = api_client.guardar_planeacion(self.sesion["token"], datos, fotos)
+
+            # El documento va después y aparte: si falla, la clase igual
+            # quedó registrada. Lo único que se pierde es el link del
+            # informe, que se puede rehacer editando la planeación.
+            try:
+                archivo = vista_previa.planeacion_para_subir(contexto, self.foto_path)
+                api_client.guardar_documento_planeacion(
+                    self.sesion["token"], resultado["id"], archivo
+                )
+            except Exception:  # noqa: BLE001
+                traceback.print_exc(file=sys.stderr)
+                resultado = dict(resultado, sin_documento=True)
+            return resultado
 
         def listo(resultado):
             self.previsualizar_boton.configure(state="normal", text="Ver vista previa")
             self.guardar_boton.configure(text="Guardar planeación")
             self._limpiar_formulario()
-            self.error_label.configure(
-                text=f"Planeación guardada (id {resultado['id']}) ✓", text_color="#2fa84f"
-            )
+            if resultado.get("sin_documento"):
+                self.error_label.configure(
+                    text="Planeación guardada ✓, pero no se pudo subir el documento a Drive.\n"
+                         "El informe del mes va a quedar sin el link de esta clase; se arregla "
+                         "abriéndola desde «Mis planeaciones» y guardándola de nuevo.",
+                    text_color="#8A6114",
+                )
+            else:
+                self.error_label.configure(
+                    text=f"Planeación guardada (id {resultado['id']}) ✓", text_color="#2fa84f"
+                )
 
         def fallo(exc):
             self.previsualizar_boton.configure(state="normal", text="Ver vista previa")

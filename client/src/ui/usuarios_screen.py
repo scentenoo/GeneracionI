@@ -29,6 +29,13 @@ ROJO, AMBAR, VERDE, GRIS = "#c0392b", "#8A6114", "#2fa84f", "gray"
 DIAS_INACTIVO = 30
 
 
+def texto(valor) -> str:
+    """Sheets devuelve números donde uno espera texto: un usuario que se
+    llame "2024" vuelve como int y reventaba el armado de la tarjeta,
+    dejando la lista entera en blanco."""
+    return "" if valor is None else str(valor)
+
+
 class UsuariosScreen(ctk.CTkFrame):
     def __init__(self, master, sesion: dict, on_volver: Callable[[], None]):
         super().__init__(master)
@@ -145,11 +152,11 @@ class ListaUsuariosTab(ctk.CTkScrollableFrame):
         cuerpo.pack(side="left", fill="both", expand=True, padx=12, pady=10)
 
         ctk.CTkLabel(
-            cuerpo, text=usuario.get("nombre", ""), font=ctk.CTkFont(size=14, weight="bold"),
+            cuerpo, text=texto(usuario.get("nombre")), font=ctk.CTkFont(size=14, weight="bold"),
             anchor="w", justify="left", wraplength=460,
         ).pack(fill="x")
 
-        etiquetas = [usuario.get("usuario", ""), usuario.get("rol", "")]
+        etiquetas = [texto(usuario.get("usuario")), texto(usuario.get("rol"))]
         if usuario.get("es_admin"):
             etiquetas.append("administrador")
         ctk.CTkLabel(

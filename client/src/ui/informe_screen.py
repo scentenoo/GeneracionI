@@ -137,7 +137,9 @@ class InformeScreen(ctk.CTkScrollableFrame):
             return
 
         for s in semanas:
-            editor = AvanceSemanaEditor(self.avances_contenedor, s["semana"], s.get("temas", []))
+            editor = AvanceSemanaEditor(
+                self.avances_contenedor, s["semana"], s.get("temas", []), s.get("fecha", "")
+            )
             editor.pack(fill="x", pady=3)
             self.avances.append(editor)
 

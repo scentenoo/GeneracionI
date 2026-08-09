@@ -58,7 +58,7 @@ function guardar_actividad(token, datos, fotos) {
         'Fotos de actividades',
         fotos.foto.base64,
         fotos.foto.mimeType || 'image/jpeg',
-        `actividad_${sesion.id}_${datos.fecha}.jpg`
+        nombreDeFoto_('actividad', curso.nombre, datos.fecha)
       );
     }
 
@@ -114,7 +114,7 @@ function editar_actividad(token, id, datos, fotos) {
         fila.foto_drive_id,
         fotos.foto.base64,
         fotos.foto.mimeType || 'image/jpeg',
-        `actividad_${fila.usuario_id}_${datos.fecha}.jpg`
+        nombreDeFoto_('actividad', curso.nombre, datos.fecha)
       );
     }
 

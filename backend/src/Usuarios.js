@@ -182,6 +182,11 @@ function listar_usuarios(token) {
   return readAllRows_(SHEET_NAMES.USUARIOS).map((u) => {
     const { password_hash, ...sinPassword } = u; // eslint-disable-line no-unused-vars
     sinPassword.ultimo_acceso = fechaHoraISO_(u.ultimo_acceso);
+    // Sheets devuelve números donde esperamos texto: alguien que se llame
+    // "2024" vuelve como int y revienta al cliente, que lo concatena.
+    ['nombre', 'usuario', 'rol'].forEach((campo) => {
+      sinPassword[campo] = String(sinPassword[campo] === undefined ? '' : sinPassword[campo]);
+    });
     return sinPassword;
   });
 }

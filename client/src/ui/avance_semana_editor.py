@@ -9,16 +9,23 @@ from __future__ import annotations
 
 import customtkinter as ctk
 
+from services import date_utils
+
 NIVELES = ["Bajo", "Medio", "Alto"]
 
 
 class AvanceSemanaEditor(ctk.CTkFrame):
-    def __init__(self, master, semana: int, temas: list[str]):
+    def __init__(self, master, semana: int, temas: list[str], fecha: str = ""):
         super().__init__(master, border_width=1, corner_radius=8, fg_color="transparent")
         self.semana = semana
 
+        # Cada fila es una clase concreta: sin la fecha, cuatro renglones
+        # que dicen "Semana 1..4" no le dicen al docente cuál es cuál.
+        titulo = f"Semana {semana}"
+        if fecha:
+            titulo += f"  ·  {date_utils.a_fecha_corta(fecha)}"
         ctk.CTkLabel(
-            self, text=f"Semana {semana}", font=ctk.CTkFont(weight="bold"), anchor="w"
+            self, text=titulo, font=ctk.CTkFont(weight="bold"), anchor="w"
         ).pack(fill="x", padx=10, pady=(8, 0))
 
         resumen = " · ".join(temas) if temas else "(sin temas registrados)"

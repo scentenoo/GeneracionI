@@ -19,7 +19,7 @@ function guardar_planeacion(token, datos, fotos) {
       'Fotos de clase',
       fotos.foto_clase.base64,
       fotos.foto_clase.mimeType || 'image/jpeg',
-      `clase_${sesion.id}_${datos.fecha}.jpg`
+      nombreDeFoto_('clase', curso.nombre, datos.fecha)
     );
 
     const fila = appendRow_(SHEET_NAMES.PLANEACIONES, {
@@ -41,6 +41,46 @@ function guardar_planeacion(token, datos, fotos) {
     });
 
     return { ok: true, id: fila.id };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Guarda en Drive el documento de la planeación y se queda con su id.
+ *
+ * El informe mensual tiene una columna "LINK A PLANEACION" que en los
+ * informes reales del programa apunta a un archivo de Drive; hasta ahora
+ * iba vacía porque una planeación vive en una fila de Sheets y no tiene
+ * URL propia. El .docx lo arma el cliente (Apps Script no puede rellenar
+ * plantillas), así que lo sube apenas guarda y acá solo se archiva.
+ *
+ * Va aparte de guardar_planeacion para que la clase quede registrada
+ * aunque el documento falle: el dato que importa es la planeación, el
+ * archivo es la evidencia.
+ */
+function guardar_documento_planeacion(token, planeacion_id, archivo) {
+  const sesion = requireSession_(token);
+
+  const fila = findRowById_(SHEET_NAMES.PLANEACIONES, planeacion_id);
+  if (!fila) throw new Error('Planeación no encontrada');
+  if (String(fila.docente_id) !== String(sesion.id) && !esDirectivo_(sesion)) {
+    throw new Error('No tienes permiso para modificar esa planeación');
+  }
+  if (!archivo || !archivo.base64) throw new Error('Falta el documento');
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const id = reemplazarArchivo_(
+      'Planeaciones',
+      fila.doc_drive_id,
+      archivo.base64,
+      archivo.mimeType || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      nombreDeDocumento_(fila.grupo, fila.fecha)
+    );
+    updateRowById_(SHEET_NAMES.PLANEACIONES, planeacion_id, { doc_drive_id: id });
+    return { ok: true, link: urlDeArchivo_(id) };
   } finally {
     lock.releaseLock();
   }

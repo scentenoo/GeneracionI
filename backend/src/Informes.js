@@ -200,7 +200,7 @@ function generar_informe_mensual(token, curso_id, mes, narrativa, gestionNarrati
       horas_externas: '',
       cantidad_asistentes: String(asistentes),
       fecha: fechaCorta_(p.fecha),
-      link_planeacion: '', // pendiente: no hay visor de planeaciones con URL propia todavía
+      link_planeacion: urlDeArchivo_(p.doc_drive_id),
     };
   });
 
@@ -215,10 +215,11 @@ function generar_informe_mensual(token, curso_id, mes, narrativa, gestionNarrati
     nro_semana: String(Math.ceil(diaDeFecha_(a.fecha) / 7)),
     horas_sede: Number(a.horas_sede) ? String(a.horas_sede) : '',
     horas_externas: Number(a.horas_externas) ? String(a.horas_externas) : '',
-    // Una reunión no tiene asistencia de estudiantes ni planeación.
+    // Una reunión no tiene asistencia de estudiantes ni planeación: su
+    // soporte es la foto que se pidió al registrarla.
     cantidad_asistentes: '',
     fecha: fechaCorta_(a.fecha),
-    link_planeacion: '',
+    link_planeacion: urlDeArchivo_(a.foto_drive_id),
   }));
 
   const actividades = filasDeClases
@@ -402,15 +403,19 @@ function obtener_avance_sugerido(token, curso_id, mes) {
     (p) => String(p.curso_id) === String(curso_id) && mesDeFecha_(p.fecha) === mes
   ).map(parsePlaneacionRow_);
 
-  const porSemana = {};
-  planeaciones.forEach((p) => {
-    const semana = Math.ceil(diaDeFecha_(p.fecha) / 7);
-    if (!porSemana[semana]) porSemana[semana] = [];
-    porSemana[semana] = porSemana[semana].concat(p.temas_vistos || []);
-  });
-
-  return Object.keys(porSemana)
-    .map(Number)
-    .sort((a, b) => a - b)
-    .map((semana) => ({ semana: semana, temas: porSemana[semana] }));
+  // Una fila por clase, en orden de fecha, y la "semana" es el lugar que
+  // ocupa esa clase en el mes: 4 clases son siempre las semanas 1 a 4.
+  //
+  // Antes agrupaba por Math.ceil(día / 7), y eso fusionaba dos clases de
+  // la misma franja de días en una sola fila — el docente cargaba 4
+  // planeaciones y el informe le mostraba 3 semanas. Además los días 29 a
+  // 31 caían en una "semana 5" que el formato no tiene.
+  return planeaciones
+    .slice()
+    .sort((a, b) => (fechaISO_(a.fecha) < fechaISO_(b.fecha) ? -1 : 1))
+    .map((p, i) => ({
+      semana: i + 1,
+      fecha: fechaISO_(p.fecha),
+      temas: p.temas_vistos || [],
+    }));
 }

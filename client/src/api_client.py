@@ -135,6 +135,14 @@ def guardar_planeacion(token: str, datos: dict, fotos: dict) -> dict:
     return _call("guardar_planeacion", token, datos, fotos)
 
 
+def guardar_documento_planeacion(token: str, planeacion_id: int, archivo: dict) -> dict:
+    """Sube a Drive el .docx de la planeación, que es lo que el informe
+    mensual enlaza en la columna «LINK A PLANEACION».
+
+    archivo: {"base64": ..., "mimeType": ...}"""
+    return _call("guardar_documento_planeacion", token, planeacion_id, archivo)
+
+
 def obtener_planeaciones(
     token: str,
     docente_id: int | None = None,

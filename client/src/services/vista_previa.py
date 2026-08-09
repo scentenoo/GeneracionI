@@ -85,6 +85,32 @@ def previsualizar_planeacion(contexto: dict, foto_clase_path: str) -> tuple[Path
     return ruta, es_pdf
 
 
+def planeacion_para_subir(contexto: dict, foto_clase_path: str) -> dict:
+    """Arma el .docx de la planeación y lo devuelve listo para mandarlo.
+
+    Es el archivo que el informe mensual enlaza en «LINK A PLANEACION»:
+    una planeación vive en una fila de Sheets y no tiene URL propia, así
+    que el documento se genera acá —donde están las plantillas— y se
+    archiva en Drive.
+    """
+    import base64
+
+    salida = _carpeta_temporal() / f"subir_{uuid.uuid4().hex[:8]}.docx"
+    try:
+        docx_generator.generar_planeacion_docx(contexto, foto_clase_path, salida)
+        datos = salida.read_bytes()
+    finally:
+        try:
+            salida.unlink()
+        except OSError:
+            pass
+
+    return {
+        "base64": base64.b64encode(datos).decode("ascii"),
+        "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    }
+
+
 def previsualizar_informe(contexto: dict) -> tuple[Path, bool]:
     """Igual pero para el informe mensual, cuyo contexto ya viene armado
     desde el backend."""

@@ -51,6 +51,7 @@ const ESQUEMA_SHEETS_ = {
   [SHEET_NAMES.PLANEACIONES]: [
     'id', 'docente_id', 'curso_id', 'fecha', 'grupo', 'objetivo', 'temas_vistos',
     'bloques', 'foto_clase_drive_id', 'asistencia', 'horas', 'creado_en',
+    'doc_drive_id',
   ],
   // Lo que se factura y no es una clase: reuniones, claustros, informes.
   // En el informe de julio de Samir eran 8 de las 16 horas del mes, así que

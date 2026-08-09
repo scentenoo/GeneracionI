@@ -27,3 +27,30 @@ function reemplazarArchivo_(subfolderName, fileIdExistente, base64Data, mimeType
 function obtenerUrlDescarga_(fileId) {
   return `https://drive.google.com/uc?id=${fileId}`;
 }
+
+/** El link que se pega en el informe mensual, para abrirlo en el navegador. */
+function urlDeArchivo_(fileId) {
+  return fileId ? `https://drive.google.com/file/d/${fileId}/view?usp=sharing` : '';
+}
+
+/**
+ * Nombre con el que el archivo queda en Drive.
+ *
+ * Antes era `clase_<id del docente>_<fecha>`, así que todas las fotos de
+ * una misma persona empezaban igual ("clase_1_...") y en Drive no había
+ * forma de saber de qué curso era cada una sin abrirlas.
+ */
+function nombreDeFoto_(prefijo, nombreCurso, fecha) {
+  return `${prefijo} - ${nombreParaDrive_(nombreCurso)} - ${fechaISO_(fecha)}.jpg`;
+}
+
+function nombreDeDocumento_(nombreCurso, fecha) {
+  return `Planeacion - ${nombreParaDrive_(nombreCurso)} - ${fechaISO_(fecha)}.docx`;
+}
+
+function nombreParaDrive_(nombreCurso) {
+  return String(nombreCurso || 'sin curso')
+    .replace(/[\\/:*?"<>|]/g, ' ')
+    .trim()
+    .slice(0, 60);
+}
