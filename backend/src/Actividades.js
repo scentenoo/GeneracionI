@@ -119,7 +119,6 @@ function editar_actividad(token, id, datos, fotos) {
     }
 
     const cambiosReales = updateRowById_(SHEET_NAMES.ACTIVIDADES, id, cambios);
-    registrarHistorial_(sesion.usuario, 'actividad', id, cambiosReales);
     return { ok: true, cambios: cambiosReales.length };
   } finally {
     lock.releaseLock();
@@ -163,9 +162,6 @@ function eliminar_actividad(token, id) {
       }
     }
     getSheet_(SHEET_NAMES.ACTIVIDADES).deleteRow(fila._row);
-    registrarHistorial_(sesion.usuario, 'actividad', id, [
-      { campo: 'eliminada', antes: `${fila.fecha} - ${fila.descripcion}`, despues: '' },
-    ]);
     return { ok: true };
   } finally {
     lock.releaseLock();

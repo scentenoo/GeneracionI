@@ -34,9 +34,6 @@ function crear_curso(token, datos) {
     activo: true,
   });
 
-  registrarHistorial_(sesion.usuario, 'curso', fila.id, [
-    { campo: 'creado', antes: '', despues: `${datos.nombre} (docente ${datos.docente_id})` },
-  ]);
   return { ok: true, id: fila.id };
 }
 
@@ -78,7 +75,6 @@ function editar_curso(token, curso_id, cambios) {
   });
 
   const cambiosReales = updateRowById_(SHEET_NAMES.CURSOS, curso_id, cambiosFiltrados);
-  registrarHistorial_(sesion.usuario, 'curso', curso_id, cambiosReales);
   return { ok: true, cambios: cambiosReales.length };
 }
 
@@ -95,9 +91,6 @@ function desactivar_curso(token, curso_id) {
   if (!curso) throw new Error('Curso no encontrado');
 
   updateRowById_(SHEET_NAMES.CURSOS, curso_id, { activo: false });
-  registrarHistorial_(sesion.usuario, 'curso', curso_id, [
-    { campo: 'activo', antes: true, despues: false },
-  ]);
   return { ok: true };
 }
 

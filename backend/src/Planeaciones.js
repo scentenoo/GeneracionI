@@ -161,7 +161,6 @@ function parsePlaneacionRow_(p) {
 /**
  * Edita el docente dueño (CRUD sobre lo suyo) o un directivo sobre la de
  * cualquiera — pero el directivo nunca elimina, ver eliminar_planeacion.
- * Todo queda registrado en Historial.
  */
 function editar_planeacion(token, id, cambios) {
   const sesion = requireSession_(token);
@@ -186,7 +185,6 @@ function editar_planeacion(token, id, cambios) {
     });
 
     const cambiosReales = updateRowById_(SHEET_NAMES.PLANEACIONES, id, cambiosSerializados);
-    registrarHistorial_(sesion.usuario, 'planeacion', id, cambiosReales);
     return { ok: true, cambios: cambiosReales.length };
   } finally {
     lock.releaseLock();
@@ -218,9 +216,6 @@ function eliminar_planeacion(token, id) {
       }
     }
     getSheet_(SHEET_NAMES.PLANEACIONES).deleteRow(fila._row);
-    registrarHistorial_(sesion.usuario, 'planeacion', id, [
-      { campo: 'eliminada', antes: `${fila.fecha} - ${fila.grupo}`, despues: '' },
-    ]);
     return { ok: true };
   } finally {
     lock.releaseLock();

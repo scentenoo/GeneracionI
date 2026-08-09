@@ -380,7 +380,7 @@ class PlaneacionScreen(ctk.CTkScrollableFrame):
             self.guardar_boton.configure(state="normal", text="Guardar planeación")
             self.error_label.configure(text=str(exc), text_color="#c0392b")
 
-        en_segundo_plano(self, trabajo, listo, fallo)
+        en_segundo_plano(self, trabajo, listo, fallo, bloquea_cierre=True)
 
     def _limpiar_formulario(self):
         """Deja el formulario listo para la siguiente clase, conservando la

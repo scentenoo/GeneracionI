@@ -11,7 +11,7 @@ horas. El informe mensual junta las dos.
 
 from __future__ import annotations
 
-from tkinter import filedialog
+from tkinter import filedialog, messagebox
 from typing import Callable
 
 import customtkinter as ctk
@@ -180,7 +180,7 @@ class ActividadesScreen(ctk.CTkScrollableFrame):
         botones.pack(side="right", padx=10)
         ctk.CTkButton(
             botones, text="Quitar", width=80, fg_color="#c0392b", hover_color="#922b21",
-            command=lambda: self._eliminar(a["id"]),
+            command=lambda: self._eliminar(a["id"], str(a.get("descripcion", ""))),
         ).pack(pady=2)
         ctk.CTkButton(botones, text="Editar", width=80, command=lambda: self._editar(a)).pack(pady=2)
 
@@ -291,9 +291,22 @@ class ActividadesScreen(ctk.CTkScrollableFrame):
             )
             self.error_label.configure(text=str(exc), text_color="#c0392b")
 
-        en_segundo_plano(self, trabajo, listo, fallo)
+        en_segundo_plano(self, trabajo, listo, fallo, bloquea_cierre=True)
 
-    def _eliminar(self, actividad_id: int):
+    def _eliminar(self, actividad_id: int, descripcion: str = ""):
+        # Estas horas van a la cuenta de cobro del mes: borrar una por
+        # error se paga con plata, así que se pregunta.
+        corta = descripcion[:80] + ("..." if len(descripcion) > 80 else "")
+        if not messagebox.askyesno(
+            "Eliminar actividad",
+            f"¿Eliminar «{corta}»?\n\n"
+            "Sus horas dejan de contar en el informe del mes.\n"
+            "Esto no se puede deshacer.",
+            icon="warning",
+            default="no",
+        ):
+            return
+
         if self._editando and self._editando["id"] == actividad_id:
             self._salir_de_edicion()
         en_segundo_plano(
@@ -301,4 +314,5 @@ class ActividadesScreen(ctk.CTkScrollableFrame):
             lambda: api_client.eliminar_actividad(self.sesion["token"], actividad_id),
             lambda _r: self._cargar_lista(),
             lambda exc: self.error_label.configure(text=str(exc), text_color="#c0392b"),
+            bloquea_cierre=True,
         )

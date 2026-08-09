@@ -27,9 +27,6 @@ function importar_estudiantes(token, curso_id, csv) {
       })
     );
 
-    registrarHistorial_(sesion.usuario, 'grupo_estudiantes', curso_id, [
-      { campo: 'importacion_csv', antes: '', despues: `${creados.length} estudiantes` },
-    ]);
 
     return { ok: true, creados: creados.length };
   } finally {
@@ -66,23 +63,22 @@ function modificar_grupo(token, curso_id, cambios) {
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
-    const cambiosHistorial = [];
+    const cambiosHechos = [];
 
     (cambios.agregar || []).forEach((est) => {
       const fila = appendRow_(SHEET_NAMES.ESTUDIANTES, { nombre: est.nombre, curso_id: curso_id });
-      cambiosHistorial.push({ campo: 'estudiante_agregado', antes: '', despues: `${fila.nombre} (id ${fila.id})` });
+      cambiosHechos.push({ campo: 'estudiante_agregado', antes: '', despues: `${fila.nombre} (id ${fila.id})` });
     });
 
     (cambios.quitar || []).forEach((estudianteId) => {
       const est = findRowById_(SHEET_NAMES.ESTUDIANTES, estudianteId);
       if (est) {
         getSheet_(SHEET_NAMES.ESTUDIANTES).deleteRow(est._row);
-        cambiosHistorial.push({ campo: 'estudiante_quitado', antes: `${est.nombre} (id ${est.id})`, despues: '' });
+        cambiosHechos.push({ campo: 'estudiante_quitado', antes: `${est.nombre} (id ${est.id})`, despues: '' });
       }
     });
 
-    registrarHistorial_(sesion.usuario, 'grupo_estudiantes', curso_id, cambiosHistorial);
-    return { ok: true, cambios: cambiosHistorial.length };
+    return { ok: true, cambios: cambiosHechos.length };
   } finally {
     lock.releaseLock();
   }

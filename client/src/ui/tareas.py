@@ -56,22 +56,49 @@ def _bombear(root):
         pass
 
 
+# Cuántas subidas hay corriendo ahora mismo. Cerrar la ventana en el medio
+# de una mata el hilo antes de que Apps Script termine de escribir, y la
+# planeación queda a medio guardar o la foto sin subir. El contador lo lee
+# App._al_cerrar para avisar en vez de cerrar.
+_lock_contador = threading.Lock()
+_contador = 0
+
+
+def hay_trabajo_pendiente() -> bool:
+    with _lock_contador:
+        return _contador > 0
+
+
+def _sumar(delta: int):
+    global _contador
+    with _lock_contador:
+        _contador += delta
+
+
 def en_segundo_plano(
     widget,
     trabajo: Callable[[], object],
     al_terminar: Callable[[object], None],
     al_fallar: Callable[[Exception], None] | None = None,
+    bloquea_cierre: bool = False,
 ):
     """Corre `trabajo()` fuera del hilo de la interfaz y entrega el
     resultado a `al_terminar` ya de vuelta en el hilo de Tk.
 
     Se llama siempre desde el hilo principal (sale de un callback de la
     interfaz), que es donde se arranca el temporizador de entrega.
+
+    Con `bloquea_cierre` la tarea se cuenta como "subida en curso" y la app
+    avisa antes de cerrarse. Va solo en lo que escribe en el backend: para
+    una consulta de lectura, cerrar en el medio no rompe nada.
     """
     global _entrega_iniciada
     if not _entrega_iniciada:
         _entrega_iniciada = True
         _bombear(widget.winfo_toplevel())
+
+    if bloquea_cierre:
+        _sumar(1)
 
     def correr():
         try:
@@ -83,6 +110,9 @@ def en_segundo_plano(
                 traceback.print_exc(file=sys.stderr)
         else:
             _cola.put((widget, al_terminar, resultado))
+        finally:
+            if bloquea_cierre:
+                _sumar(-1)
 
     threading.Thread(target=correr, daemon=True).start()
 

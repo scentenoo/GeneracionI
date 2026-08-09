@@ -17,6 +17,7 @@ const MIGRACIONES_DISPONIBLES_ = {
   setupSheets: setupSheets,
   migrarACursos: migrarACursos,
   limpiarColumnasViejas: limpiarColumnasViejas,
+  eliminarHistorial: eliminarHistorial,
 };
 
 function ejecutar_migracion(token, nombre) {
@@ -31,9 +32,6 @@ function ejecutar_migracion(token, nombre) {
   }
 
   fn();
-  registrarHistorial_(sesion.usuario, 'migracion', nombre, [
-    { campo: 'ejecutada', antes: '', despues: nombre },
-  ]);
   return { ok: true, migracion: nombre };
 }
 
@@ -141,4 +139,30 @@ function limpiarColumnasViejas() {
     'Columnas borradas — Usuarios: %s · Estudiantes: %s',
     borradasUsuarios.length, borradasEstudiantes.length
   );
+}
+
+/**
+ * Borra la pestaña Historial.
+ *
+ * Era un registro de auditoría que guardaba una fila por CAMPO cambiado,
+ * así que crecía mucho más rápido que los datos reales y, de yapa, cada
+ * escritura releía la pestaña entera: editar un usuario con cinco campos
+ * costaba cinco lecturas completas de una tabla que solo crecía.
+ *
+ * Nadie la consultaba desde la app. Lo que sí importa —quién subió cada
+ * planeación y cuándo— ya vive en las propias filas (docente_id,
+ * creado_en, ultimo_acceso).
+ *
+ * Ojo: esto borra datos y no hay deshacer.
+ */
+function eliminarHistorial() {
+  const ss = getSpreadsheet_();
+  const hoja = ss.getSheetByName('Historial');
+  if (!hoja) {
+    Logger.log('No hay pestaña Historial: nada que borrar.');
+    return;
+  }
+  const filas = Math.max(0, hoja.getLastRow() - 1);
+  ss.deleteSheet(hoja);
+  Logger.log('Historial eliminado (%s filas).', filas);
 }

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from tkinter import messagebox
+
 import customtkinter as ctk
 
 from ui.login_screen import LoginScreen
@@ -17,6 +19,7 @@ from ui.planeaciones_docente_screen import PlaneacionesDocenteScreen
 from ui.usuarios_screen import UsuariosScreen
 from ui.password_screen import PasswordScreen
 from ui.version_screen import VersionScreen
+from ui import tareas
 from ui.tareas import cache, en_segundo_plano
 import api_client
 from services import vista_previa
@@ -45,6 +48,20 @@ class App(ctk.CTk):
         self._mostrar_login()
 
     def _al_cerrar(self):
+        # Cerrar en el medio de una subida mata el hilo antes de que Apps
+        # Script termine de escribir: la planeación queda a medias o la
+        # foto sin subir, y el docente cree que guardó.
+        if tareas.hay_trabajo_pendiente():
+            if not messagebox.askyesno(
+                "Hay algo subiéndose",
+                "Todavía se está subiendo algo al servidor.\n\n"
+                "Si cerrás ahora puede quedar a medio guardar y vas a tener que "
+                "cargarlo de nuevo.\n\n¿Cerrar igual?",
+                icon="warning",
+                default="no",
+            ):
+                return
+
         vista_previa.limpiar_borradores()
         self.destroy()
 

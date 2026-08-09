@@ -81,9 +81,6 @@ const ESQUEMA_SHEETS_ = {
   [SHEET_NAMES.REAPERTURAS]: [
     'id', 'curso_id', 'mes', 'abierta', 'abierto_por', 'actualizado_en',
   ],
-  [SHEET_NAMES.HISTORIAL]: [
-    'timestamp', 'usuario', 'tipo', 'id_afectado', 'campo', 'valor_anterior', 'valor_nuevo',
-  ],
   [SHEET_NAMES.CONFIG]: ['key', 'value'],
 };
 

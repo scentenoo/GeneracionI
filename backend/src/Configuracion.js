@@ -58,9 +58,6 @@ function fijar_version(token, version, link_instalador) {
     lock.releaseLock();
   }
 
-  registrarHistorial_(sesion.usuario, 'config', 'version_actual', [
-    { campo: 'version_actual', antes: anterior.version, despues: String(version).trim() },
-  ]);
 
   return { ok: true, version: String(version).trim() };
 }

@@ -88,8 +88,8 @@ function setCampoDeFila_(sheetName, fila, campo, valor) {
 
 /**
  * Actualiza campos específicos de la fila con ese id. Devuelve
- * {antes, despues} solo de los campos que realmente cambiaron, para
- * poder registrar en Historial sin duplicar lógica en cada caller.
+ * {antes, despues} solo de los campos que realmente cambiaron, para que
+ * el caller pueda decir cuántos se tocaron de verdad.
  */
 function updateRowById_(sheetName, id, cambios) {
   const sheet = getSheet_(sheetName);

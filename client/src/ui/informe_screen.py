@@ -344,6 +344,7 @@ class InformeScreen(ctk.CTkScrollableFrame):
             ),
             listo,
             fallo,
+            bloquea_cierre=True,
         )
 
     def _permitir(self, permitido: bool):

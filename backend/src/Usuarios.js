@@ -71,7 +71,6 @@ function editar_usuario(token, usuario_id, cambios) {
   }
 
   const cambiosReales = updateRowById_(SHEET_NAMES.USUARIOS, usuario_id, cambiosFiltrados);
-  registrarHistorial_(sesion.usuario, 'usuario', usuario_id, cambiosReales);
   return { ok: true, cambios: cambiosReales.length };
 }
 
@@ -107,9 +106,6 @@ function convertirme_administrador(token) {
   }
 
   updateRowById_(SHEET_NAMES.USUARIOS, sesion.id, { es_admin: true });
-  registrarHistorial_(sesion.usuario, 'usuario', sesion.id, [
-    { campo: 'es_admin', antes: false, despues: true },
-  ]);
   return { ok: true };
 }
 
@@ -129,9 +125,6 @@ function transferir_administrador(token, nuevo_admin_id) {
   try {
     updateRowById_(SHEET_NAMES.USUARIOS, sesion.id, { es_admin: false });
     updateRowById_(SHEET_NAMES.USUARIOS, nuevo_admin_id, { es_admin: true });
-    registrarHistorial_(sesion.usuario, 'usuario', nuevo_admin_id, [
-      { campo: 'es_admin', antes: false, despues: true },
-    ]);
     return { ok: true };
   } finally {
     lock.releaseLock();
@@ -167,9 +160,6 @@ function eliminar_usuario(token, usuario_id) {
   lock.waitLock(30000);
   try {
     getSheet_(SHEET_NAMES.USUARIOS).deleteRow(fila._row);
-    registrarHistorial_(sesion.usuario, 'usuario', usuario_id, [
-      { campo: 'eliminado', antes: `${fila.nombre} (${fila.usuario})`, despues: '' },
-    ]);
     return { ok: true };
   } finally {
     lock.releaseLock();
@@ -222,11 +212,6 @@ function restablecer_password(token, usuario_id, password_nueva) {
   updateRowById_(SHEET_NAMES.USUARIOS, usuario_id, {
     password_hash: crearHashConSalt_(password_nueva),
   });
-  // Se registra que pasó y cuándo, nunca el valor: el Historial lo ve
-  // cualquiera que abra la Sheet.
-  registrarHistorial_(sesion.usuario, 'usuario', usuario_id, [
-    { campo: 'password_restablecida', antes: '', despues: ahoraISO_() },
-  ]);
   return { ok: true };
 }
 

@@ -11,6 +11,7 @@ asistencia y todo, que es otra operación.
 
 from __future__ import annotations
 
+from tkinter import messagebox
 from typing import Callable
 
 import customtkinter as ctk
@@ -141,6 +142,14 @@ class PlaneacionEditorScreen(ctk.CTkScrollableFrame):
         def listo(_resultado):
             self.guardar_boton.configure(state="normal", text="Guardar cambios")
             self.error_label.configure(text="Cambios guardados ✓", text_color="#2fa84f")
+            # Dejar el editor abierto después de guardar hace dudar de si
+            # se guardó, e invita a volver a apretar. Se avisa y se vuelve
+            # a la lista, que ya muestra el cambio.
+            messagebox.showinfo(
+                "Listo",
+                "Los cambios de la planeación quedaron guardados.",
+            )
+            self.on_volver()
 
         def fallo(exc):
             self.guardar_boton.configure(state="normal", text="Guardar cambios")
@@ -151,4 +160,5 @@ class PlaneacionEditorScreen(ctk.CTkScrollableFrame):
             lambda: api_client.editar_planeacion(self.sesion["token"], self.planeacion["id"], cambios),
             listo,
             fallo,
+            bloquea_cierre=True,
         )

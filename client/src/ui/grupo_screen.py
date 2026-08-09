@@ -6,7 +6,7 @@ tiene dos listas separadas y acá se elige de cuál."""
 
 from __future__ import annotations
 
-from tkinter import filedialog
+from tkinter import filedialog, messagebox
 from typing import Callable
 
 import customtkinter as ctk
@@ -193,6 +193,18 @@ class GrupoScreen(ctk.CTkScrollableFrame):
         ids_a_quitar = [est_id for est_id, (_, var) in self._checkboxes.items() if var.get()]
         if not curso or not ids_a_quitar:
             self.error_label.configure(text="Marcá al menos un estudiante para quitar.", text_color="#c0392b")
+            return
+
+        # La asistencia ya guardada no se toca (es una copia del día), pero
+        # el estudiante deja de aparecer para las clases que vienen.
+        if not messagebox.askyesno(
+            "Quitar estudiantes",
+            f"¿Quitar {len(ids_a_quitar)} estudiante(s) de este curso?\n\n"
+            "Las planeaciones ya guardadas conservan la asistencia de ese día; "
+            "dejan de aparecer para las clases nuevas.",
+            icon="warning",
+            default="no",
+        ):
             return
 
         self.quitar_boton.configure(state="disabled")
