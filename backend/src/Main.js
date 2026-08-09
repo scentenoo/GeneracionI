@@ -40,6 +40,7 @@ const ACCIONES_PERMITIDAS_ = {
   convertirme_administrador,
   transferir_administrador,
   listar_usuarios,
+  restablecer_password,
   subir_firma,
   obtener_dashboard_directivo,
   ejecutar_migracion,

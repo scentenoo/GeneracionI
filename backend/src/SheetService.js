@@ -69,6 +69,24 @@ function nextId_(sheetName) {
 }
 
 /**
+ * Escribe un solo campo de una fila que el caller ya tiene leída.
+ *
+ * updateRowById_ vuelve a leer la pestaña entera para encontrar la fila;
+ * cuando ya la tenemos en la mano eso es una lectura completa al pedo. Lo
+ * usa el login, que corre cada vez que alguien abre la app.
+ *
+ * Devuelve false si la columna todavía no existe, para que el caller siga
+ * andando mientras no se haya corrido setupSheets.
+ */
+function setCampoDeFila_(sheetName, fila, campo, valor) {
+  const sheet = getSheet_(sheetName);
+  const col = getHeaders_(sheet).indexOf(campo);
+  if (col === -1) return false;
+  sheet.getRange(fila._row, col + 1).setValue(valor);
+  return true;
+}
+
+/**
  * Actualiza campos específicos de la fila con ese id. Devuelve
  * {antes, despues} solo de los campos que realmente cambiaron, para
  * poder registrar en Historial sin duplicar lógica en cada caller.

@@ -16,19 +16,22 @@ from typing import Callable
 import customtkinter as ctk
 
 import api_client
-from ui.tareas import cache
+from ui.tareas import cache, en_segundo_plano
 from services import image_utils
 from ui.usuario_form_fields import construir_campos_perfil, leer_campos_perfil
 
 
 class EditarUsuarioScreen(ctk.CTkScrollableFrame):
-    def __init__(self, master, sesion: dict, on_volver: Callable[[], None]):
-        super().__init__(master, label_text="Editar usuario")
+    def __init__(self, master, sesion: dict, on_volver: Callable[[], None] | None = None):
+        # Sin `on_volver` va montada como pestaña de UsuariosScreen, que ya
+        # tiene su propio Volver: dos seguidos confunden.
+        super().__init__(master, label_text="" if on_volver is None else "Editar usuario")
         self.sesion = sesion
         self.on_volver = on_volver
         self._usuarios_por_nombre: dict[str, dict] = {}
 
-        ctk.CTkButton(self, text="← Volver", width=90, command=on_volver).pack(anchor="w", pady=(0, 10))
+        if on_volver is not None:
+            ctk.CTkButton(self, text="← Volver", width=90, command=on_volver).pack(anchor="w", pady=(0, 10))
 
         ctk.CTkLabel(self, text="Usuario").pack(anchor="w")
         self.usuario_menu = ctk.CTkOptionMenu(self, values=["(cargando...)"], command=lambda _v: self._cargar())
@@ -71,19 +74,33 @@ class EditarUsuarioScreen(ctk.CTkScrollableFrame):
         entry.pack(fill="x", pady=(2, 0))
         return entry
 
-    def _cargar_usuarios(self):
-        try:
-            usuarios = api_client.listar_usuarios(self.sesion["token"])
-        except api_client.ApiError as exc:
-            self.error_label.configure(text=str(exc))
-            return
+    def _cargar_usuarios(self, seleccionar: str | None = None):
+        """La lista sale del caché, que ya viene precargado desde el login,
+        así que normalmente no cuesta ningún viaje al backend. Igual va en
+        segundo plano por si toca ir a buscarla."""
 
-        self._usuarios_por_nombre = {u["nombre"]: u for u in usuarios}
-        self._hay_admin = any(u.get("es_admin") for u in usuarios)
-        nombres = list(self._usuarios_por_nombre) or ["(sin usuarios)"]
-        self.usuario_menu.configure(values=nombres)
-        self.usuario_menu.set(nombres[0])
-        self._cargar()
+        def listo(usuarios):
+            self._usuarios_por_nombre = {u["nombre"]: u for u in usuarios}
+            self._hay_admin = any(u.get("es_admin") for u in usuarios)
+            nombres = list(self._usuarios_por_nombre) or ["(sin usuarios)"]
+            self.usuario_menu.configure(values=nombres)
+            self.usuario_menu.set(seleccionar if seleccionar in nombres else nombres[0])
+            self._cargar()
+
+        en_segundo_plano(
+            self,
+            lambda: cache.usuarios(self.sesion["token"]),
+            listo,
+            lambda exc: self.error_label.configure(text=str(exc), text_color="#c0392b"),
+        )
+
+    def seleccionar(self, nombre: str):
+        """Deja abierto ese usuario. La usa la lista para saltar acá."""
+        if nombre in self._usuarios_por_nombre:
+            self.usuario_menu.set(nombre)
+            self._cargar()
+        else:
+            self._cargar_usuarios(seleccionar=nombre)
 
     def _usuario_actual(self) -> dict | None:
         return self._usuarios_por_nombre.get(self.usuario_menu.get())

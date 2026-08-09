@@ -32,3 +32,27 @@ def a_fecha_larga(fecha: str) -> str:
 def a_fecha_corta(fecha: str) -> str:
     """'2026-08-05' o '2026-08-05T05:00:00.000Z' -> '05/08/2026'"""
     return _solo_fecha(fecha).strftime("%d/%m/%Y")
+
+
+def hace_cuanto(fecha: str | None) -> tuple[str, int | None]:
+    """Devuelve ('entró hoy', 0) y similares, más los días transcurridos.
+
+    Los días vuelven aparte para que quien llama decida qué es "hace
+    mucho" — acá no sabemos si eso son 7 días o 30. `None` significa que
+    la fecha viene vacía: nunca pasó.
+    """
+    if not fecha:
+        return "nunca entró", None
+
+    try:
+        dias = (date.today() - _solo_fecha(str(fecha))).days
+    except ValueError:
+        return str(fecha), None
+
+    if dias <= 0:
+        return "entró hoy", 0
+    if dias == 1:
+        return "entró ayer", 1
+    if dias < 30:
+        return f"entró hace {dias} días", dias
+    return f"entró el {a_fecha_corta(str(fecha))}", dias

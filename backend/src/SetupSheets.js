@@ -43,6 +43,7 @@ const ESQUEMA_SHEETS_ = {
     'id', 'nombre', 'usuario', 'password_hash', 'rol', 'es_admin',
     'valor_hora_docente', 'valor_hora_directivo', 'cedula',
     'numero_cuenta', 'tipo_cuenta', 'entidad_bancaria', 'firma_drive_id',
+    'ultimo_acceso',
   ],
   [SHEET_NAMES.CURSOS]: [
     'id', 'docente_id', 'nombre', 'nucleo', 'edad_desde', 'edad_hasta', 'activo',

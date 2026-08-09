@@ -14,8 +14,7 @@ from ui.grupo_screen import GrupoScreen
 from ui.cursos_screen import CursosScreen
 from ui.horas_gestion_screen import HorasGestionScreen
 from ui.planeaciones_docente_screen import PlaneacionesDocenteScreen
-from ui.usuario_screen import UsuarioScreen
-from ui.editar_usuario_screen import EditarUsuarioScreen
+from ui.usuarios_screen import UsuariosScreen
 from ui.password_screen import PasswordScreen
 from ui.version_screen import VersionScreen
 from ui.tareas import cache, en_segundo_plano
@@ -140,8 +139,7 @@ class App(ctk.CTk):
             on_cursos=self._mostrar_cursos,
             on_horas_gestion=self._mostrar_horas_gestion,
             on_planeaciones_docente=self._mostrar_planeaciones_docente,
-            on_crear_usuario=self._mostrar_crear_usuario,
-            on_editar_usuario=self._mostrar_editar_usuario,
+            on_usuarios=self._mostrar_usuarios,
             on_cambiar_password=self._mostrar_password,
             on_version=self._mostrar_version,
         )
@@ -226,14 +224,9 @@ class App(ctk.CTk):
         )
         self.pantalla_actual.pack(fill="both", expand=True)
 
-    def _mostrar_crear_usuario(self):
+    def _mostrar_usuarios(self):
         self._limpiar()
-        self.pantalla_actual = UsuarioScreen(self, self.sesion, on_volver=self._mostrar_home)
-        self.pantalla_actual.pack(fill="both", expand=True)
-
-    def _mostrar_editar_usuario(self):
-        self._limpiar()
-        self.pantalla_actual = EditarUsuarioScreen(self, self.sesion, on_volver=self._mostrar_home)
+        self.pantalla_actual = UsuariosScreen(self, self.sesion, on_volver=self._mostrar_home)
         self.pantalla_actual.pack(fill="both", expand=True)
 
     def _mostrar_version(self):

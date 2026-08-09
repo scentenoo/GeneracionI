@@ -23,6 +23,26 @@ function fechaCorta_(valor) {
   return `${dd}/${mm}/${yyyy}`;
 }
 
+/**
+ * Fecha + hora normalizada. Los timestamps también sufren la conversión de
+ * Sheets, así que vuelven como Date igual que las fechas sueltas.
+ *
+ * Se guarda y se lee en hora de Bogotá, sin zona en el string: si
+ * guardáramos UTC, el caso "Sheets no convirtió" mostraría cinco horas de
+ * más y el caso "sí convirtió" no, para el mismo dato.
+ */
+function fechaHoraISO_(valor) {
+  if (!valor) return '';
+  if (valor instanceof Date) {
+    return Utilities.formatDate(valor, ZONA_HORARIA_, "yyyy-MM-dd'T'HH:mm:ss");
+  }
+  return String(valor);
+}
+
+function ahoraISO_() {
+  return Utilities.formatDate(new Date(), ZONA_HORARIA_, "yyyy-MM-dd'T'HH:mm:ss");
+}
+
 function mesDeFecha_(valor) {
   return fechaISO_(valor).slice(0, 7);
 }

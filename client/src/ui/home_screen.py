@@ -21,8 +21,7 @@ class HomeScreen(ctk.CTkFrame):
         on_cursos: Callable[[], None],
         on_horas_gestion: Callable[[], None],
         on_planeaciones_docente: Callable[[], None],
-        on_crear_usuario: Callable[[], None],
-        on_editar_usuario: Callable[[], None],
+        on_usuarios: Callable[[], None],
         on_cambiar_password: Callable[[], None],
         on_version: Callable[[], None],
     ):
@@ -53,8 +52,7 @@ class HomeScreen(ctk.CTkFrame):
             ctk.CTkButton(
                 self, text="Planeaciones de un docente", width=260, command=on_planeaciones_docente
             ).pack(pady=6)
-            ctk.CTkButton(self, text="Crear usuario", width=260, command=on_crear_usuario).pack(pady=6)
-            ctk.CTkButton(self, text="Editar usuario", width=260, command=on_editar_usuario).pack(pady=6)
+            ctk.CTkButton(self, text="Usuarios", width=260, command=on_usuarios).pack(pady=6)
         ctk.CTkButton(self, text="Cambiar contraseña", width=260, command=on_cambiar_password).pack(pady=6)
 
         # Publicar una versión bloquea a quien no la tenga, así que va

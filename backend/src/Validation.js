@@ -1,6 +1,7 @@
 /** Reglas de validación de la sección 6 de la spec. */
 
 const MIN_PALABRAS_DETALLE = 20;
+const MIN_LARGO_PASSWORD = 6;
 const CLASES_ESPERADAS_POR_MES = 4;
 
 /** Cada clase tiene que sumar al menos 2 horas repartidas entre sus bloques. */
@@ -19,6 +20,12 @@ function requireMinPalabras_(texto, nombreCampo) {
     throw new Error(
       `"${nombreCampo}" necesita mínimo ${MIN_PALABRAS_DETALLE} palabras (tiene ${n})`
     );
+  }
+}
+
+function requireLargoPassword_(password) {
+  if (String(password || '').length < MIN_LARGO_PASSWORD) {
+    throw new Error(`La contraseña necesita al menos ${MIN_LARGO_PASSWORD} caracteres`);
   }
 }
 

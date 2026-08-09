@@ -308,6 +308,16 @@ def listar_usuarios(token: str) -> list[dict]:
     return _call("listar_usuarios", token)
 
 
+def restablecer_password(token: str, usuario_id: int, password_nueva: str) -> dict:
+    """Le pone una contraseña nueva a otro usuario, para cuando se le
+    olvidó la suya.
+
+    No hay forma de *ver* la contraseña de nadie: lo que guarda el backend
+    es un hash con salt, ni él la conoce. Un directivo puede restablecer
+    docentes; para tocar a otro directivo hace falta el administrador."""
+    return _call("restablecer_password", token, usuario_id, password_nueva)
+
+
 def eliminar_usuario(token: str, usuario_id: int) -> dict:
     """Directivo: solo usuarios con rol 'docente'. Administrador: cualquiera."""
     return _call("eliminar_usuario", token, usuario_id)

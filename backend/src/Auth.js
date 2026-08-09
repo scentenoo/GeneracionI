@@ -44,6 +44,10 @@ function login(usuario, password) {
   };
   CacheService.getScriptCache().put(`session:${token}`, JSON.stringify(sesion), SESSION_TTL_SECONDS);
 
+  // Para que el equipo directivo vea quién viene usando la app: alguien
+  // que nunca entró probablemente ni la tiene instalada.
+  setCampoDeFila_(SHEET_NAMES.USUARIOS, fila, 'ultimo_acceso', ahoraISO_());
+
   return Object.assign({ token }, sesion);
 }
 
@@ -53,6 +57,7 @@ function cambiarPassword(token, passwordActual, passwordNueva) {
   if (!verificarPassword_(passwordActual, fila.password_hash)) {
     throw new Error('La contraseña actual no es correcta');
   }
+  requireLargoPassword_(passwordNueva);
   updateRowById_(SHEET_NAMES.USUARIOS, sesion.id, { password_hash: crearHashConSalt_(passwordNueva) });
   return { ok: true };
 }

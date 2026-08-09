@@ -19,11 +19,14 @@ ROLES = ["docente", "directivo", "ambos"]
 
 
 class UsuarioScreen(ctk.CTkScrollableFrame):
-    def __init__(self, master, sesion: dict, on_volver: Callable[[], None]):
-        super().__init__(master, label_text="Crear usuario")
+    def __init__(self, master, sesion: dict, on_volver: Callable[[], None] | None = None):
+        # Sin `on_volver` va montada como pestaña de UsuariosScreen, que ya
+        # tiene su propio Volver: dos seguidos confunden.
+        super().__init__(master, label_text="" if on_volver is None else "Crear usuario")
         self.sesion = sesion
 
-        ctk.CTkButton(self, text="← Volver", width=90, command=on_volver).pack(anchor="w", pady=(0, 10))
+        if on_volver is not None:
+            ctk.CTkButton(self, text="← Volver", width=90, command=on_volver).pack(anchor="w", pady=(0, 10))
 
         self.nombre_entry = self._campo("Nombre completo")
         self.usuario_entry = self._campo("Usuario (login)")

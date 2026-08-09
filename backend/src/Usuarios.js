@@ -181,8 +181,48 @@ function listar_usuarios(token) {
   requireRole_(sesion, [ROLES.DIRECTIVO, ROLES.AMBOS]);
   return readAllRows_(SHEET_NAMES.USUARIOS).map((u) => {
     const { password_hash, ...sinPassword } = u; // eslint-disable-line no-unused-vars
+    sinPassword.ultimo_acceso = fechaHoraISO_(u.ultimo_acceso);
     return sinPassword;
   });
+}
+
+/**
+ * Le pone una contraseña nueva a otro usuario, para el caso de siempre:
+ * a alguien se le olvidó la suya.
+ *
+ * No existe "ver la contraseña": lo guardado es un hash con salt (ver
+ * Auth.js), o sea que ni el backend la conoce. Y está bien que sea así —
+ * si el equipo directivo pudiera leer la de un docente, la firma de una
+ * planeación dejaría de probar quién la subió.
+ *
+ * Permisos calcados de eliminar_usuario: un directivo restablece
+ * docentes, y para tocar a otro directivo/ambos hace falta el
+ * administrador. Si no, cualquier directivo se queda con la cuenta de
+ * cualquier otro, incluida la del administrador.
+ */
+function restablecer_password(token, usuario_id, password_nueva) {
+  const sesion = requireSession_(token);
+  requireRole_(sesion, [ROLES.DIRECTIVO, ROLES.AMBOS]);
+
+  const fila = findRowById_(SHEET_NAMES.USUARIOS, usuario_id);
+  if (!fila) throw new Error('Usuario no encontrado');
+
+  const esOtro = String(usuario_id) !== String(sesion.id);
+  if (esOtro && fila.rol !== ROLES.DOCENTE) {
+    requireAdministrador_(sesion);
+  }
+
+  requireLargoPassword_(password_nueva);
+
+  updateRowById_(SHEET_NAMES.USUARIOS, usuario_id, {
+    password_hash: crearHashConSalt_(password_nueva),
+  });
+  // Se registra que pasó y cuándo, nunca el valor: el Historial lo ve
+  // cualquiera que abra la Sheet.
+  registrarHistorial_(sesion.usuario, 'usuario', usuario_id, [
+    { campo: 'password_restablecida', antes: '', despues: ahoraISO_() },
+  ]);
+  return { ok: true };
 }
 
 /** El directivo sube la firma una sola vez; se reutiliza en cada informe mensual (ver spec sección 7/11). */
