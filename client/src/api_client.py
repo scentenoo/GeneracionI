@@ -85,9 +85,19 @@ def guardar_planeacion(token: str, datos: dict, fotos: dict) -> dict:
 
 
 def obtener_planeaciones(
-    token: str, docente_id: int | None = None, curso_id: int | None = None
+    token: str,
+    docente_id: int | None = None,
+    curso_id: int | None = None,
+    resumen: bool = False,
 ) -> list[dict]:
-    return _call("obtener_planeaciones", token, docente_id, curso_id)
+    """Con `resumen` no trae los bloques ni la asistencia — son el grueso
+    del peso de cada fila y las listas no los muestran."""
+    return _call("obtener_planeaciones", token, docente_id, curso_id, resumen)
+
+
+def obtener_planeacion(token: str, id_: int) -> dict:
+    """Una sola planeación completa, para abrirla en el editor."""
+    return _call("obtener_planeacion", token, id_)
 
 
 def editar_planeacion(token: str, id_: int, cambios: dict) -> dict:

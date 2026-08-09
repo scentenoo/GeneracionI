@@ -12,6 +12,7 @@ const ACCIONES_PERMITIDAS_ = {
   cambiarPassword,
   guardar_planeacion,
   obtener_planeaciones,
+  obtener_planeacion,
   editar_planeacion,
   eliminar_planeacion,
   obtener_estado_mes,

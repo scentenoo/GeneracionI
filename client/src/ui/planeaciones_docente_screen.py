@@ -1,7 +1,11 @@
 """El directivo revisa y edita planeaciones de cualquier docente — nunca
 las elimina (eso es solo del docente dueño, ver planeacion_list_screen.py).
 Spec sección 3: "Puede editar (nunca eliminar) planeaciones de docentes,
-con registro en el historial"."""
+con registro en el historial".
+
+Acá solo vive la lista: editar abre PlaneacionEditorScreen, la misma
+pantalla que usa el docente sobre las suyas.
+"""
 
 from __future__ import annotations
 
@@ -11,24 +15,30 @@ import customtkinter as ctk
 
 import api_client
 from services import date_utils
-from ui.bloque_editor import BloqueEditor
-from ui.lista_dinamica import ListaDinamica
+from ui.tareas import cache, en_segundo_plano
 
 
 class PlaneacionesDocenteScreen(ctk.CTkScrollableFrame):
-    def __init__(self, master, sesion: dict, on_volver: Callable[[], None]):
+    def __init__(
+        self,
+        master,
+        sesion: dict,
+        on_volver: Callable[[], None],
+        on_editar: Callable[[dict], None],
+    ):
         super().__init__(master, label_text="Planeaciones de un docente")
         self.sesion = sesion
         self.on_volver = on_volver
+        self.on_editar = on_editar
         self._docentes_por_nombre: dict[str, int] = {}
-        self._planeacion_en_edicion: dict | None = None
-        self.bloques: list[BloqueEditor] = []
 
         ctk.CTkButton(self, text="← Volver", width=90, command=on_volver).pack(anchor="w", pady=(0, 10))
 
         ctk.CTkLabel(self, text="Docente").pack(anchor="w")
-        self.docente_menu = ctk.CTkOptionMenu(self, values=["(cargando...)"], command=lambda _v: self._mostrar_lista())
-        self.docente_menu.pack(anchor="w", pady=(2, 10))
+        self.docente_menu = ctk.CTkOptionMenu(
+            self, values=["(cargando...)"], command=lambda _v: self._mostrar_lista()
+        )
+        self.docente_menu.pack(fill="x", pady=(2, 10))
 
         self.error_label = ctk.CTkLabel(self, text="", text_color="#c0392b", wraplength=450, justify="left")
         self.error_label.pack(fill="x", pady=(0, 4))
@@ -38,14 +48,10 @@ class PlaneacionesDocenteScreen(ctk.CTkScrollableFrame):
 
         self._cargar_docentes()
 
-    def _limpiar_contenido(self):
-        for w in self.contenido.winfo_children():
-            w.destroy()
-
     def _cargar_docentes(self):
         try:
             docentes = [
-                u for u in api_client.listar_usuarios(self.sesion["token"]) if u["rol"] in ("docente", "ambos")
+                u for u in cache.usuarios(self.sesion["token"]) if u["rol"] in ("docente", "ambos")
             ]
         except api_client.ApiError as exc:
             self.error_label.configure(text=str(exc))
@@ -60,32 +66,36 @@ class PlaneacionesDocenteScreen(ctk.CTkScrollableFrame):
     def _docente_id_actual(self) -> int | None:
         return self._docentes_por_nombre.get(self.docente_menu.get())
 
-    # --- lista -----------------------------------------------------------
-
     def _mostrar_lista(self):
-        self._planeacion_en_edicion = None
-        self._limpiar_contenido()
-        self.error_label.configure(text="")
+        for w in self.contenido.winfo_children():
+            w.destroy()
 
         docente_id = self._docente_id_actual()
         if docente_id is None:
             return
 
-        try:
-            planeaciones = api_client.obtener_planeaciones(self.sesion["token"], docente_id)
-        except api_client.ApiError as exc:
-            self.error_label.configure(text=str(exc))
-            return
+        self.error_label.configure(text="Cargando...", text_color="gray")
 
-        if not planeaciones:
-            ctk.CTkLabel(self.contenido, text="Este docente todavía no tiene planeaciones.", text_color="gray").pack(
-                anchor="w", pady=10
-            )
-            return
+        def listo(planeaciones):
+            self.error_label.configure(text="")
+            if not planeaciones:
+                ctk.CTkLabel(
+                    self.contenido, text="Este docente todavía no tiene planeaciones.", text_color="gray"
+                ).pack(anchor="w", pady=10)
+                return
 
-        planeaciones.sort(key=lambda p: p["fecha"], reverse=True)
-        for p in planeaciones:
-            self._fila_planeacion(p)
+            planeaciones.sort(key=lambda p: p["fecha"], reverse=True)
+            for p in planeaciones:
+                self._fila_planeacion(p)
+
+        en_segundo_plano(
+            self,
+            # Resumen: la lista solo muestra fecha y curso, no hace falta
+            # arrastrar los bloques de cada una.
+            lambda: api_client.obtener_planeaciones(self.sesion["token"], docente_id, resumen=True),
+            listo,
+            lambda exc: self.error_label.configure(text=str(exc), text_color="#c0392b"),
+        )
 
     def _fila_planeacion(self, p: dict):
         try:
@@ -98,89 +108,14 @@ class PlaneacionesDocenteScreen(ctk.CTkScrollableFrame):
 
         info = ctk.CTkFrame(fila, fg_color="transparent")
         info.pack(side="left", fill="both", expand=True, padx=10, pady=8)
-        ctk.CTkLabel(info, text=f"{fecha_legible} — {p['grupo']}", font=ctk.CTkFont(weight="bold"), anchor="w").pack(
-            fill="x"
-        )
+        ctk.CTkLabel(
+            info, text=f"{fecha_legible} — {p['grupo']}", font=ctk.CTkFont(weight="bold"), anchor="w"
+        ).pack(fill="x")
+        objetivo_corto = p["objetivo"][:110] + ("..." if len(p["objetivo"]) > 110 else "")
+        ctk.CTkLabel(
+            info, text=objetivo_corto, text_color="gray", anchor="w", justify="left", wraplength=340
+        ).pack(fill="x")
 
-        ctk.CTkButton(fila, text="Editar", width=80, command=lambda: self._mostrar_edicion(p)).pack(
+        ctk.CTkButton(fila, text="Editar", width=80, command=lambda: self.on_editar(p)).pack(
             side="right", padx=10
         )
-
-    # --- edición -----------------------------------------------------------
-
-    def _mostrar_edicion(self, p: dict):
-        self._planeacion_en_edicion = p
-        self._limpiar_contenido()
-        self.bloques = []
-
-        ctk.CTkButton(self.contenido, text="← Cancelar", width=100, command=self._mostrar_lista).pack(
-            anchor="w", pady=(0, 10)
-        )
-
-        ctk.CTkLabel(self.contenido, text="Fecha (AAAA-MM-DD)").pack(anchor="w")
-        self.fecha_entry = ctk.CTkEntry(self.contenido)
-        self.fecha_entry.insert(0, p["fecha"][:10])
-        self.fecha_entry.pack(fill="x", pady=(2, 8))
-
-        # El curso no se edita acá: viene de la asignación del docente y
-        # cambiarlo movería la planeación de curso, con su asistencia y todo.
-        ctk.CTkLabel(
-            self.contenido, text=f"Curso: {p.get('grupo') or '—'}", text_color="gray"
-        ).pack(anchor="w", pady=(2, 8))
-
-        ctk.CTkLabel(self.contenido, text="Objetivo").pack(anchor="w")
-        self.objetivo_box = ctk.CTkTextbox(self.contenido, height=70)
-        self.objetivo_box.insert("1.0", p["objetivo"])
-        self.objetivo_box.pack(fill="x", pady=(2, 8))
-
-        ctk.CTkLabel(self.contenido, text="Temas vistos").pack(anchor="w", pady=(8, 0))
-        self.temas_lista = ListaDinamica(self.contenido, placeholder="Tema visto")
-        if p["temas_vistos"]:
-            self.temas_lista.filas[0].insert(0, p["temas_vistos"][0])  # ListaDinamica ya trae una fila vacía
-            for tema in p["temas_vistos"][1:]:
-                self.temas_lista.agregar_fila(tema)
-        self.temas_lista.pack(fill="x", pady=(2, 8))
-
-        ctk.CTkLabel(self.contenido, text="Bloques", font=ctk.CTkFont(weight="bold")).pack(anchor="w", pady=(10, 4))
-        self.bloques_contenedor = ctk.CTkFrame(self.contenido, fg_color="transparent")
-        self.bloques_contenedor.pack(fill="x")
-        for bloque_data in p["bloques"]:
-            self._agregar_bloque(bloque_data)
-        ctk.CTkButton(self.contenido, text="+ Agregar bloque", command=lambda: self._agregar_bloque()).pack(
-            anchor="w", pady=(6, 0)
-        )
-
-        ctk.CTkButton(self.contenido, text="Guardar cambios", command=self._guardar).pack(pady=16)
-
-    def _agregar_bloque(self, datos: dict | None = None):
-        bloque = BloqueEditor(self.bloques_contenedor, len(self.bloques) + 1, self._quitar_bloque)
-        if datos:
-            bloque.momento_entry.insert(0, datos.get("momento", ""))
-            bloque.minutos_entry.insert(0, str(datos.get("minutos", "") or ""))
-            bloque.observacion.set(datos.get("observacion", ""))
-            bloque.avance.set(datos.get("avance", ""))
-        bloque.pack(fill="x", pady=6)
-        self.bloques.append(bloque)
-
-    def _quitar_bloque(self, bloque: BloqueEditor):
-        if len(self.bloques) <= 1:
-            return
-        self.bloques.remove(bloque)
-        bloque.destroy()
-
-    def _guardar(self):
-        cambios = {
-            "fecha": self.fecha_entry.get().strip(),
-            "objetivo": self.objetivo_box.get("1.0", "end").strip(),
-            "temas_vistos": self.temas_lista.valores(),
-            "bloques": [b.a_dict() for b in self.bloques],
-        }
-
-        try:
-            api_client.editar_planeacion(self.sesion["token"], self._planeacion_en_edicion["id"], cambios)
-        except api_client.ApiError as exc:
-            self.error_label.configure(text=str(exc), text_color="#c0392b")
-            return
-
-        self._mostrar_lista()
-        self.error_label.configure(text="Cambios guardados ✓", text_color="#2fa84f")

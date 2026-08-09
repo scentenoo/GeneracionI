@@ -11,10 +11,49 @@ resultado al hilo de Tk con `widget.after()`, que sí es seguro.
 
 from __future__ import annotations
 
+import queue
+import sys
 import threading
+import traceback
 from typing import Callable
 
 import api_client
+
+# Los resultados de los hilos se dejan acá y los recoge el hilo principal.
+#
+# El hilo worker NO puede tocar Tkinter: ni siquiera `winfo_exists()` o
+# `after()`, que fallan con "main thread is not in main loop". Por eso la
+# entrega pasa por una cola, que sí es segura entre hilos, y un temporizador
+# que corre en el hilo principal la vacía.
+_cola: "queue.Queue[tuple]" = queue.Queue()
+_entrega_iniciada = False
+
+INTERVALO_MS = 50
+
+
+def _bombear(root):
+    """Corre en el hilo principal: saca resultados de la cola y los entrega.
+
+    Si el usuario navegó a otra pantalla, el widget ya no existe y el
+    resultado se descarta — es tarde para mostrarlo y ya no le importa.
+    """
+    try:
+        while True:
+            widget, callback, valor = _cola.get_nowait()
+            try:
+                if widget.winfo_exists():
+                    callback(valor)
+            except Exception:  # noqa: BLE001
+                # Un callback que revienta no puede matar la entrega del resto.
+                traceback.print_exc(file=sys.stderr)
+    except queue.Empty:
+        pass
+
+    try:
+        root.after(INTERVALO_MS, lambda: _bombear(root))
+    except Exception:  # noqa: BLE001
+        # La ventana se cerró: no hay nada más que entregar.
+        pass
 
 
 def en_segundo_plano(
@@ -26,26 +65,24 @@ def en_segundo_plano(
     """Corre `trabajo()` fuera del hilo de la interfaz y entrega el
     resultado a `al_terminar` ya de vuelta en el hilo de Tk.
 
-    Si el usuario navega a otra pantalla mientras la llamada está en
-    curso, el widget deja de existir y el resultado se descarta en vez de
-    reventar."""
-
-    def entregar(callback, valor):
-        try:
-            if widget.winfo_exists():
-                widget.after(0, lambda: callback(valor))
-        except Exception:
-            # La ventana ya se cerró: no hay a quién entregarle nada.
-            pass
+    Se llama siempre desde el hilo principal (sale de un callback de la
+    interfaz), que es donde se arranca el temporizador de entrega.
+    """
+    global _entrega_iniciada
+    if not _entrega_iniciada:
+        _entrega_iniciada = True
+        _bombear(widget.winfo_toplevel())
 
     def correr():
         try:
             resultado = trabajo()
         except Exception as exc:  # noqa: BLE001 — se lo pasamos tal cual al caller
             if al_fallar is not None:
-                entregar(al_fallar, exc)
+                _cola.put((widget, al_fallar, exc))
+            else:
+                traceback.print_exc(file=sys.stderr)
         else:
-            entregar(al_terminar, resultado)
+            _cola.put((widget, al_terminar, resultado))
 
     threading.Thread(target=correr, daemon=True).start()
 

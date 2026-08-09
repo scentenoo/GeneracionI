@@ -40,7 +40,7 @@ class PlaneacionListScreen(ctk.CTkScrollableFrame):
         self.error_label.configure(text="")
 
         try:
-            planeaciones = api_client.obtener_planeaciones(self.sesion["token"])
+            planeaciones = api_client.obtener_planeaciones(self.sesion["token"], resumen=True)
         except api_client.ApiError as exc:
             self.error_label.configure(text=str(exc))
             return

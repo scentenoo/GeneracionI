@@ -50,8 +50,13 @@ function guardar_planeacion(token, datos, fotos) {
  * Docente ve solo las suyas; directivo puede pedir las de cualquiera.
  * Con `curso_id` se acota a un curso — que es lo que necesita el informe
  * mensual, ya que va por curso y no por persona.
+ *
+ * Con `resumen` deja afuera los campos pesados. Las pantallas de lista
+ * solo muestran fecha, curso y objetivo, pero los bloques son el 90% del
+ * peso de cada fila y eso crece con cada mes de uso. Para editar una hay
+ * obtener_planeacion, que sí la trae completa.
  */
-function obtener_planeaciones(token, docente_id, curso_id) {
+function obtener_planeaciones(token, docente_id, curso_id, resumen) {
   const sesion = requireSession_(token);
   const targetId = docente_id || sesion.id;
 
@@ -59,12 +64,37 @@ function obtener_planeaciones(token, docente_id, curso_id) {
     throw new Error('No tienes permiso para ver planeaciones de otro docente');
   }
 
-  return readRowsWhere_(
+  const filas = readRowsWhere_(
     SHEET_NAMES.PLANEACIONES,
     (p) =>
       String(p.docente_id) === String(targetId) &&
       (!curso_id || String(p.curso_id) === String(curso_id))
-  ).map(parsePlaneacionRow_);
+  );
+
+  if (resumen) {
+    return filas.map((p) => ({
+      id: p.id,
+      docente_id: p.docente_id,
+      curso_id: p.curso_id,
+      fecha: p.fecha,
+      grupo: p.grupo,
+      objetivo: p.objetivo,
+      horas: p.horas,
+    }));
+  }
+  return filas.map(parsePlaneacionRow_);
+}
+
+/** Una sola planeación completa, para abrirla en el editor. */
+function obtener_planeacion(token, id) {
+  const sesion = requireSession_(token);
+
+  const fila = findRowById_(SHEET_NAMES.PLANEACIONES, id);
+  if (!fila) throw new Error(`No se encontró la planeación ${id}`);
+  if (String(fila.docente_id) !== String(sesion.id) && !esDirectivo_(sesion)) {
+    throw new Error('No tienes permiso para ver esa planeación');
+  }
+  return parsePlaneacionRow_(fila);
 }
 
 function parsePlaneacionRow_(p) {

@@ -17,6 +17,7 @@ from ui.usuario_screen import UsuarioScreen
 from ui.editar_usuario_screen import EditarUsuarioScreen
 from ui.password_screen import PasswordScreen
 from ui.tareas import cache, en_segundo_plano
+import api_client
 from services import vista_previa
 
 
@@ -112,11 +113,28 @@ class App(ctk.CTk):
         self.pantalla_actual.pack(fill="both", expand=True)
 
     def _mostrar_editor_planeacion(self, planeacion, on_volver):
+        """Las listas traen un resumen sin bloques ni temas, así que la
+        completa se pide recién acá, para la que se va a editar."""
         self._limpiar()
-        self.pantalla_actual = PlaneacionEditorScreen(
-            self, self.sesion, planeacion, on_volver=on_volver
+        cargando = ctk.CTkFrame(self)
+        cargando.pack(fill="both", expand=True)
+        aviso = ctk.CTkLabel(cargando, text="Cargando la planeación...", text_color="gray")
+        aviso.pack(padx=30, pady=60)
+        self.pantalla_actual = cargando
+
+        def listo(completa):
+            self._limpiar()
+            self.pantalla_actual = PlaneacionEditorScreen(
+                self, self.sesion, completa, on_volver=on_volver
+            )
+            self.pantalla_actual.pack(fill="both", expand=True)
+
+        en_segundo_plano(
+            self,
+            lambda: api_client.obtener_planeacion(self.sesion["token"], planeacion["id"]),
+            listo,
+            lambda exc: aviso.configure(text=str(exc), text_color="#c0392b"),
         )
-        self.pantalla_actual.pack(fill="both", expand=True)
 
     def _mostrar_dashboard(self):
         self._limpiar()
@@ -145,7 +163,12 @@ class App(ctk.CTk):
 
     def _mostrar_planeaciones_docente(self):
         self._limpiar()
-        self.pantalla_actual = PlaneacionesDocenteScreen(self, self.sesion, on_volver=self._mostrar_home)
+        self.pantalla_actual = PlaneacionesDocenteScreen(
+            self,
+            self.sesion,
+            on_volver=self._mostrar_home,
+            on_editar=lambda p: self._mostrar_editor_planeacion(p, self._mostrar_planeaciones_docente),
+        )
         self.pantalla_actual.pack(fill="both", expand=True)
 
     def _mostrar_crear_usuario(self):
