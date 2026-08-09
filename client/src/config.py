@@ -7,7 +7,11 @@ from pathlib import Path
 
 BACKEND_URL = "https://script.google.com/macros/s/AKfycbys9dPldfgtNcO8J51jsroJkC2Ic-_qn7jkVyp_G9w0UgEjaqGH4VsN_K7bteJMEOE-/exec"
 
-APP_VERSION = "1.0.0"
+# Tiene que coincidir con lo que diga Config.version_actual en la Sheet, si
+# no la app se bloquea al abrir (ver main.py). O sea: primero se compila el
+# .exe con esta versión, después se sube a Drive, y recién ahí se publica
+# desde «Versión de la app». Al revés deja a todos afuera.
+APP_VERSION = "1.1.0"
 
 
 def _base_dir() -> Path:
