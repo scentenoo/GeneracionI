@@ -15,9 +15,10 @@ from typing import Callable
 import customtkinter as ctk
 
 import api_client
-from services import date_utils, image_utils
+from services import date_utils, image_utils, vista_previa
 from ui.bloque_editor import BloqueEditor
 from ui.lista_dinamica import ListaDinamica
+from ui.tareas import en_segundo_plano
 from ui.widgets import CampoConContador, MIN_PALABRAS
 
 MINUTOS_MINIMOS = 120
@@ -183,8 +184,76 @@ class PlaneacionScreen(ctk.CTkScrollableFrame):
     def _construir_acciones(self):
         self.error_label = ctk.CTkLabel(self, text="", text_color="#c0392b", wraplength=450, justify="left")
         self.error_label.pack(fill="x", pady=(16, 4))
-        self.guardar_boton = ctk.CTkButton(self, text="Guardar planeación", command=self._guardar)
-        self.guardar_boton.pack(pady=10)
+
+        # Primero se revisa el documento, después se sube: guardar queda
+        # deshabilitado hasta haber visto la vista previa.
+        self.previsualizar_boton = ctk.CTkButton(
+            self, text="Ver vista previa", command=self._previsualizar
+        )
+        self.previsualizar_boton.pack(pady=(0, 6))
+
+        self.guardar_boton = ctk.CTkButton(
+            self, text="Guardar planeación", command=self._guardar, state="disabled"
+        )
+        self.guardar_boton.pack(pady=(0, 10))
+
+        ctk.CTkLabel(
+            self,
+            text="Revisá la vista previa para poder guardar.",
+            text_color="gray",
+            font=ctk.CTkFont(size=11),
+        ).pack()
+
+    # --- vista previa ------------------------------------------------------
+
+    def _contexto_documento(self) -> dict:
+        """Lo que va a la plantilla, armado con lo que hay en pantalla."""
+        curso = self._curso_actual()
+        return {
+            "fecha": date_utils.a_fecha_larga(self.fecha_entry.get().strip()),
+            "grupo": curso["nombre"] if curso else "",
+            "objetivo": self.objetivo.get(),
+            "temas_vistos": self.temas_lista.valores(),
+            "bloques": [
+                dict(b.a_dict(), momento=f"{b.momento_entry.get().strip()} ({b.minutos()} min)")
+                for b in self.bloques
+            ],
+            "asistencia": [
+                {"nombre": nombre, "presente": "Sí" if var.get() else "No"}
+                for nombre, var in self.asistencia_vars.items()
+            ],
+        }
+
+    def _previsualizar(self):
+        error = self._validar()
+        if error:
+            self.error_label.configure(text=error, text_color="#c0392b")
+            return
+
+        self.previsualizar_boton.configure(state="disabled", text="Generando...")
+        self.error_label.configure(text="Armando el documento...", text_color="gray")
+        self.update_idletasks()
+
+        def trabajo():
+            return vista_previa.previsualizar_planeacion(self._contexto_documento(), self.foto_path)
+
+        def listo(resultado):
+            _ruta, es_pdf = resultado
+            self.previsualizar_boton.configure(state="normal", text="Ver vista previa de nuevo")
+            self.guardar_boton.configure(state="normal")
+            formato = "PDF" if es_pdf else "documento de Word"
+            self.error_label.configure(
+                text=f"Abrí el {formato} para revisarlo. Si está bien, dale a guardar.",
+                text_color="#2fa84f",
+            )
+
+        def fallo(exc):
+            self.previsualizar_boton.configure(state="normal", text="Ver vista previa")
+            self.error_label.configure(
+                text=f"No se pudo armar la vista previa: {exc}", text_color="#c0392b"
+            )
+
+        en_segundo_plano(self, trabajo, listo, fallo)
 
     # --- guardar ---------------------------------------------------------
 
@@ -223,7 +292,8 @@ class PlaneacionScreen(ctk.CTkScrollableFrame):
             return
 
         self.guardar_boton.configure(state="disabled", text="Guardando...")
-        self.error_label.configure(text="Subiendo la foto y guardando...", text_color="gray")
+        self.previsualizar_boton.configure(state="disabled")
+        self.error_label.configure(text="Comprimiendo la foto y subiendo...", text_color="gray")
         self.update_idletasks()
 
         datos = {
@@ -236,18 +306,26 @@ class PlaneacionScreen(ctk.CTkScrollableFrame):
                 {"nombre": nombre, "presente": var.get()} for nombre, var in self.asistencia_vars.items()
             ],
         }
-        fotos = {"foto_clase": image_utils.foto_a_payload(self.foto_path)}
 
-        try:
-            resultado = api_client.guardar_planeacion(self.sesion["token"], datos, fotos)
-        except api_client.ApiError as exc:
-            self.error_label.configure(text=str(exc), text_color="#c0392b")
-            return
-        finally:
+        def trabajo():
+            # La compresión de la foto también tarda, así que va al hilo.
+            fotos = {"foto_clase": image_utils.foto_a_payload(self.foto_path)}
+            return api_client.guardar_planeacion(self.sesion["token"], datos, fotos)
+
+        def listo(resultado):
+            self.previsualizar_boton.configure(state="normal", text="Ver vista previa")
+            self.guardar_boton.configure(text="Guardar planeación")
+            self._limpiar_formulario()
+            self.error_label.configure(
+                text=f"Planeación guardada (id {resultado['id']}) ✓", text_color="#2fa84f"
+            )
+
+        def fallo(exc):
+            self.previsualizar_boton.configure(state="normal", text="Ver vista previa")
             self.guardar_boton.configure(state="normal", text="Guardar planeación")
+            self.error_label.configure(text=str(exc), text_color="#c0392b")
 
-        self.error_label.configure(text=f"Planeación guardada (id {resultado['id']}) ✓", text_color="#2fa84f")
-        self._limpiar_formulario()
+        en_segundo_plano(self, trabajo, listo, fallo)
 
     def _limpiar_formulario(self):
         """Deja el formulario listo para la siguiente clase, conservando la
@@ -262,5 +340,8 @@ class PlaneacionScreen(ctk.CTkScrollableFrame):
 
         self.foto_path = None
         self.foto_label.configure(text="Ninguna foto seleccionada", text_color="gray")
+
+        # La próxima planeación también hay que revisarla antes de subirla.
+        self.guardar_boton.configure(state="disabled")
 
         self._cargar_asistencia()

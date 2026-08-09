@@ -11,8 +11,10 @@ import customtkinter as ctk
 
 import api_client
 from ui.tareas import cache
-from services import date_utils, docx_generator, pdf_converter
+from services import date_utils, docx_generator, pdf_converter, vista_previa
 from ui.avance_semana_editor import AvanceSemanaEditor
+from ui.tareas import en_segundo_plano
+from ui.widgets import MIN_PALABRAS, contar_palabras
 
 
 class InformeScreen(ctk.CTkScrollableFrame):
@@ -161,9 +163,26 @@ class InformeScreen(ctk.CTkScrollableFrame):
     def _construir_acciones(self):
         self.error_label = ctk.CTkLabel(self, text="", text_color="#c0392b", wraplength=450, justify="left")
         self.error_label.pack(fill="x", pady=(16, 4))
-        ctk.CTkButton(self, text="Generar informe (.docx)", command=self._generar).pack(pady=10)
 
-    # --- generar -----------------------------------------------------------
+        # Igual que en la planeación: primero se revisa, después se guarda.
+        self.previsualizar_boton = ctk.CTkButton(
+            self, text="Ver vista previa", command=self._previsualizar
+        )
+        self.previsualizar_boton.pack(pady=(0, 6))
+
+        self.guardar_boton = ctk.CTkButton(
+            self, text="Guardar informe...", command=self._guardar, state="disabled"
+        )
+        self.guardar_boton.pack(pady=(0, 10))
+
+        ctk.CTkLabel(
+            self,
+            text="Revisá la vista previa para poder guardar.",
+            text_color="gray",
+            font=ctk.CTkFont(size=11),
+        ).pack()
+
+    # --- armado ------------------------------------------------------------
 
     def _texto(self, box: ctk.CTkTextbox) -> str:
         return box.get("1.0", "end").strip()
@@ -171,12 +190,39 @@ class InformeScreen(ctk.CTkScrollableFrame):
     def _curso_seleccionado(self) -> dict | None:
         return self._cursos_por_etiqueta.get(self.curso_menu.get())
 
-    def _generar(self):
-        curso = self._curso_seleccionado()
-        if not curso:
-            self.error_label.configure(text="No hay curso seleccionado.", text_color="#c0392b")
-            return
+    def _validar(self) -> str | None:
+        if not self._curso_seleccionado():
+            return "Elegí un curso."
+        if not self.mes_entry.get().strip():
+            return "Falta el mes."
 
+        campos = [
+            (self.objetivo_box, "Objetivos del mes"),
+            (self.logros_box, "Principales logros"),
+            (self.dificultades_box, "Dificultades"),
+            (self.estrategias_box, "Estrategias"),
+            (self.situacion_box, "Situación positiva"),
+            (self.ctei_box, "Componente CTeI"),
+        ]
+        if self.es_directivo:
+            campos += [
+                (self.gestion_objetivos_box, "Gestión: objetivos"),
+                (self.gestion_logros_box, "Gestión: logros"),
+                (self.gestion_novedades_box, "Gestión: novedades"),
+                (self.gestion_estrategias_box, "Gestión: estrategias"),
+                (self.gestion_pendientes_box, "Gestión: pendientes"),
+            ]
+
+        for box, nombre in campos:
+            n = contar_palabras(self._texto(box))
+            if n < MIN_PALABRAS:
+                return f"«{nombre}» necesita mínimo {MIN_PALABRAS} palabras (tiene {n})."
+        return None
+
+    def _armar_contexto(self):
+        """Pide al backend los datos agregados del mes ya mezclados con las
+        respuestas narrativas."""
+        curso = self._curso_seleccionado()
         narrativa = {
             "objetivo_cumplimiento": self._texto(self.objetivo_box),
             "logros_avances": self._texto(self.logros_box),
@@ -196,17 +242,51 @@ class InformeScreen(ctk.CTkScrollableFrame):
                 "pendientes": self._texto(self.gestion_pendientes_box),
             }
 
-        self.error_label.configure(text="Generando (puede tardar un poco por las fotos)...", text_color="gray")
-        self.update()
+        return api_client.generar_informe_mensual(
+            self.sesion["token"], curso["id"], self.mes_entry.get().strip(),
+            narrativa, gestion_narrativa,
+            incluir_gestion=bool(self.incluir_gestion_var.get()) if self.es_directivo else False,
+        )
 
-        try:
-            contexto = api_client.generar_informe_mensual(
-                self.sesion["token"], curso["id"], self.mes_entry.get().strip(),
-                narrativa, gestion_narrativa,
-                incluir_gestion=bool(self.incluir_gestion_var.get()) if self.es_directivo else False,
+    # --- vista previa y guardado --------------------------------------------
+
+    def _previsualizar(self):
+        error = self._validar()
+        if error:
+            self.error_label.configure(text=error, text_color="#c0392b")
+            return
+
+        self.previsualizar_boton.configure(state="disabled", text="Generando...")
+        self.error_label.configure(
+            text="Armando el informe (puede tardar por las fotos)...", text_color="gray"
+        )
+        self.update_idletasks()
+
+        def trabajo():
+            contexto = self._armar_contexto()
+            return contexto, vista_previa.previsualizar_informe(contexto)[1]
+
+        def listo(resultado):
+            contexto, es_pdf = resultado
+            self._contexto_listo = contexto
+            self.previsualizar_boton.configure(state="normal", text="Ver vista previa de nuevo")
+            self.guardar_boton.configure(state="normal")
+            formato = "PDF" if es_pdf else "documento de Word"
+            self.error_label.configure(
+                text=f"Abrí el {formato} para revisarlo. Si está bien, dale a guardar.",
+                text_color="#2fa84f",
             )
-        except api_client.ApiError as exc:
+
+        def fallo(exc):
+            self.previsualizar_boton.configure(state="normal", text="Ver vista previa")
             self.error_label.configure(text=str(exc), text_color="#c0392b")
+
+        en_segundo_plano(self, trabajo, listo, fallo)
+
+    def _guardar(self):
+        contexto = getattr(self, "_contexto_listo", None)
+        if contexto is None:
+            self.error_label.configure(text="Primero mirá la vista previa.", text_color="#c0392b")
             return
 
         ruta = filedialog.asksaveasfilename(
@@ -216,16 +296,18 @@ class InformeScreen(ctk.CTkScrollableFrame):
             initialfile=f"informe_{self.mes_entry.get().strip()}.docx",
         )
         if not ruta:
-            self.error_label.configure(text="Generado pero no se guardó (cancelaste el diálogo).", text_color="gray")
+            self.error_label.configure(text="No se guardó: cancelaste el diálogo.", text_color="gray")
             return
 
+        # Reusa el contexto que ya vino del backend en la vista previa, así
+        # que esto es rápido y no vuelve a pedir las fotos.
         docx_generator.generar_informe_mensual_docx(contexto, ruta)
 
         try:
-            pdf_path = pdf_converter.docx_a_pdf(ruta)
-            self.error_label.configure(text=f"Listo: {ruta}  (también generé el PDF)", text_color="#2fa84f")
+            pdf_converter.docx_a_pdf(ruta)
+            self.error_label.configure(text=f"Guardado: {ruta}  (también el PDF)", text_color="#2fa84f")
         except pdf_converter.ConversionNoDisponible:
             self.error_label.configure(
-                text=f"Listo: {ruta}  (no se pudo convertir a PDF automáticamente, entregá el .docx)",
+                text=f"Guardado: {ruta}  (sin PDF automático en este equipo, entregá el .docx)",
                 text_color="#2fa84f",
             )
