@@ -26,6 +26,8 @@ const ACCIONES_PERMITIDAS_ = {
   editar_curso,
   desactivar_curso,
   generar_informe_mensual,
+  guardar_informe_mensual,
+  obtener_informe_mensual,
   obtener_avance_sugerido,
   crear_usuario,
   editar_usuario,

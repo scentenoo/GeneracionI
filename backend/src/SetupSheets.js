@@ -51,6 +51,17 @@ const ESQUEMA_SHEETS_ = {
     'id', 'docente_id', 'curso_id', 'fecha', 'grupo', 'objetivo', 'temas_vistos',
     'bloques', 'foto_clase_drive_id', 'asistencia', 'horas', 'creado_en',
   ],
+  // Las respuestas narrativas del mes, que antes se escribían una vez y se
+  // perdían. Una fila por curso y mes.
+  [SHEET_NAMES.INFORMES]: [
+    'id', 'curso_id', 'docente_id', 'mes',
+    'objetivo_cumplimiento', 'logros_avances', 'dificultades',
+    'estrategias', 'situacion_positiva', 'ctei_integracion',
+    'avance_semanal',
+    'incluye_gestion', 'gestion_objetivos', 'gestion_logros',
+    'gestion_novedades', 'gestion_estrategias', 'gestion_pendientes',
+    'creado_en', 'actualizado_en',
+  ],
   [SHEET_NAMES.ESTUDIANTES]: ['id', 'nombre', 'curso_id'],
   [SHEET_NAMES.HORAS_GESTION]: [
     'id', 'directivo_id', 'fecha', 'actividad', 'horas_sede',

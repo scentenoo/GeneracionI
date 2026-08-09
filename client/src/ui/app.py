@@ -6,6 +6,7 @@ from ui.login_screen import LoginScreen
 from ui.home_screen import HomeScreen
 from ui.planeacion_screen import PlaneacionScreen
 from ui.planeacion_list_screen import PlaneacionListScreen
+from ui.planeacion_editor_screen import PlaneacionEditorScreen
 from ui.dashboard_screen import DashboardScreen
 from ui.informe_screen import InformeScreen
 from ui.grupo_screen import GrupoScreen
@@ -88,7 +89,19 @@ class App(ctk.CTk):
 
     def _mostrar_mis_planeaciones(self):
         self._limpiar()
-        self.pantalla_actual = PlaneacionListScreen(self, self.sesion, on_volver=self._mostrar_home)
+        self.pantalla_actual = PlaneacionListScreen(
+            self,
+            self.sesion,
+            on_volver=self._mostrar_home,
+            on_editar=lambda p: self._mostrar_editor_planeacion(p, self._mostrar_mis_planeaciones),
+        )
+        self.pantalla_actual.pack(fill="both", expand=True)
+
+    def _mostrar_editor_planeacion(self, planeacion, on_volver):
+        self._limpiar()
+        self.pantalla_actual = PlaneacionEditorScreen(
+            self, self.sesion, planeacion, on_volver=on_volver
+        )
         self.pantalla_actual.pack(fill="both", expand=True)
 
     def _mostrar_dashboard(self):

@@ -54,7 +54,9 @@ class DashboardScreen(ctk.CTkScrollableFrame):
         # atrasado en el otro.
         encabezado = ctk.CTkFrame(self.tabla_contenedor, fg_color="transparent")
         encabezado.pack(fill="x")
-        for texto, ancho in [("Curso", 180), ("Docente", 160), ("Hechas", 70), ("Esperadas", 80), ("Faltan", 70)]:
+        for texto, ancho in [
+            ("Curso", 170), ("Docente", 150), ("Clases", 90), ("Informe", 110),
+        ]:
             ctk.CTkLabel(encabezado, text=texto, width=ancho, anchor="w", font=ctk.CTkFont(weight="bold")).pack(
                 side="left"
             )
@@ -62,12 +64,24 @@ class DashboardScreen(ctk.CTkScrollableFrame):
         for estado in estados:
             fila = ctk.CTkFrame(self.tabla_contenedor, fg_color="transparent")
             fila.pack(fill="x", pady=2)
-            color = "#2fa84f" if estado["faltantes"] == 0 else "#c0392b"
-            ctk.CTkLabel(fila, text=estado.get("curso", ""), width=180, anchor="w").pack(side="left")
-            ctk.CTkLabel(fila, text=estado.get("docente", ""), width=160, anchor="w").pack(side="left")
-            ctk.CTkLabel(fila, text=str(estado["registradas"]), width=70, anchor="w").pack(side="left")
-            ctk.CTkLabel(fila, text=str(estado["esperadas"]), width=80, anchor="w").pack(side="left")
-            ctk.CTkLabel(fila, text=str(estado["faltantes"]), width=70, anchor="w", text_color=color).pack(side="left")
+
+            al_dia = estado["faltantes"] == 0
+            color_clases = "#2fa84f" if al_dia else "#c0392b"
+            clases = f"{estado['registradas']} de {estado['esperadas']}"
+
+            entregado = estado.get("informe_entregado")
+            if entregado:
+                texto_informe, color_informe = "Entregado", "#2fa84f"
+            elif al_dia:
+                texto_informe, color_informe = "Pendiente", "#c0392b"
+            else:
+                # Todavía no puede entregarlo: le faltan clases del mes.
+                texto_informe, color_informe = "—", "gray"
+
+            ctk.CTkLabel(fila, text=estado.get("curso", ""), width=170, anchor="w").pack(side="left")
+            ctk.CTkLabel(fila, text=estado.get("docente", ""), width=150, anchor="w").pack(side="left")
+            ctk.CTkLabel(fila, text=clases, width=90, anchor="w", text_color=color_clases).pack(side="left")
+            ctk.CTkLabel(fila, text=texto_informe, width=110, anchor="w", text_color=color_informe).pack(side="left")
 
         if not estados:
             ctk.CTkLabel(self.tabla_contenedor, text="No hay cursos registrados todavía.", text_color="gray").pack(

@@ -61,9 +61,14 @@ class InformeScreen(ctk.CTkScrollableFrame):
             self._cursos_por_etiqueta = {}
 
         etiquetas = list(self._cursos_por_etiqueta) or ["(sin cursos)"]
-        self.curso_menu = ctk.CTkOptionMenu(self, values=etiquetas)
+        self.curso_menu = ctk.CTkOptionMenu(
+            self, values=etiquetas, command=lambda _v: self._cargar_entregado()
+        )
         self.curso_menu.set(etiquetas[0])
         self.curso_menu.pack(fill="x", pady=(2, 10))
+
+        self.entregado_label = ctk.CTkLabel(self, text="", text_color="gray", anchor="w")
+        self.entregado_label.pack(fill="x")
 
     def _campo(self, etiqueta: str) -> ctk.CTkTextbox:
         ctk.CTkLabel(self, text=etiqueta, anchor="w").pack(fill="x", pady=(10, 0))
@@ -171,16 +176,21 @@ class InformeScreen(ctk.CTkScrollableFrame):
         self.previsualizar_boton.pack(pady=(0, 6))
 
         self.guardar_boton = ctk.CTkButton(
-            self, text="Guardar informe...", command=self._guardar, state="disabled"
+            self, text="Entregar informe del mes", command=self._guardar, state="disabled"
         )
         self.guardar_boton.pack(pady=(0, 10))
 
         ctk.CTkLabel(
             self,
-            text="Revisá la vista previa para poder guardar.",
+            text="Revisá la vista previa para poder entregar.",
             text_color="gray",
             font=ctk.CTkFont(size=11),
         ).pack()
+
+        if self.es_directivo:
+            ctk.CTkButton(
+                self, text="Descargar .docx de lo entregado", command=self._descargar
+            ).pack(pady=(16, 10))
 
     # --- armado ------------------------------------------------------------
 
@@ -219,10 +229,8 @@ class InformeScreen(ctk.CTkScrollableFrame):
                 return f"«{nombre}» necesita mínimo {MIN_PALABRAS} palabras (tiene {n})."
         return None
 
-    def _armar_contexto(self):
-        """Pide al backend los datos agregados del mes ya mezclados con las
-        respuestas narrativas."""
-        curso = self._curso_seleccionado()
+    def _respuestas(self):
+        """Lo que escribió el usuario, en la forma que espera el backend."""
         narrativa = {
             "objetivo_cumplimiento": self._texto(self.objetivo_box),
             "logros_avances": self._texto(self.logros_box),
@@ -232,20 +240,26 @@ class InformeScreen(ctk.CTkScrollableFrame):
             "ctei_integracion": self._texto(self.ctei_box),
             "avance_semanal": [a.a_dict() for a in self.avances],
         }
-        gestion_narrativa = None
+        incluir = bool(self.incluir_gestion_var.get()) if self.es_directivo else False
+        gestion = None
         if self.es_directivo:
-            gestion_narrativa = {
+            gestion = {
                 "objetivos": self._texto(self.gestion_objetivos_box),
                 "logros": self._texto(self.gestion_logros_box),
                 "novedades": self._texto(self.gestion_novedades_box),
                 "estrategias": self._texto(self.gestion_estrategias_box),
                 "pendientes": self._texto(self.gestion_pendientes_box),
             }
+        return narrativa, gestion, incluir
 
+    def _armar_contexto(self):
+        """Pide al backend los datos agregados del mes ya mezclados con las
+        respuestas de pantalla — esto es el borrador, todavía sin entregar."""
+        curso = self._curso_seleccionado()
+        narrativa, gestion, incluir = self._respuestas()
         return api_client.generar_informe_mensual(
             self.sesion["token"], curso["id"], self.mes_entry.get().strip(),
-            narrativa, gestion_narrativa,
-            incluir_gestion=bool(self.incluir_gestion_var.get()) if self.es_directivo else False,
+            narrativa, gestion, incluir,
         )
 
     # --- vista previa y guardado --------------------------------------------
@@ -284,30 +298,121 @@ class InformeScreen(ctk.CTkScrollableFrame):
         en_segundo_plano(self, trabajo, listo, fallo)
 
     def _guardar(self):
-        contexto = getattr(self, "_contexto_listo", None)
-        if contexto is None:
-            self.error_label.configure(text="Primero mirá la vista previa.", text_color="#c0392b")
+        """Entrega el informe: guarda las respuestas en el backend para
+        poder reabrirlas y para que el dashboard sepa que ya está."""
+        curso = self._curso_seleccionado()
+        if not curso:
             return
 
-        ruta = filedialog.asksaveasfilename(
-            title="Guardar informe mensual",
-            defaultextension=".docx",
-            filetypes=[("Word", "*.docx")],
-            initialfile=f"informe_{self.mes_entry.get().strip()}.docx",
+        narrativa, gestion, incluir = self._respuestas()
+
+        self.guardar_boton.configure(state="disabled", text="Entregando...")
+        self.error_label.configure(text="Entregando el informe...", text_color="gray")
+        self.update_idletasks()
+
+        def listo(resultado):
+            self.guardar_boton.configure(text="Entregar informe del mes")
+            verbo = "actualizado" if resultado.get("actualizado") else "entregado"
+            self.error_label.configure(text=f"Informe {verbo} ✓", text_color="#2fa84f")
+            self._cargar_entregado()
+
+        def fallo(exc):
+            self.guardar_boton.configure(state="normal", text="Entregar informe del mes")
+            self.error_label.configure(text=str(exc), text_color="#c0392b")
+
+        en_segundo_plano(
+            self,
+            lambda: api_client.guardar_informe_mensual(
+                self.sesion["token"], curso["id"], self.mes_entry.get().strip(),
+                narrativa, gestion, incluir,
+            ),
+            listo,
+            fallo,
         )
-        if not ruta:
-            self.error_label.configure(text="No se guardó: cancelaste el diálogo.", text_color="gray")
+
+    def _cargar_entregado(self):
+        """Si el informe de ese curso y mes ya se entregó, trae las
+        respuestas para poder revisarlas o corregirlas."""
+        curso = self._curso_seleccionado()
+        if not curso:
             return
 
-        # Reusa el contexto que ya vino del backend en la vista previa, así
-        # que esto es rápido y no vuelve a pedir las fotos.
-        docx_generator.generar_informe_mensual_docx(contexto, ruta)
+        def listo(guardado):
+            if not guardado:
+                self.entregado_label.configure(text="Todavía no entregado.", text_color="gray")
+                return
 
-        try:
-            pdf_converter.docx_a_pdf(ruta)
-            self.error_label.configure(text=f"Guardado: {ruta}  (también el PDF)", text_color="#2fa84f")
-        except pdf_converter.ConversionNoDisponible:
-            self.error_label.configure(
-                text=f"Guardado: {ruta}  (sin PDF automático en este equipo, entregá el .docx)",
-                text_color="#2fa84f",
+            self.entregado_label.configure(
+                text="Ya entregado — podés corregirlo y volver a entregar.", text_color="#2fa84f"
             )
+            for box, clave in [
+                (self.objetivo_box, "objetivo_cumplimiento"),
+                (self.logros_box, "logros_avances"),
+                (self.dificultades_box, "dificultades"),
+                (self.estrategias_box, "estrategias"),
+                (self.situacion_box, "situacion_positiva"),
+                (self.ctei_box, "ctei_integracion"),
+            ]:
+                box.delete("1.0", "end")
+                box.insert("1.0", guardado.get(clave, "") or "")
+
+            if self.es_directivo:
+                for box, clave in [
+                    (self.gestion_objetivos_box, "gestion_objetivos"),
+                    (self.gestion_logros_box, "gestion_logros"),
+                    (self.gestion_novedades_box, "gestion_novedades"),
+                    (self.gestion_estrategias_box, "gestion_estrategias"),
+                    (self.gestion_pendientes_box, "gestion_pendientes"),
+                ]:
+                    box.delete("1.0", "end")
+                    box.insert("1.0", guardado.get(clave, "") or "")
+                self.incluir_gestion_var.set(bool(guardado.get("incluye_gestion")))
+
+        en_segundo_plano(
+            self,
+            lambda: api_client.obtener_informe_mensual(
+                self.sesion["token"], curso["id"], self.mes_entry.get().strip()
+            ),
+            listo,
+            lambda exc: self.entregado_label.configure(text=str(exc), text_color="#c0392b"),
+        )
+
+    def _descargar(self):
+        """El directivo baja el .docx de un informe ya entregado, sin tener
+        que volver a llenar nada."""
+        curso = self._curso_seleccionado()
+        if not curso:
+            self.error_label.configure(text="Elegí un curso.", text_color="#c0392b")
+            return
+
+        mes = self.mes_entry.get().strip()
+        self.error_label.configure(text="Armando el documento...", text_color="gray")
+        self.update_idletasks()
+
+        def listo(contexto):
+            ruta = filedialog.asksaveasfilename(
+                title="Guardar informe mensual",
+                defaultextension=".docx",
+                filetypes=[("Word", "*.docx")],
+                initialfile=f"informe_{curso['nombre']}_{mes}.docx".replace(" ", "_"),
+            )
+            if not ruta:
+                self.error_label.configure(text="No se guardó: cancelaste el diálogo.", text_color="gray")
+                return
+
+            docx_generator.generar_informe_mensual_docx(contexto, ruta)
+            try:
+                pdf_converter.docx_a_pdf(ruta)
+                self.error_label.configure(text=f"Guardado: {ruta}  (también el PDF)", text_color="#2fa84f")
+            except pdf_converter.ConversionNoDisponible:
+                self.error_label.configure(
+                    text=f"Guardado: {ruta}  (sin PDF automático en este equipo)", text_color="#2fa84f"
+                )
+
+        en_segundo_plano(
+            self,
+            # Sin narrativa, el backend usa lo que ya está entregado.
+            lambda: api_client.generar_informe_mensual(self.sesion["token"], curso["id"], mes),
+            listo,
+            lambda exc: self.error_label.configure(text=str(exc), text_color="#c0392b"),
+        )

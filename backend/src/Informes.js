@@ -16,6 +16,101 @@
  * pestaña HorasGestion hoy no guarda fotos).
  */
 
+const CAMPOS_NARRATIVA_ = [
+  'objetivo_cumplimiento', 'logros_avances', 'dificultades',
+  'estrategias', 'situacion_positiva', 'ctei_integracion',
+];
+const CAMPOS_GESTION_ = ['objetivos', 'logros', 'novedades', 'estrategias', 'pendientes'];
+
+/**
+ * Sheets convierte "2026-08" en una fecha al guardarlo, así que al releer
+ * vuelve como Date y no como el string que mandamos. mesDeFecha_ normaliza
+ * las dos formas — mismo problema que con `fecha` en Planeaciones.
+ */
+function buscarInforme_(curso_id, mes) {
+  return readRowsWhere_(
+    SHEET_NAMES.INFORMES,
+    (i) => String(i.curso_id) === String(curso_id) && mesDeFecha_(i.mes) === mes
+  )[0] || null;
+}
+
+/**
+ * Guarda las respuestas narrativas del mes. Antes se escribían, se metían
+ * en el .docx y se perdían; ahora quedan para poder reabrirlas, y para que
+ * el dashboard sepa quién ya entregó.
+ *
+ * Solo se puede entregar con todas las clases del mes cargadas: el informe
+ * las resume, así que a medias no sirve.
+ */
+function guardar_informe_mensual(token, curso_id, mes, narrativa, gestionNarrativa, incluirGestion) {
+  const sesion = requireSession_(token);
+
+  const curso = findRowById_(SHEET_NAMES.CURSOS, curso_id);
+  if (!curso) throw new Error('Curso no encontrado');
+  if (String(curso.docente_id) !== String(sesion.id) && !esDirectivo_(sesion)) {
+    throw new Error('No tienes permiso para entregar el informe de ese curso');
+  }
+
+  const estado = obtener_estado_mes(token, curso_id, mes);
+  if (estado.faltantes > 0) {
+    throw new Error(
+      `Faltan ${estado.faltantes} planeaciones de ${mes} para poder entregar el informe de este curso`
+    );
+  }
+
+  CAMPOS_NARRATIVA_.forEach((campo) => {
+    requireMinPalabras_(narrativa[campo], campo);
+  });
+
+  const fila = {
+    curso_id: curso_id,
+    docente_id: curso.docente_id,
+    mes: mes,
+    avance_semanal: JSON.stringify(narrativa.avance_semanal || []),
+    incluye_gestion: incluirGestion === true,
+    actualizado_en: new Date().toISOString(),
+  };
+  CAMPOS_NARRATIVA_.forEach((campo) => {
+    fila[campo] = narrativa[campo];
+  });
+  if (incluirGestion === true) {
+    CAMPOS_GESTION_.forEach((campo) => {
+      requireMinPalabras_((gestionNarrativa || {})[campo], `gestión: ${campo}`);
+      fila['gestion_' + campo] = gestionNarrativa[campo];
+    });
+  }
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const existente = buscarInforme_(curso_id, mes);
+    if (existente) {
+      updateRowById_(SHEET_NAMES.INFORMES, existente.id, fila);
+      return { ok: true, id: existente.id, actualizado: true };
+    }
+    fila.creado_en = fila.actualizado_en;
+    const creada = appendRow_(SHEET_NAMES.INFORMES, fila);
+    return { ok: true, id: creada.id, actualizado: false };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/** Las respuestas ya guardadas, para reabrir el informe y seguir editándolo. */
+function obtener_informe_mensual(token, curso_id, mes) {
+  const sesion = requireSession_(token);
+
+  const curso = findRowById_(SHEET_NAMES.CURSOS, curso_id);
+  if (!curso) throw new Error('Curso no encontrado');
+  if (String(curso.docente_id) !== String(sesion.id) && !esDirectivo_(sesion)) {
+    throw new Error('No tienes permiso para ver ese informe');
+  }
+
+  const fila = buscarInforme_(curso_id, mes);
+  if (!fila) return null;
+  return Object.assign({}, fila, { avance_semanal: JSON.parse(fila.avance_semanal || '[]') });
+}
+
 const MESES_ES_ = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
@@ -49,12 +144,34 @@ function archivoABase64_(fileId) {
  * horas de gestión del mes. Solo aplica a quien tiene rol directivo, y hay
  * que marcarlo en UN solo informe del mes para no cobrar dos veces las
  * mismas horas de gestión.
+ *
+ * Si no le pasan `narrativa`, la lee de lo ya entregado — que es como lo
+ * usa el directivo para descargar el informe de cualquier docente. Con
+ * narrativa es la vista previa de un borrador todavía sin entregar.
  */
 function generar_informe_mensual(token, curso_id, mes, narrativa, gestionNarrativa, incluirGestion) {
   const sesion = requireSession_(token);
 
   const curso = findRowById_(SHEET_NAMES.CURSOS, curso_id);
   if (!curso) throw new Error('Curso no encontrado');
+
+  if (!narrativa) {
+    const guardado = obtener_informe_mensual(token, curso_id, mes);
+    if (!guardado) {
+      throw new Error(`Todavía no se entregó el informe de ${mes} para este curso`);
+    }
+    narrativa = {};
+    CAMPOS_NARRATIVA_.forEach((campo) => {
+      narrativa[campo] = guardado[campo];
+    });
+    narrativa.avance_semanal = guardado.avance_semanal;
+
+    gestionNarrativa = {};
+    CAMPOS_GESTION_.forEach((campo) => {
+      gestionNarrativa[campo] = guardado['gestion_' + campo];
+    });
+    incluirGestion = guardado.incluye_gestion === true;
+  }
 
   const targetId = curso.docente_id;
   if (String(targetId) !== String(sesion.id) && !esDirectivo_(sesion)) {

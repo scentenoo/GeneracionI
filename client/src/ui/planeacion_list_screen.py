@@ -13,9 +13,16 @@ from services import date_utils
 
 
 class PlaneacionListScreen(ctk.CTkScrollableFrame):
-    def __init__(self, master, sesion: dict, on_volver: Callable[[], None]):
+    def __init__(
+        self,
+        master,
+        sesion: dict,
+        on_volver: Callable[[], None],
+        on_editar: Callable[[dict], None],
+    ):
         super().__init__(master, label_text="Mis planeaciones")
         self.sesion = sesion
+        self.on_editar = on_editar
 
         ctk.CTkButton(self, text="← Volver", width=90, command=on_volver).pack(anchor="w", pady=(0, 10))
 
@@ -68,10 +75,15 @@ class PlaneacionListScreen(ctk.CTkScrollableFrame):
             fill="x"
         )
 
+        acciones = ctk.CTkFrame(fila, fg_color="transparent")
+        acciones.pack(side="right", padx=10)
         ctk.CTkButton(
-            fila, text="Eliminar", width=90, fg_color="#c0392b", hover_color="#922b21",
+            acciones, text="Eliminar", width=90, fg_color="#c0392b", hover_color="#922b21",
             command=lambda: self._eliminar(p["id"]),
-        ).pack(side="right", padx=10)
+        ).pack(pady=2)
+        ctk.CTkButton(
+            acciones, text="Editar", width=90, command=lambda: self.on_editar(p)
+        ).pack(pady=2)
 
     def _eliminar(self, planeacion_id: int):
         try:

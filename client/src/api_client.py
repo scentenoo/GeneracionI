@@ -146,7 +146,7 @@ def generar_informe_mensual(
     token: str,
     curso_id: int,
     mes: str,
-    narrativa: dict,
+    narrativa: dict | None = None,
     gestion_narrativa: dict | None = None,
     incluir_gestion: bool = True,
 ) -> dict:
@@ -154,12 +154,34 @@ def generar_informe_mensual(
     (ver client/src/services/docx_generator.py).
 
     El informe va por curso: quien tiene dos cursos entrega dos informes.
-    `incluir_gestion` decide si este informe se lleva la sección 5 — hay que
-    marcarlo en uno solo del mes para no cobrar dos veces esas horas."""
+    Sin `narrativa` usa lo ya entregado — así descarga el directivo. Con
+    narrativa es la vista previa de un borrador todavía sin entregar."""
     return _call(
         "generar_informe_mensual", token, curso_id, mes,
         narrativa, gestion_narrativa or {}, incluir_gestion,
     )
+
+
+def guardar_informe_mensual(
+    token: str,
+    curso_id: int,
+    mes: str,
+    narrativa: dict,
+    gestion_narrativa: dict | None = None,
+    incluir_gestion: bool = False,
+) -> dict:
+    """Entrega el informe del mes: guarda las respuestas para poder
+    reabrirlas y para que el dashboard sepa quién ya entregó. Exige tener
+    todas las planeaciones del mes cargadas."""
+    return _call(
+        "guardar_informe_mensual", token, curso_id, mes,
+        narrativa, gestion_narrativa or {}, incluir_gestion,
+    )
+
+
+def obtener_informe_mensual(token: str, curso_id: int, mes: str) -> dict | None:
+    """Las respuestas ya entregadas, o None si todavía no se entregó."""
+    return _call("obtener_informe_mensual", token, curso_id, mes)
 
 
 def obtener_avance_sugerido(token: str, curso_id: int, mes: str) -> list[dict]:

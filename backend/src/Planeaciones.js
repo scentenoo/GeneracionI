@@ -75,10 +75,21 @@ function parsePlaneacionRow_(p) {
   });
 }
 
-/** Solo directivo edita, nunca elimina. Queda registrado en Historial. */
+/**
+ * Edita el docente dueño (CRUD sobre lo suyo) o un directivo sobre la de
+ * cualquiera — pero el directivo nunca elimina, ver eliminar_planeacion.
+ * Todo queda registrado en Historial.
+ */
 function editar_planeacion(token, id, cambios) {
   const sesion = requireSession_(token);
-  requireRole_(sesion, [ROLES.DIRECTIVO, ROLES.AMBOS]);
+
+  const fila = findRowById_(SHEET_NAMES.PLANEACIONES, id);
+  if (!fila) throw new Error(`No se encontró la planeación ${id}`);
+
+  const esDueno = String(fila.docente_id) === String(sesion.id);
+  if (!esDueno && !esDirectivo_(sesion)) {
+    throw new Error('Solo podés editar tus propias planeaciones');
+  }
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
@@ -151,6 +162,11 @@ function obtener_estado_mes(token, curso_id, mes) {
     (p) => String(p.curso_id) === String(curso_id) && mesDeFecha_(p.fecha) === mes
   );
 
+  const informe = readRowsWhere_(
+    SHEET_NAMES.INFORMES,
+    (i) => String(i.curso_id) === String(curso_id) && mesDeFecha_(i.mes) === mes
+  )[0];
+
   return {
     curso_id: curso.id,
     curso: curso.nombre,
@@ -159,5 +175,7 @@ function obtener_estado_mes(token, curso_id, mes) {
     registradas: planeaciones.length,
     esperadas: CLASES_ESPERADAS_POR_MES,
     faltantes: Math.max(0, CLASES_ESPERADAS_POR_MES - planeaciones.length),
+    informe_entregado: !!informe,
+    informe_actualizado_en: informe ? informe.actualizado_en : '',
   };
 }
