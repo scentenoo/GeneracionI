@@ -23,18 +23,61 @@ class SesionExpirada(ApiError):
     """El token de sesión venció o es inválido — hay que loguearse de nuevo."""
 
 
+class SinConexion(ApiError):
+    """No se pudo llegar al servidor: sin internet, o Google no responde.
+
+    Es distinto de que el backend conteste con un error: acá no llegamos ni
+    a preguntarle. Se separa para que la app pueda ofrecer reintentar en vez
+    de tratarlo como un fallo definitivo.
+    """
+
+
 def _call(action: str, *params):
+    """Los errores de red se traducen a un mensaje que le sirva a un
+    docente. El detalle técnico de requests no le dice nada a nadie y
+    además incluye la URL del backend, que no tiene por qué andar a la
+    vista en una pantalla de error."""
     try:
         resp = requests.post(
             BACKEND_URL,
             json={"action": action, "params": list(params)},
             timeout=_TIMEOUT_SECONDS,
         )
-        resp.raise_for_status()
+    except requests.ConnectionError as exc:  # incluye fallos de DNS
+        raise SinConexion(
+            "No hay conexión a internet.\n\n"
+            "Revisá que estés conectado a la red y volvé a intentar."
+        ) from exc
+    except requests.Timeout as exc:
+        raise SinConexion(
+            "El servidor está tardando demasiado en responder.\n\n"
+            "Puede ser la conexión. Intentá de nuevo en un momento."
+        ) from exc
     except requests.RequestException as exc:
-        raise ApiError(f"No se pudo conectar con el servidor: {exc}") from exc
+        raise SinConexion(
+            "No se pudo conectar con el servidor.\n\nIntentá de nuevo en un momento."
+        ) from exc
 
-    body = resp.json()
+    if resp.status_code in (401, 403):
+        # Le pasa al deployment de Apps Script cuando pierde el acceso
+        # "Cualquier usuario". El docente no puede hacer nada con esto, así
+        # que lo importante es que sepa a quién avisarle.
+        raise ApiError(
+            "El servidor rechazó la conexión.\n\n"
+            "Es un problema de configuración, no tuyo: avisale a Samir."
+        )
+    if resp.status_code >= 500:
+        raise SinConexion(
+            "El servidor tuvo un problema.\n\nIntentá de nuevo en un momento."
+        )
+    if resp.status_code != 200:
+        raise ApiError(f"El servidor respondió algo inesperado (código {resp.status_code}).")
+
+    try:
+        body = resp.json()
+    except ValueError as exc:
+        raise ApiError("El servidor respondió algo que no se entiende.") from exc
+
     if not body.get("ok"):
         error = body.get("error", "Error desconocido")
         if "sesión" in error.lower() or "sesion" in error.lower():

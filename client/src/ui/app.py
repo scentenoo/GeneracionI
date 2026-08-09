@@ -57,19 +57,49 @@ class App(ctk.CTk):
     # --- chequeo de versión, que corre de fondo al abrir (ver main.py) ---
 
     def version_verificada(self):
-        """La versión coincide: se habilita el login."""
-        if isinstance(self.pantalla_actual, LoginScreen):
-            self.pantalla_actual.habilitar()
+        """La versión coincide: se habilita el login.
 
-    def bloquear(self, mensaje: str):
+        Si veníamos de la pantalla de sin conexión —porque el usuario dio
+        Reintentar y esta vez sí respondió— hay que volver al login, que
+        es lo que quedó tapado.
+        """
+        if not isinstance(self.pantalla_actual, LoginScreen):
+            self._mostrar_login()
+        self.pantalla_actual.habilitar()
+
+    def bloquear(self, mensaje: str, titulo: str = "No se puede usar la app",
+                 al_reintentar=None):
         """Reemplaza todo por el aviso: la app no se puede usar con una
-        versión vieja ni sin poder verificarla."""
+        versión vieja ni sin poder verificarla.
+
+        Con `al_reintentar` se muestra un botón para volver a probar, que es
+        lo que corresponde cuando la causa es la conexión y no algo que el
+        usuario tenga que ir a resolver a otro lado.
+        """
         self._limpiar()
         aviso = ctk.CTkFrame(self)
         aviso.pack(fill="both", expand=True)
+
+        contenido = ctk.CTkFrame(aviso, fg_color="transparent")
+        contenido.place(relx=0.5, rely=0.5, anchor="center")
+
         ctk.CTkLabel(
-            aviso, text=mensaje, wraplength=400, justify="left", text_color="#c0392b"
-        ).pack(padx=30, pady=60, fill="both", expand=True)
+            contenido, text=titulo, font=ctk.CTkFont(size=18, weight="bold"), wraplength=380
+        ).pack(pady=(0, 12))
+        ctk.CTkLabel(
+            contenido, text=mensaje, wraplength=380, justify="center", text_color="gray"
+        ).pack()
+
+        if al_reintentar is not None:
+            boton = ctk.CTkButton(contenido, text="Reintentar", width=200)
+
+            def reintentar():
+                boton.configure(state="disabled", text="Probando...")
+                al_reintentar()
+
+            boton.configure(command=reintentar)
+            boton.pack(pady=(20, 0))
+
         self.pantalla_actual = aviso
 
     def _on_login_exitoso(self, sesion: dict):

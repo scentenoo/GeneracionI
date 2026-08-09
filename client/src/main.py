@@ -19,34 +19,36 @@ from ui.app import App
 from ui.tareas import en_segundo_plano
 
 
-def _mensaje_de_bloqueo(version_backend: str) -> str | None:
-    """El texto a mostrar si hay que bloquear el uso, o None si está OK."""
-    if version_backend != APP_VERSION:
-        return (
-            f"Esta versión de la app ({APP_VERSION}) quedó desactualizada "
-            f"(la vigente es {version_backend}). Pedile a Samir el instalador nuevo."
-        )
-    return None
-
-
 def main():
     ctk.set_appearance_mode("system")
     ctk.set_default_color_theme("green")
 
     app = App()
 
+    def verificar():
+        en_segundo_plano(app, api_client.version_actual, al_responder, al_fallar)
+
     def al_responder(version_backend):
-        bloqueo = _mensaje_de_bloqueo(str(version_backend))
-        if bloqueo:
-            app.bloquear(bloqueo)
+        if str(version_backend) != APP_VERSION:
+            app.bloquear(
+                f"Esta computadora tiene la versión {APP_VERSION} y la vigente "
+                f"es la {version_backend}.\n\nPedile a Samir el instalador nuevo.",
+                titulo="La app quedó desactualizada",
+            )
         else:
             app.version_verificada()
 
     def al_fallar(exc):
-        app.bloquear(f"No se pudo verificar la versión de la app:\n{exc}")
+        # Sin conexión se puede reintentar sin cerrar la app; cualquier otra
+        # cosa es algo que hay que ir a resolver a otro lado.
+        sin_conexion = isinstance(exc, api_client.SinConexion)
+        app.bloquear(
+            str(exc),
+            titulo="Sin conexión" if sin_conexion else "No se pudo abrir la app",
+            al_reintentar=verificar if sin_conexion else None,
+        )
 
-    en_segundo_plano(app, api_client.version_actual, al_responder, al_fallar)
-
+    verificar()
     app.mainloop()
 
 
