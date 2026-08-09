@@ -22,6 +22,7 @@ const ACCIONES_PERMITIDAS_ = {
   reabrir_mes,
   importar_estudiantes,
   obtener_estudiantes,
+  buscar_estudiantes,
   modificar_grupo,
   guardar_horas_gestion,
   obtener_horas_gestion,

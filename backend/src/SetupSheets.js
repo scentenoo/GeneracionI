@@ -71,7 +71,13 @@ const ESQUEMA_SHEETS_ = {
     'gestion_novedades', 'gestion_estrategias', 'gestion_pendientes',
     'creado_en', 'actualizado_en',
   ],
+  // Una ficha por persona. `curso_id` quedó de cuando el estudiante
+  // colgaba de un solo curso; hoy manda Inscripciones (ver migrarAInscripciones).
   [SHEET_NAMES.ESTUDIANTES]: ['id', 'nombre', 'curso_id'],
+  // Un estudiante puede estar en varios cursos: inglés y robótica, por
+  // ejemplo. Antes había que escribirlo una vez por curso y, si se escribía
+  // distinto, quedaba como dos personas.
+  [SHEET_NAMES.INSCRIPCIONES]: ['id', 'estudiante_id', 'curso_id', 'creado_en'],
   [SHEET_NAMES.HORAS_GESTION]: [
     'id', 'directivo_id', 'fecha', 'actividad', 'horas_sede',
     'entregable', 'link_soporte', 'creado_en',

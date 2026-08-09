@@ -118,7 +118,13 @@ class GrupoScreen(ctk.CTkScrollableFrame):
                 return
             for est in estudiantes:
                 var = ctk.BooleanVar(value=False)
-                cb = ctk.CTkCheckBox(self.lista_contenedor, text=est["nombre"], variable=var)
+                # Quien está en otro curso sigue inscrito ahí si lo sacás de
+                # este: conviene verlo antes de marcarlo.
+                otros = est.get("otros_cursos", 0)
+                etiqueta = str(est["nombre"])
+                if otros:
+                    etiqueta += f"   (también en {otros} curso{'s' if otros > 1 else ''})"
+                cb = ctk.CTkCheckBox(self.lista_contenedor, text=etiqueta, variable=var)
                 cb.pack(anchor="w", pady=2)
                 self._checkboxes[est["id"]] = (cb, var)
 
@@ -148,9 +154,13 @@ class GrupoScreen(ctk.CTkScrollableFrame):
 
         def listo(resultado):
             self._cargar()
-            self.error_label.configure(
-                text=f"Se importaron {resultado['creados']} estudiantes.", text_color="#2fa84f"
-            )
+            # Los reusados son los que ya estaban en otro curso: se
+            # inscriben acá con la misma ficha, no se duplican.
+            reusados = resultado.get("reusados", 0)
+            texto = f"Se importaron {resultado['creados']} estudiantes."
+            if reusados:
+                texto += f" Otros {reusados} ya existían en el programa y se inscribieron acá."
+            self.error_label.configure(text=texto, text_color="#2fa84f")
 
         en_segundo_plano(
             self,

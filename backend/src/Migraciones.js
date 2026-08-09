@@ -18,6 +18,8 @@ const MIGRACIONES_DISPONIBLES_ = {
   migrarACursos: migrarACursos,
   limpiarColumnasViejas: limpiarColumnasViejas,
   eliminarHistorial: eliminarHistorial,
+  migrarAInscripciones: migrarAInscripciones,
+  limpiarColumnaCursoDeEstudiantes: limpiarColumnaCursoDeEstudiantes,
 };
 
 function ejecutar_migracion(token, nombre) {
@@ -165,4 +167,63 @@ function eliminarHistorial() {
   const filas = Math.max(0, hoja.getLastRow() - 1);
   ss.deleteSheet(hoja);
   Logger.log('Historial eliminado (%s filas).', filas);
+}
+
+/**
+ * Pasa los estudiantes de "una fila por curso" a "una ficha + una
+ * inscripción por curso".
+ *
+ * Junta las fichas que tengan el mismo nombre normalizado (sin tildes ni
+ * mayúsculas): quien estaba cargado en dos cursos era dos personas
+ * distintas para la app y pasa a ser una sola.
+ *
+ * Idempotente: las inscripciones que ya existan no se duplican.
+ */
+function migrarAInscripciones() {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(60000);
+  try {
+    const filas = readAllRows_(SHEET_NAMES.ESTUDIANTES);
+    const inscripciones = readAllRows_(SHEET_NAMES.INSCRIPCIONES);
+
+    // La primera ficha de cada nombre se queda; las repetidas se descartan
+    // después de repuntar sus inscripciones.
+    const canonicaPorNombre = {};
+    const aBorrar = [];
+    let creadas = 0;
+
+    filas.forEach((e) => {
+      const clave = nombreNormalizado_(e.nombre);
+      if (!clave) return;
+
+      const canonica = canonicaPorNombre[clave];
+      if (!canonica) {
+        canonicaPorNombre[clave] = e;
+      }
+      const destino = canonicaPorNombre[clave];
+
+      if (e.curso_id && inscribir_(destino.id, e.curso_id, inscripciones)) creadas++;
+      if (canonica && String(e.id) !== String(destino.id)) aBorrar.push(e);
+    });
+
+    // De abajo hacia arriba, si no se corren los índices de fila.
+    aBorrar.sort((a, b) => b._row - a._row).forEach((e) => {
+      getSheet_(SHEET_NAMES.ESTUDIANTES).deleteRow(e._row);
+      Logger.log('Ficha repetida borrada: %s (id %s)', e.nombre, e.id);
+    });
+
+    Logger.log(
+      'Inscripciones creadas: %s · fichas repetidas unidas: %s · fichas finales: %s',
+      creadas, aBorrar.length, Object.keys(canonicaPorNombre).length
+    );
+    Logger.log('Si todo se ve bien, corré limpiarColumnaCursoDeEstudiantes() para sacar la columna vieja.');
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/** Segundo paso, aparte a propósito: saca `curso_id` de Estudiantes. */
+function limpiarColumnaCursoDeEstudiantes() {
+  const borradas = eliminarColumnas_(SHEET_NAMES.ESTUDIANTES, ['curso_id']);
+  Logger.log('Estudiantes: columnas borradas -> %s', borradas.length);
 }
