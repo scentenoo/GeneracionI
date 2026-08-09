@@ -203,3 +203,9 @@ def subir_firma(token: str, usuario_id: int, imagen: dict) -> dict:
 
 def obtener_dashboard_directivo(token: str, mes: str) -> list[dict]:
     return _call("obtener_dashboard_directivo", token, mes)
+
+
+def ejecutar_migracion(token: str, nombre: str) -> dict:
+    """Tareas de mantenimiento del esquema, solo para el administrador.
+    Evita tener que abrir el editor de Apps Script en cada cambio."""
+    return _call("ejecutar_migracion", token, nombre)

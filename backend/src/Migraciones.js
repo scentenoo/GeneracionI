@@ -6,6 +6,37 @@
  * Corré siempre `setupSheets()` antes, para que existan las columnas nuevas.
  */
 
+/**
+ * Deja correr las tareas de mantenimiento desde la app en vez de tener que
+ * abrir el editor de Apps Script cada vez que cambia el esquema.
+ *
+ * Solo el administrador, y solo las funciones de esta lista: es un
+ * ejecutor de tareas conocidas, no un "corré lo que te mande".
+ */
+const MIGRACIONES_DISPONIBLES_ = {
+  setupSheets: setupSheets,
+  migrarACursos: migrarACursos,
+  limpiarColumnasViejas: limpiarColumnasViejas,
+};
+
+function ejecutar_migracion(token, nombre) {
+  const sesion = requireSession_(token);
+  requireAdministrador_(sesion);
+
+  const fn = MIGRACIONES_DISPONIBLES_[nombre];
+  if (!fn) {
+    throw new Error(
+      `Migración desconocida: ${nombre}. Disponibles: ${Object.keys(MIGRACIONES_DISPONIBLES_).join(', ')}`
+    );
+  }
+
+  fn();
+  registrarHistorial_(sesion.usuario, 'migracion', nombre, [
+    { campo: 'ejecutada', antes: '', despues: nombre },
+  ]);
+  return { ok: true, migracion: nombre };
+}
+
 /** Borra columnas por nombre, de derecha a izquierda para que no se corran los índices. */
 function eliminarColumnas_(sheetName, nombres) {
   const sheet = getSheet_(sheetName);

@@ -35,6 +35,7 @@ const ACCIONES_PERMITIDAS_ = {
   listar_usuarios,
   subir_firma,
   obtener_dashboard_directivo,
+  ejecutar_migracion,
   version_actual,
 };
 
