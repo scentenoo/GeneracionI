@@ -27,7 +27,11 @@ class App(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("Generación-I — Planeaciones")
-        self.geometry("560x720")
+        # Los equipos de la sede son viejos, así que hay que contar con
+        # pantallas de 1366x768: descontando barra de tareas y título quedan
+        # unos 696 px de alto útiles, y 720 se salía por abajo.
+        self.geometry("700x670")
+        self.minsize(560, 480)
 
         self.sesion: dict | None = None
         # customtkinter (CTkScrollableFrame en particular) no siempre queda

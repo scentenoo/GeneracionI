@@ -1,6 +1,14 @@
-"""Dashboard directivo: qué docente lleva cuántas planeaciones del mes
-(spec sección 3: "Ve un dashboard de estado: qué docente tiene qué
-pendiente")."""
+"""Dashboard directivo: cómo va cada curso en el mes (spec sección 3,
+"qué docente tiene qué pendiente").
+
+Un dashboard se mira de reojo, no se lee. Por eso: primero el resumen en
+una línea, después una tarjeta por curso ordenada por urgencia —lo que
+necesita atención arriba— y el estado codificado en color además de en
+texto, para que se entienda sin leer.
+
+Va por curso y no por docente porque quien tiene dos puede ir al día en
+uno y atrasado en el otro.
+"""
 
 from __future__ import annotations
 
@@ -10,80 +18,132 @@ import customtkinter as ctk
 
 import api_client
 from services import date_utils
+from ui.tareas import en_segundo_plano
+
+# Rojo: ni siquiera puede entregar el informe, le faltan clases.
+# Ámbar: ya puede entregarlo y no lo hizo — es lo accionable hoy.
+# Verde: al día.
+ROJO, AMBAR, VERDE, GRIS = "#c0392b", "#8A6114", "#2fa84f", "gray"
 
 
 class DashboardScreen(ctk.CTkScrollableFrame):
     def __init__(self, master, sesion: dict, on_volver: Callable[[], None]):
-        super().__init__(master, label_text="Dashboard directivo")
+        super().__init__(master, label_text="Cómo va el mes")
         self.sesion = sesion
         self.on_volver = on_volver
 
-        ctk.CTkButton(self, text="← Volver", width=90, command=self.on_volver).pack(anchor="w", pady=(0, 10))
+        ctk.CTkButton(self, text="← Volver", width=90, command=on_volver).pack(anchor="w", pady=(0, 10))
 
         fila_mes = ctk.CTkFrame(self, fg_color="transparent")
-        fila_mes.pack(fill="x", pady=(0, 10))
-        ctk.CTkLabel(fila_mes, text="Mes (AAAA-MM):").pack(side="left")
-        self.mes_entry = ctk.CTkEntry(fila_mes, width=100)
+        fila_mes.pack(fill="x")
+        ctk.CTkLabel(fila_mes, text="Mes").pack(side="left")
+        self.mes_entry = ctk.CTkEntry(fila_mes, width=90)
         self.mes_entry.insert(0, date_utils.hoy_iso()[:7])
         self.mes_entry.pack(side="left", padx=8)
-        ctk.CTkButton(fila_mes, text="Actualizar", command=self._cargar).pack(side="left")
+        ctk.CTkButton(fila_mes, text="Actualizar", width=100, command=self._cargar).pack(side="left")
 
-        self.tabla_contenedor = ctk.CTkFrame(self, fg_color="transparent")
-        self.tabla_contenedor.pack(fill="both", expand=True)
+        self.resumen_label = ctk.CTkLabel(
+            self, text="", font=ctk.CTkFont(size=15, weight="bold"), anchor="w", justify="left"
+        )
+        self.resumen_label.pack(fill="x", pady=(14, 2))
+        # customtkinter no acepta text_color=None para "el del tema", así que
+        # nos guardamos el que trae de fábrica para poder volver a él.
+        self.color_normal = self.resumen_label.cget("text_color")
 
-        self.error_label = ctk.CTkLabel(self, text="", text_color="#c0392b")
-        self.error_label.pack(fill="x")
+        self.detalle_label = ctk.CTkLabel(self, text="", text_color=GRIS, anchor="w", justify="left")
+        self.detalle_label.pack(fill="x", pady=(0, 10))
 
+        self.tarjetas = ctk.CTkFrame(self, fg_color="transparent")
+        self.tarjetas.pack(fill="both", expand=True)
+
+        # Cambiar de mes deja la consulta anterior viajando: si esa llega
+        # última, el directivo termina viendo el mes que ya no pidió.
+        self.consulta = 0
         self._cargar()
 
+    # --- estado de cada curso ------------------------------------------
+
+    def _clasificar(self, estado: dict):
+        """Devuelve (prioridad, color, texto del informe). Prioridad más
+        baja se muestra primero: lo que necesita atención va arriba."""
+        if estado["faltantes"] > 0:
+            return 0, ROJO, "no puede entregar todavía"
+        if not estado.get("informe_entregado"):
+            return 1, AMBAR, "informe pendiente"
+        return 2, VERDE, "informe entregado"
+
     def _cargar(self):
-        for w in self.tabla_contenedor.winfo_children():
+        for w in self.tarjetas.winfo_children():
             w.destroy()
-        self.error_label.configure(text="")
 
-        self.error_label.configure(text="Cargando...", text_color="gray")
-        self.update_idletasks()
-        try:
-            estados = api_client.obtener_dashboard_directivo(self.sesion["token"], self.mes_entry.get().strip())
-        except api_client.ApiError as exc:
-            self.error_label.configure(text=str(exc), text_color="#c0392b")
-            return
-        self.error_label.configure(text="")
+        mes = self.mes_entry.get().strip()
+        self.consulta += 1
+        consulta = self.consulta
+        self.resumen_label.configure(text="Cargando...", text_color=GRIS)
+        self.detalle_label.configure(text="")
 
-        # Una fila por curso: quien tiene dos puede ir al día en uno y
-        # atrasado en el otro.
-        encabezado = ctk.CTkFrame(self.tabla_contenedor, fg_color="transparent")
-        encabezado.pack(fill="x")
-        for texto, ancho in [
-            ("Curso", 170), ("Docente", 150), ("Clases", 90), ("Informe", 110),
-        ]:
-            ctk.CTkLabel(encabezado, text=texto, width=ancho, anchor="w", font=ctk.CTkFont(weight="bold")).pack(
-                side="left"
+        def listo(estados):
+            if consulta != self.consulta:
+                return
+            if not estados:
+                self.resumen_label.configure(text="Todavía no hay cursos.", text_color=GRIS)
+                return
+
+            entregados = sum(1 for e in estados if e.get("informe_entregado"))
+            al_dia = sum(1 for e in estados if e["faltantes"] == 0)
+            self.resumen_label.configure(
+                text=f"{entregados} de {len(estados)} informes entregados",
+                text_color=VERDE if entregados == len(estados) else self.color_normal,
+            )
+            self.detalle_label.configure(
+                text=f"{al_dia} de {len(estados)} cursos con todas las clases cargadas  ·  {mes}"
             )
 
-        for estado in estados:
-            fila = ctk.CTkFrame(self.tabla_contenedor, fg_color="transparent")
-            fila.pack(fill="x", pady=2)
+            for estado in sorted(estados, key=lambda e: (self._clasificar(e)[0], e.get("curso", ""))):
+                self._tarjeta(estado)
 
-            al_dia = estado["faltantes"] == 0
-            color_clases = "#2fa84f" if al_dia else "#c0392b"
-            clases = f"{estado['registradas']} de {estado['esperadas']}"
+        en_segundo_plano(
+            self,
+            lambda: api_client.obtener_dashboard_directivo(self.sesion["token"], mes),
+            listo,
+            lambda exc: consulta == self.consulta
+            and self.resumen_label.configure(text=str(exc), text_color=ROJO),
+        )
 
-            entregado = estado.get("informe_entregado")
-            if entregado:
-                texto_informe, color_informe = "Entregado", "#2fa84f"
-            elif al_dia:
-                texto_informe, color_informe = "Pendiente", "#c0392b"
-            else:
-                # Todavía no puede entregarlo: le faltan clases del mes.
-                texto_informe, color_informe = "—", "gray"
+    def _tarjeta(self, estado: dict):
+        _, color, texto_informe = self._clasificar(estado)
 
-            ctk.CTkLabel(fila, text=estado.get("curso", ""), width=170, anchor="w").pack(side="left")
-            ctk.CTkLabel(fila, text=estado.get("docente", ""), width=150, anchor="w").pack(side="left")
-            ctk.CTkLabel(fila, text=clases, width=90, anchor="w", text_color=color_clases).pack(side="left")
-            ctk.CTkLabel(fila, text=texto_informe, width=110, anchor="w", text_color=color_informe).pack(side="left")
+        marco = ctk.CTkFrame(self.tarjetas, corner_radius=8, border_width=1)
+        marco.pack(fill="x", pady=4)
 
-        if not estados:
-            ctk.CTkLabel(self.tabla_contenedor, text="No hay cursos registrados todavía.", text_color="gray").pack(
-                anchor="w", pady=10
-            )
+        # Franja de color a la izquierda: el estado se ve antes de leer.
+        franja = ctk.CTkFrame(marco, width=5, fg_color=color, corner_radius=0)
+        franja.pack(side="left", fill="y")
+        franja.pack_propagate(False)
+
+        cuerpo = ctk.CTkFrame(marco, fg_color="transparent")
+        cuerpo.pack(side="left", fill="both", expand=True, padx=12, pady=10)
+
+        ctk.CTkLabel(
+            cuerpo, text=estado.get("curso", ""), font=ctk.CTkFont(size=14, weight="bold"),
+            anchor="w", justify="left", wraplength=520,
+        ).pack(fill="x")
+        ctk.CTkLabel(cuerpo, text=estado.get("docente", ""), text_color=GRIS, anchor="w").pack(fill="x")
+
+        estados_fila = ctk.CTkFrame(cuerpo, fg_color="transparent")
+        estados_fila.pack(fill="x", pady=(8, 0))
+
+        faltan = estado["faltantes"]
+        texto_clases = (
+            f"{estado['registradas']} de {estado['esperadas']} clases"
+            if faltan == 0
+            else f"{estado['registradas']} de {estado['esperadas']} clases · faltan {faltan}"
+        )
+        self._chip(estados_fila, texto_clases, VERDE if faltan == 0 else ROJO)
+        self._chip(estados_fila, texto_informe, color)
+
+    def _chip(self, padre, texto: str, color: str):
+        ctk.CTkLabel(
+            padre, text=f"  {texto}  ", text_color=color, font=ctk.CTkFont(size=12),
+            corner_radius=6, fg_color=("gray92", "gray20"),
+        ).pack(side="left", padx=(0, 6))
