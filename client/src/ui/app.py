@@ -17,6 +17,7 @@ from ui.usuario_screen import UsuarioScreen
 from ui.editar_usuario_screen import EditarUsuarioScreen
 from ui.password_screen import PasswordScreen
 from ui.tareas import cache, en_segundo_plano
+from services import vista_previa
 
 
 class App(ctk.CTk):
@@ -30,7 +31,16 @@ class App(ctk.CTk):
         # accesible recorriendo winfo_children(), así que guardamos la
         # pantalla activa acá para poder referenciarla directo.
         self.pantalla_actual: ctk.CTkBaseClass | None = None
+
+        # Los borradores de vista previa llevan nombres de estudiantes y la
+        # foto de la clase: no tienen por qué sobrevivir a la sesión.
+        self.protocol("WM_DELETE_WINDOW", self._al_cerrar)
+
         self._mostrar_login()
+
+    def _al_cerrar(self):
+        vista_previa.limpiar_borradores()
+        self.destroy()
 
     def _limpiar(self):
         for widget in self.winfo_children():
