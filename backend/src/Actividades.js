@@ -16,9 +16,8 @@
  * cuenta de cobro lo único que importa es la suma.
  */
 
-function guardar_actividad(token, datos) {
-  const sesion = requireSession_(token);
-
+/** Valida lo común a crear y editar, y devuelve el curso ya resuelto. */
+function validarActividad_(sesion, datos) {
   if (!datos.fecha) throw new Error('Falta la fecha');
   if (!datos.descripcion) throw new Error('Falta describir la actividad');
 
@@ -37,9 +36,32 @@ function guardar_actividad(token, datos) {
     throw new Error('Ese curso no es tuyo');
   }
 
+  return { curso: curso, horasSede: horasSede, horasExternas: horasExternas };
+}
+
+function guardar_actividad(token, datos, fotos) {
+  const sesion = requireSession_(token);
+  const { curso, horasSede, horasExternas } = validarActividad_(sesion, datos);
+
+  // La foto es la evidencia de que la actividad pasó, igual que en la
+  // clase. Solo un directivo puede registrarla sin nada.
+  if (!fotos || !fotos.foto) {
+    if (!esDirectivo_(sesion)) throw new Error('Falta la foto de la actividad');
+  }
+
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
+    let fotoId = '';
+    if (fotos && fotos.foto) {
+      fotoId = guardarArchivoBase64_(
+        'Fotos de actividades',
+        fotos.foto.base64,
+        fotos.foto.mimeType || 'image/jpeg',
+        `actividad_${sesion.id}_${datos.fecha}.jpg`
+      );
+    }
+
     const fila = appendRow_(SHEET_NAMES.ACTIVIDADES, {
       usuario_id: curso.docente_id,
       curso_id: curso.id,
@@ -47,9 +69,58 @@ function guardar_actividad(token, datos) {
       descripcion: datos.descripcion,
       horas_sede: horasSede,
       horas_externas: horasExternas,
+      foto_drive_id: fotoId,
       creado_en: new Date().toISOString(),
     });
     return { ok: true, id: fila.id };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Edita una actividad. `fotos` es opcional: sin foto nueva se conserva la
+ * que ya tenía, no se borra.
+ */
+function editar_actividad(token, id, datos, fotos) {
+  const sesion = requireSession_(token);
+
+  const fila = findRowById_(SHEET_NAMES.ACTIVIDADES, id);
+  if (!fila) throw new Error(`No se encontró la actividad ${id}`);
+  if (String(fila.usuario_id) !== String(sesion.id) && !esDirectivo_(sesion)) {
+    throw new Error('Solo podés editar tus propias actividades');
+  }
+
+  const { curso, horasSede, horasExternas } = validarActividad_(sesion, datos);
+
+  if (!fila.foto_drive_id && !(fotos && fotos.foto) && !esDirectivo_(sesion)) {
+    throw new Error('Falta la foto de la actividad');
+  }
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const cambios = {
+      curso_id: curso.id,
+      fecha: datos.fecha,
+      descripcion: datos.descripcion,
+      horas_sede: horasSede,
+      horas_externas: horasExternas,
+    };
+
+    if (fotos && fotos.foto) {
+      cambios.foto_drive_id = reemplazarArchivo_(
+        'Fotos de actividades',
+        fila.foto_drive_id,
+        fotos.foto.base64,
+        fotos.foto.mimeType || 'image/jpeg',
+        `actividad_${fila.usuario_id}_${datos.fecha}.jpg`
+      );
+    }
+
+    const cambiosReales = updateRowById_(SHEET_NAMES.ACTIVIDADES, id, cambios);
+    registrarHistorial_(sesion.usuario, 'actividad', id, cambiosReales);
+    return { ok: true, cambios: cambiosReales.length };
   } finally {
     lock.releaseLock();
   }
@@ -84,6 +155,13 @@ function eliminar_actividad(token, id) {
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
+    if (fila.foto_drive_id) {
+      try {
+        DriveApp.getFileById(fila.foto_drive_id).setTrashed(true);
+      } catch (e) {
+        // La foto ya no existe o no es accesible: no bloquea el borrado.
+      }
+    }
     getSheet_(SHEET_NAMES.ACTIVIDADES).deleteRow(fila._row);
     registrarHistorial_(sesion.usuario, 'actividad', id, [
       { campo: 'eliminada', antes: `${fila.fecha} - ${fila.descripcion}`, despues: '' },

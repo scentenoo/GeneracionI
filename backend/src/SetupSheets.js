@@ -56,7 +56,7 @@ const ESQUEMA_SHEETS_ = {
   // sin esto la cuenta de cobro salía por la mitad.
   [SHEET_NAMES.ACTIVIDADES]: [
     'id', 'usuario_id', 'curso_id', 'fecha', 'descripcion',
-    'horas_sede', 'horas_externas', 'creado_en',
+    'horas_sede', 'horas_externas', 'foto_drive_id', 'creado_en',
   ],
   // Las respuestas narrativas del mes, que antes se escribían una vez y se
   // perdían. Una fila por curso y mes.

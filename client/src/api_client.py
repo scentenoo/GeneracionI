@@ -170,10 +170,19 @@ def obtener_horas_gestion(token: str, directivo_id: int | None = None) -> list[d
 
 # --- Actividades que no son clases ---------------------------------------------
 
-def guardar_actividad(token: str, datos: dict) -> dict:
+def guardar_actividad(token: str, datos: dict, fotos: dict | None = None) -> dict:
     """Reuniones, claustros, informes: lo que se factura y no es una clase.
-    datos: curso_id, fecha, descripcion, horas_sede, horas_externas."""
-    return _call("guardar_actividad", token, datos)
+    datos: curso_id, fecha, descripcion, horas_sede, horas_externas.
+    fotos: {"foto": {"base64": ..., "mimeType": ...}} — obligatoria salvo
+    para directivos."""
+    return _call("guardar_actividad", token, datos, fotos or {})
+
+
+def editar_actividad(
+    token: str, id_: int, datos: dict, fotos: dict | None = None
+) -> dict:
+    """Sin foto nueva se conserva la que ya tenía."""
+    return _call("editar_actividad", token, id_, datos, fotos or {})
 
 
 def obtener_actividades(token: str, curso_id: int, mes: str | None = None) -> list[dict]:

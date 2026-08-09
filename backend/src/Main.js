@@ -22,6 +22,7 @@ const ACCIONES_PERMITIDAS_ = {
   guardar_horas_gestion,
   obtener_horas_gestion,
   guardar_actividad,
+  editar_actividad,
   obtener_actividades,
   eliminar_actividad,
   crear_curso,

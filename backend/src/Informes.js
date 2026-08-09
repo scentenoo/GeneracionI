@@ -232,10 +232,34 @@ function generar_informe_mensual(token, curso_id, mes, narrativa, gestionNarrati
   const totalHorasDocente = horasDeClases + horasDeOtras;
   const totalAsistentes = filasDeClases.reduce((sum, a) => sum + Number(a.cantidad_asistentes), 0);
 
-  const encuentros = planeacionesDelMes.map((p, i) => {
+  // Las evidencias fotográficas también llevan las actividades que no son
+  // clase: en el informe real de Wendy, "Claustro docente con la directriz
+  // de secretaría" aparece en esa tabla junto a las clases.
+  const encuentrosDeClases = planeacionesDelMes.map((p, i) => {
     const foto = archivoABase64_(p.foto_clase_drive_id);
-    return { nro: String(i + 1), foto_base64: foto ? foto.base64 : null, foto_mime: foto ? foto.mimeType : null };
+    return {
+      _fecha: fechaISO_(p.fecha),
+      nro: `Clase ${i + 1}`,
+      foto_base64: foto ? foto.base64 : null,
+      foto_mime: foto ? foto.mimeType : null,
+    };
   });
+
+  const encuentrosDeOtras = otrasDelMes
+    .filter((a) => a.foto_drive_id)
+    .map((a) => {
+      const foto = archivoABase64_(a.foto_drive_id);
+      return {
+        _fecha: fechaISO_(a.fecha),
+        nro: a.descripcion,
+        foto_base64: foto ? foto.base64 : null,
+        foto_mime: foto ? foto.mimeType : null,
+      };
+    });
+
+  const encuentros = encuentrosDeClases
+    .concat(encuentrosDeOtras)
+    .sort((a, b) => (a._fecha < b._fecha ? -1 : a._fecha > b._fecha ? 1 : 0));
 
   const valorHoraDocente = Number(usuario.valor_hora_docente) || 0;
   let valorTotal = totalHorasDocente * valorHoraDocente;

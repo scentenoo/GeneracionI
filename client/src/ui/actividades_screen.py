@@ -11,12 +11,13 @@ horas. El informe mensual junta las dos.
 
 from __future__ import annotations
 
+from tkinter import filedialog
 from typing import Callable
 
 import customtkinter as ctk
 
 import api_client
-from services import date_utils
+from services import date_utils, image_utils
 from ui.tareas import cache, en_segundo_plano
 
 
@@ -24,7 +25,10 @@ class ActividadesScreen(ctk.CTkScrollableFrame):
     def __init__(self, master, sesion: dict, on_volver: Callable[[], None]):
         super().__init__(master, label_text="Otras actividades del mes")
         self.sesion = sesion
+        self.es_directivo = sesion["rol"] in ("directivo", "ambos")
         self._cursos_por_nombre: dict[str, dict] = {}
+        self._editando: dict | None = None
+        self.foto_path: str | None = None
 
         ctk.CTkButton(self, text="← Volver", width=90, command=on_volver).pack(anchor="w", pady=(0, 10))
 
@@ -60,11 +64,23 @@ class ActividadesScreen(ctk.CTkScrollableFrame):
         self.horas_externas_entry = ctk.CTkEntry(fila_horas, width=60)
         self.horas_externas_entry.pack(side="left")
 
+        fila_foto = ctk.CTkFrame(self, fg_color="transparent")
+        fila_foto.pack(fill="x", pady=(10, 0))
+        ctk.CTkButton(fila_foto, text="Elegir foto...", width=110, command=self._elegir_foto).pack(side="left")
+        self.foto_label = ctk.CTkLabel(fila_foto, text="", text_color="gray", anchor="w")
+        self.foto_label.pack(side="left", padx=10)
+        self._actualizar_foto_label()
+
         self.error_label = ctk.CTkLabel(self, text="", text_color="#c0392b", wraplength=450, justify="left")
         self.error_label.pack(fill="x", pady=(12, 4))
 
-        self.guardar_boton = ctk.CTkButton(self, text="Agregar actividad", command=self._guardar)
-        self.guardar_boton.pack(pady=(0, 16))
+        acciones = ctk.CTkFrame(self, fg_color="transparent")
+        acciones.pack(pady=(0, 16))
+        self.guardar_boton = ctk.CTkButton(acciones, text="Agregar actividad", command=self._guardar)
+        self.guardar_boton.pack(side="left")
+        self.cancelar_boton = ctk.CTkButton(
+            acciones, text="Cancelar edición", width=130, fg_color="gray", command=self._salir_de_edicion
+        )
 
         self.total_label = ctk.CTkLabel(self, text="", font=ctk.CTkFont(weight="bold"), anchor="w")
         self.total_label.pack(fill="x", pady=(8, 4))
@@ -160,10 +176,68 @@ class ActividadesScreen(ctk.CTkScrollableFrame):
             info, text=f"{fecha}  ·  {'  ·  '.join(horas)}", text_color="gray", anchor="w"
         ).pack(fill="x")
 
+        botones = ctk.CTkFrame(fila, fg_color="transparent")
+        botones.pack(side="right", padx=10)
         ctk.CTkButton(
-            fila, text="Quitar", width=80, fg_color="#c0392b", hover_color="#922b21",
+            botones, text="Quitar", width=80, fg_color="#c0392b", hover_color="#922b21",
             command=lambda: self._eliminar(a["id"]),
-        ).pack(side="right", padx=10)
+        ).pack(pady=2)
+        ctk.CTkButton(botones, text="Editar", width=80, command=lambda: self._editar(a)).pack(pady=2)
+
+        if not a.get("foto_drive_id"):
+            ctk.CTkLabel(info, text="sin foto", text_color="#8A6114", anchor="w").pack(fill="x")
+
+    # --- foto y modo edición ------------------------------------------------
+
+    def _actualizar_foto_label(self):
+        if self.foto_path:
+            nombre = self.foto_path.replace("\\", "/").split("/")[-1]
+            self.foto_label.configure(text=nombre, text_color="#2fa84f")
+        elif self._editando and self._editando.get("foto_drive_id"):
+            self.foto_label.configure(text="conserva la foto que ya tenía", text_color="gray")
+        elif self.es_directivo:
+            self.foto_label.configure(text="opcional para directivos", text_color="gray")
+        else:
+            self.foto_label.configure(text="obligatoria", text_color="#c0392b")
+
+    def _elegir_foto(self):
+        ruta = filedialog.askopenfilename(
+            title="Elegí la foto de la actividad", filetypes=[("Imágenes", "*.jpg *.jpeg *.png")]
+        )
+        if ruta:
+            self.foto_path = ruta
+            self._actualizar_foto_label()
+
+    def _editar(self, a: dict):
+        """Carga la actividad en el formulario de arriba."""
+        self._editando = a
+        self.foto_path = None
+
+        self.fecha_entry.delete(0, "end")
+        self.fecha_entry.insert(0, str(a["fecha"])[:10])
+        self.descripcion_entry.delete(0, "end")
+        self.descripcion_entry.insert(0, a["descripcion"])
+        self.horas_sede_entry.delete(0, "end")
+        self.horas_sede_entry.insert(0, str(a.get("horas_sede") or ""))
+        self.horas_externas_entry.delete(0, "end")
+        self.horas_externas_entry.insert(0, str(a.get("horas_externas") or ""))
+
+        self.guardar_boton.configure(text="Guardar cambios")
+        self.cancelar_boton.pack(side="left", padx=(8, 0))
+        self._actualizar_foto_label()
+        self.error_label.configure(text=f"Editando: {a['descripcion']}", text_color="gray")
+
+    def _salir_de_edicion(self):
+        self._editando = None
+        self.foto_path = None
+        for e in (self.descripcion_entry, self.horas_sede_entry, self.horas_externas_entry):
+            e.delete(0, "end")
+        self.guardar_boton.configure(text="Agregar actividad")
+        self.cancelar_boton.pack_forget()
+        self._actualizar_foto_label()
+        self.error_label.configure(text="")
+
+    # --- guardar ------------------------------------------------------------
 
     def _guardar(self):
         curso = self._curso_actual()
@@ -174,6 +248,12 @@ class ActividadesScreen(ctk.CTkScrollableFrame):
             self.error_label.configure(text="Escribí qué actividad fue.", text_color="#c0392b")
             return
 
+        # Al editar, si ya tenía foto no hace falta subir una nueva.
+        ya_tenia_foto = bool(self._editando and self._editando.get("foto_drive_id"))
+        if not self.foto_path and not ya_tenia_foto and not self.es_directivo:
+            self.error_label.configure(text="Falta la foto de la actividad.", text_color="#c0392b")
+            return
+
         datos = {
             "curso_id": curso["id"],
             "fecha": self.fecha_entry.get().strip(),
@@ -181,26 +261,41 @@ class ActividadesScreen(ctk.CTkScrollableFrame):
             "horas_sede": self.horas_sede_entry.get().strip() or 0,
             "horas_externas": self.horas_externas_entry.get().strip() or 0,
         }
+        editando = self._editando
+        ruta_foto = self.foto_path
 
         self.guardar_boton.configure(state="disabled", text="Guardando...")
         self.error_label.configure(text="Guardando...", text_color="gray")
 
+        def trabajo():
+            # Comprimir la foto también tarda, así que va al hilo.
+            fotos = {"foto": image_utils.foto_a_payload(ruta_foto)} if ruta_foto else None
+            if editando:
+                return api_client.editar_actividad(
+                    self.sesion["token"], editando["id"], datos, fotos
+                )
+            return api_client.guardar_actividad(self.sesion["token"], datos, fotos)
+
         def listo(_r):
-            self.guardar_boton.configure(state="normal", text="Agregar actividad")
-            for e in (self.descripcion_entry, self.horas_sede_entry, self.horas_externas_entry):
-                e.delete(0, "end")
+            self.guardar_boton.configure(state="normal")
+            self._salir_de_edicion()
             self._cargar_lista()
-            self.error_label.configure(text="Actividad agregada ✓", text_color="#2fa84f")
+            self.error_label.configure(
+                text="Cambios guardados ✓" if editando else "Actividad agregada ✓",
+                text_color="#2fa84f",
+            )
 
         def fallo(exc):
-            self.guardar_boton.configure(state="normal", text="Agregar actividad")
+            self.guardar_boton.configure(
+                state="normal", text="Guardar cambios" if editando else "Agregar actividad"
+            )
             self.error_label.configure(text=str(exc), text_color="#c0392b")
 
-        en_segundo_plano(
-            self, lambda: api_client.guardar_actividad(self.sesion["token"], datos), listo, fallo
-        )
+        en_segundo_plano(self, trabajo, listo, fallo)
 
     def _eliminar(self, actividad_id: int):
+        if self._editando and self._editando["id"] == actividad_id:
+            self._salir_de_edicion()
         en_segundo_plano(
             self,
             lambda: api_client.eliminar_actividad(self.sesion["token"], actividad_id),
