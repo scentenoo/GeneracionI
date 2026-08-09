@@ -414,9 +414,3 @@ function obtener_avance_sugerido(token, curso_id, mes) {
     .sort((a, b) => a - b)
     .map((semana) => ({ semana: semana, temas: porSemana[semana] }));
 }
-
-function version_actual() {
-  const configRows = readAllRows_(SHEET_NAMES.CONFIG);
-  const fila = configRows.find((r) => r.key === 'version_actual');
-  return fila ? fila.value : '0.0.0';
-}

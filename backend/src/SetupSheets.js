@@ -120,6 +120,7 @@ function setupSheets() {
       .some((r) => r[0] === 'version_actual');
   if (!yaTieneVersion) {
     config.appendRow(['version_actual', '1.0.0']);
+    config.appendRow(['link_instalador', '']);
   }
 
   Logger.log('Listo: pestañas creadas/actualizadas en %s', ss.getUrl());

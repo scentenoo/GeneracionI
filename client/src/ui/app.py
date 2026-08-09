@@ -17,6 +17,7 @@ from ui.planeaciones_docente_screen import PlaneacionesDocenteScreen
 from ui.usuario_screen import UsuarioScreen
 from ui.editar_usuario_screen import EditarUsuarioScreen
 from ui.password_screen import PasswordScreen
+from ui.version_screen import VersionScreen
 from ui.tareas import cache, en_segundo_plano
 import api_client
 from services import vista_previa
@@ -68,7 +69,7 @@ class App(ctk.CTk):
         self.pantalla_actual.habilitar()
 
     def bloquear(self, mensaje: str, titulo: str = "No se puede usar la app",
-                 al_reintentar=None):
+                 al_reintentar=None, link: str | None = None):
         """Reemplaza todo por el aviso: la app no se puede usar con una
         versión vieja ni sin poder verificarla.
 
@@ -89,6 +90,18 @@ class App(ctk.CTk):
         ctk.CTkLabel(
             contenido, text=mensaje, wraplength=380, justify="center", text_color="gray"
         ).pack()
+
+        if link:
+            # Para que el docente baje el instalador solo, sin que nadie
+            # tenga que ir hasta su computador.
+            import webbrowser
+
+            ctk.CTkButton(
+                contenido,
+                text="Descargar el instalador",
+                width=200,
+                command=lambda: webbrowser.open(link),
+            ).pack(pady=(20, 0))
 
         if al_reintentar is not None:
             boton = ctk.CTkButton(contenido, text="Reintentar", width=200)
@@ -126,6 +139,7 @@ class App(ctk.CTk):
             on_crear_usuario=self._mostrar_crear_usuario,
             on_editar_usuario=self._mostrar_editar_usuario,
             on_cambiar_password=self._mostrar_password,
+            on_version=self._mostrar_version,
         )
         self.pantalla_actual.pack(fill="both", expand=True)
 
@@ -216,6 +230,11 @@ class App(ctk.CTk):
     def _mostrar_editar_usuario(self):
         self._limpiar()
         self.pantalla_actual = EditarUsuarioScreen(self, self.sesion, on_volver=self._mostrar_home)
+        self.pantalla_actual.pack(fill="both", expand=True)
+
+    def _mostrar_version(self):
+        self._limpiar()
+        self.pantalla_actual = VersionScreen(self, self.sesion, on_volver=self._mostrar_home)
         self.pantalla_actual.pack(fill="both", expand=True)
 
     def _mostrar_password(self):

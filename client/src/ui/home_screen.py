@@ -24,6 +24,7 @@ class HomeScreen(ctk.CTkFrame):
         on_crear_usuario: Callable[[], None],
         on_editar_usuario: Callable[[], None],
         on_cambiar_password: Callable[[], None],
+        on_version: Callable[[], None],
     ):
         super().__init__(master)
 
@@ -55,3 +56,8 @@ class HomeScreen(ctk.CTkFrame):
             ctk.CTkButton(self, text="Crear usuario", width=260, command=on_crear_usuario).pack(pady=6)
             ctk.CTkButton(self, text="Editar usuario", width=260, command=on_editar_usuario).pack(pady=6)
         ctk.CTkButton(self, text="Cambiar contraseña", width=260, command=on_cambiar_password).pack(pady=6)
+
+        # Publicar una versión bloquea a quien no la tenga, así que va
+        # detrás del administrador único y no del rol directivo.
+        if sesion.get("es_admin"):
+            ctk.CTkButton(self, text="Versión de la app", width=260, command=on_version).pack(pady=6)

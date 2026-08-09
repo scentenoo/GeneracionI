@@ -28,15 +28,24 @@ def main():
     def verificar():
         en_segundo_plano(app, api_client.version_actual, al_responder, al_fallar)
 
-    def al_responder(version_backend):
-        if str(version_backend) != APP_VERSION:
-            app.bloquear(
-                f"Esta computadora tiene la versión {APP_VERSION} y la vigente "
-                f"es la {version_backend}.\n\nPedile a Samir el instalador nuevo.",
-                titulo="La app quedó desactualizada",
-            )
-        else:
+    def al_responder(info):
+        vigente = str(info.get("version", ""))
+        link = str(info.get("link_instalador", "")).strip()
+
+        if vigente == APP_VERSION:
             app.version_verificada()
+            return
+
+        mensaje = (
+            f"Esta computadora tiene la versión {APP_VERSION} y la vigente "
+            f"es la {vigente}."
+        )
+        mensaje += (
+            "\n\nDescargá el instalador nuevo y volvé a abrir la app."
+            if link
+            else "\n\nPedile a Samir el instalador nuevo."
+        )
+        app.bloquear(mensaje, titulo="La app quedó desactualizada", link=link or None)
 
     def al_fallar(exc):
         # Sin conexión se puede reintentar sin cerrar la app; cualquier otra

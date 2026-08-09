@@ -44,6 +44,7 @@ const ACCIONES_PERMITIDAS_ = {
   obtener_dashboard_directivo,
   ejecutar_migracion,
   version_actual,
+  fijar_version,
 };
 
 /**
