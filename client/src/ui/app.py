@@ -16,6 +16,7 @@ from ui.planeaciones_docente_screen import PlaneacionesDocenteScreen
 from ui.usuario_screen import UsuarioScreen
 from ui.editar_usuario_screen import EditarUsuarioScreen
 from ui.password_screen import PasswordScreen
+from ui.tareas import cache, en_segundo_plano
 
 
 class App(ctk.CTk):
@@ -62,6 +63,9 @@ class App(ctk.CTk):
     def _on_login_exitoso(self, sesion: dict):
         self.sesion = sesion
         self._mostrar_home()
+        # Deja el caché listo mientras el usuario mira el menú, así las
+        # pantallas abren sin esperar viajes al backend.
+        en_segundo_plano(self, lambda: cache.precargar(sesion), lambda _r: None, lambda _e: None)
 
     def _mostrar_home(self):
         self._limpiar()

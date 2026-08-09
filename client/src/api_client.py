@@ -47,6 +47,24 @@ def version_actual() -> str:
     return _call("version_actual")
 
 
+def batch(llamadas: list[tuple[str, list]]) -> list:
+    """Varias acciones en un solo viaje al backend.
+
+    Cada llamada cuesta ~3 segundos de ida y vuelta, casi todo overhead
+    fijo. Agrupar tres en una request las baja de nueve segundos a tres.
+
+    `llamadas` es [(accion, [params...]), ...]. Devuelve una lista del
+    mismo largo: el valor si salió bien, o una ApiError (sin lanzarla) si
+    esa llamada puntual falló — que una falle no invalida al resto.
+    """
+    payload = [{"action": accion, "params": list(params)} for accion, params in llamadas]
+    resultados = _call("batch", payload)
+    return [
+        r["data"] if r.get("ok") else ApiError(r.get("error", "Error desconocido"))
+        for r in resultados
+    ]
+
+
 # --- Sesión -----------------------------------------------------------------
 
 def login(usuario: str, password: str) -> dict:

@@ -55,7 +55,7 @@ class InformeScreen(ctk.CTkScrollableFrame):
                 }
             else:
                 self._cursos_por_etiqueta = {
-                    c["nombre"]: c for c in api_client.listar_cursos(self.sesion["token"])
+                    c["nombre"]: c for c in cache.mis_cursos(self.sesion["token"])
                 }
         except api_client.ApiError:
             self._cursos_por_etiqueta = {}

@@ -83,6 +83,39 @@ class Cache:
         for clave in claves:
             self._datos.pop(clave, None)
 
+    def precargar(self, sesion: dict):
+        """Trae de una sola vez lo que después piden casi todas las
+        pantallas. Sin esto, abrir el informe cuesta tres o cuatro viajes
+        seguidos de ~3 segundos cada uno; con esto, ninguno.
+
+        Se corre apenas entra el usuario y en segundo plano, así que no
+        retrasa que aparezca el menú.
+        """
+        token = sesion["token"]
+        es_directivo = sesion["rol"] in ("directivo", "ambos")
+
+        llamadas = [("listar_cursos", [token, None, False])]
+        if es_directivo:
+            llamadas += [("listar_todos_los_cursos", [token]), ("listar_usuarios", [token])]
+
+        resultados = api_client.batch(llamadas)
+
+        mis_cursos = resultados[0]
+        if not isinstance(mis_cursos, Exception):
+            self._datos["mis_cursos"] = mis_cursos
+
+        if es_directivo:
+            todos, usuarios = resultados[1], resultados[2]
+            if not isinstance(todos, Exception):
+                self._datos["cursos"] = todos
+            if not isinstance(usuarios, Exception):
+                self._datos["usuarios"] = usuarios
+
+    def mis_cursos(self, token: str) -> list[dict]:
+        if "mis_cursos" not in self._datos:
+            self._datos["mis_cursos"] = api_client.listar_cursos(token)
+        return self._datos["mis_cursos"]  # type: ignore[return-value]
+
 
 # Una sola instancia para toda la app: se vacía sola al cerrarla.
 cache = Cache()

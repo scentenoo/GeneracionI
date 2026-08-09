@@ -18,7 +18,7 @@ import api_client
 from services import date_utils, image_utils, vista_previa
 from ui.bloque_editor import BloqueEditor
 from ui.lista_dinamica import ListaDinamica
-from ui.tareas import en_segundo_plano
+from ui.tareas import cache, en_segundo_plano
 from ui.widgets import CampoConContador, MIN_PALABRAS
 
 MINUTOS_MINIMOS = 120
@@ -63,7 +63,7 @@ class PlaneacionScreen(ctk.CTkScrollableFrame):
 
     def _cargar_cursos(self):
         try:
-            cursos = api_client.listar_cursos(self.sesion["token"])
+            cursos = cache.mis_cursos(self.sesion["token"])
         except api_client.ApiError as exc:
             self.error_label.configure(text=str(exc))
             return

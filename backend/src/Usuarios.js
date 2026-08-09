@@ -213,6 +213,11 @@ function subir_firma(token, usuario_id, imagen) {
 /**
  * Dashboard directivo: una fila por CURSO, no por docente, porque quien
  * tiene dos cursos puede ir al día en uno y atrasado en el otro.
+ *
+ * Lee cada tabla UNA vez y agrupa en memoria. Antes llamaba a
+ * obtener_estado_mes por curso, y cada una de esas releía entera la tabla
+ * de planeaciones: con 20 cursos eran 20 lecturas completas del mismo
+ * dato, y eso crecía con cada mes de uso.
  */
 function obtener_dashboard_directivo(token, mes) {
   const sesion = requireSession_(token);
@@ -223,9 +228,33 @@ function obtener_dashboard_directivo(token, mes) {
     nombrePorId[String(u.id)] = u.nombre;
   });
 
+  const clasesPorCurso = {};
+  readAllRows_(SHEET_NAMES.PLANEACIONES).forEach((p) => {
+    if (mesDeFecha_(p.fecha) !== mes) return;
+    const clave = String(p.curso_id);
+    clasesPorCurso[clave] = (clasesPorCurso[clave] || 0) + 1;
+  });
+
+  const informePorCurso = {};
+  readAllRows_(SHEET_NAMES.INFORMES).forEach((i) => {
+    if (mesDeFecha_(i.mes) !== mes) return;
+    informePorCurso[String(i.curso_id)] = i;
+  });
+
   return readRowsWhere_(SHEET_NAMES.CURSOS, (c) => c.activo === true).map((curso) => {
-    const estado = obtener_estado_mes(token, curso.id, mes);
-    estado.docente = nombrePorId[String(curso.docente_id)] || `id ${curso.docente_id}`;
-    return estado;
+    const registradas = clasesPorCurso[String(curso.id)] || 0;
+    const informe = informePorCurso[String(curso.id)];
+    return {
+      curso_id: curso.id,
+      curso: curso.nombre,
+      docente_id: curso.docente_id,
+      docente: nombrePorId[String(curso.docente_id)] || `id ${curso.docente_id}`,
+      mes: mes,
+      registradas: registradas,
+      esperadas: CLASES_ESPERADAS_POR_MES,
+      faltantes: Math.max(0, CLASES_ESPERADAS_POR_MES - registradas),
+      informe_entregado: !!informe,
+      informe_actualizado_en: informe ? informe.actualizado_en : '',
+    };
   });
 }

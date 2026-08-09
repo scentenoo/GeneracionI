@@ -41,6 +41,30 @@ const ACCIONES_PERMITIDAS_ = {
   version_actual,
 };
 
+/**
+ * Varias acciones en un solo viaje.
+ *
+ * Cada llamada a Apps Script cuesta entre 2 y 3 segundos de ida y vuelta,
+ * casi todo overhead fijo y no datos. Una pantalla que necesita tres cosas
+ * tardaba nueve segundos en abrir; agrupadas tarda tres.
+ *
+ * Cada llamada lleva su propio ok/error: que una falle no tumba al resto.
+ */
+function batch(llamadas) {
+  return (llamadas || []).map((llamada) => {
+    const fn = ACCIONES_PERMITIDAS_[llamada.action];
+    // batch dentro de batch no aporta nada y solo abre la puerta a recursión.
+    if (!fn || llamada.action === 'batch') {
+      return { ok: false, error: `Acción desconocida: ${llamada.action}` };
+    }
+    try {
+      return { ok: true, data: fn.apply(null, llamada.params || []) };
+    } catch (err) {
+      return { ok: false, error: String(err.message || err) };
+    }
+  });
+}
+
 function doPost(e) {
   let body;
   try {
@@ -50,6 +74,15 @@ function doPost(e) {
   }
 
   const { action, params } = body;
+
+  if (action === 'batch') {
+    try {
+      return jsonResponse_({ ok: true, data: batch((params || [])[0]) });
+    } catch (err) {
+      return jsonResponse_({ ok: false, error: String(err.message || err) });
+    }
+  }
+
   const fn = ACCIONES_PERMITIDAS_[action];
   if (!fn) {
     return jsonResponse_({ ok: false, error: `Acción desconocida: ${action}` });
