@@ -43,6 +43,7 @@ const ACCIONES_PERMITIDAS_ = {
   editar_usuario,
   eliminar_usuario,
   convertirme_administrador,
+  restaurar_administrador,
   transferir_administrador,
   listar_usuarios,
   restablecer_password,

@@ -96,10 +96,75 @@ function esAdministrador_(usuarioId) {
   return !!fila && fila.es_admin === true;
 }
 
+/**
+ * El cargo de administrador vive en es_admin, no en el rol.
+ *
+ * Los permisos lo deducían del rol: "si no es docente, hace falta ser
+ * administrador para tocarlo". Eso alcanzaba mientras el administrador
+ * fuera también directivo, y dejó de alcanzar apenas pasó a tener rol
+ * docente — ahí cualquier directivo pudo eliminarlo, y pasó de verdad:
+ * se perdió la cuenta del administrador y con ella el dueño de todos los
+ * cursos. Se comprueba donde el cargo realmente está.
+ */
+function esFilaAdministrador_(fila) {
+  return !!fila && fila.es_admin === true;
+}
+
 function requireAdministrador_(sesion) {
   if (!esAdministrador_(sesion.id)) {
     throw new Error('Esta acción requiere ser el usuario administrador');
   }
+}
+
+/**
+ * Recuperación: vuelve a crear un usuario eliminado conservando su id.
+ *
+ * Existe porque pasó de verdad: se eliminó al administrador y con él al
+ * dueño de todos los cursos. Crearlo de nuevo con crear_usuario le habría
+ * dado un id nuevo, y los cursos, planeaciones e informes que apuntan al
+ * viejo habrían quedado sin dueño para siempre.
+ *
+ * Solo corre mientras no haya ningún administrador —o sea, exactamente en
+ * el escenario que viene a arreglar— y nunca pisa un id ocupado. No abre
+ * ningún privilegio nuevo: sin administrador, cualquier directivo ya
+ * puede autoproclamarse con convertirme_administrador.
+ */
+function restaurar_administrador(token, datos) {
+  const sesion = requireSession_(token);
+  requireRole_(sesion, [ROLES.DIRECTIVO, ROLES.AMBOS]);
+
+  if (hayAdministrador_()) {
+    throw new Error('Ya hay un administrador — esto solo sirve para recuperar el cargo perdido');
+  }
+  if (!datos || !datos.id || !datos.nombre || !datos.usuario || !datos.password_inicial) {
+    throw new Error('Faltan datos (id, nombre, usuario, password_inicial)');
+  }
+  if (findRowById_(SHEET_NAMES.USUARIOS, datos.id)) {
+    throw new Error(`Ya existe un usuario con id ${datos.id} — no lo piso`);
+  }
+
+  const buscado = usuarioNormalizado_(datos.usuario);
+  if (readRowsWhere_(SHEET_NAMES.USUARIOS, (u) => usuarioNormalizado_(u.usuario) === buscado).length > 0) {
+    throw new Error(`Ya existe un usuario "${datos.usuario}"`);
+  }
+
+  appendRow_(SHEET_NAMES.USUARIOS, {
+    id: datos.id,
+    nombre: datos.nombre,
+    usuario: datos.usuario,
+    password_hash: crearHashConSalt_(datos.password_inicial),
+    rol: datos.rol || ROLES.DOCENTE,
+    es_admin: true,
+    valor_hora_docente: datos.valor_hora_docente || '',
+    valor_hora_directivo: datos.valor_hora_directivo || '',
+    cedula: datos.cedula || '',
+    numero_cuenta: datos.numero_cuenta || '',
+    tipo_cuenta: datos.tipo_cuenta || '',
+    entidad_bancaria: datos.entidad_bancaria || '',
+    firma_drive_id: '',
+  });
+
+  return { ok: true, id: datos.id };
 }
 
 /** Bootstrap: mientras no exista ningún administrador, cualquier directivo puede autoproclamarse. Se cierra solo apenas hay uno. */
@@ -155,6 +220,13 @@ function eliminar_usuario(token, usuario_id) {
   const fila = findRowById_(SHEET_NAMES.USUARIOS, usuario_id);
   if (!fila) throw new Error('Usuario no encontrado');
 
+  // Al administrador no lo elimina nadie, ni siquiera él mismo: es el
+  // único que puede repartir el cargo, y sin él la app se queda sin quien
+  // administre. Para sacarlo hay que transferir el cargo primero.
+  if (esFilaAdministrador_(fila)) {
+    throw new Error('No se puede eliminar al administrador. Transferile primero el cargo a otra persona.');
+  }
+
   if (!esAdministrador_(sesion.id)) {
     requireRole_(sesion, [ROLES.DIRECTIVO, ROLES.AMBOS]);
     if (fila.rol !== ROLES.DOCENTE) {
@@ -208,8 +280,13 @@ function restablecer_password(token, usuario_id, password_nueva) {
   const fila = findRowById_(SHEET_NAMES.USUARIOS, usuario_id);
   if (!fila) throw new Error('Usuario no encontrado');
 
+  // Mismo agujero que en eliminar_usuario: con el administrador puesto
+  // como docente, cualquier directivo podía cambiarle la contraseña y
+  // entrar con su cuenta. Si el administrador olvida la suya, la
+  // recuperación es por fuera de la app, editando la Sheet — no dándole a
+  // otro la llave de todo.
   const esOtro = String(usuario_id) !== String(sesion.id);
-  if (esOtro && fila.rol !== ROLES.DOCENTE) {
+  if (esOtro && (esFilaAdministrador_(fila) || fila.rol !== ROLES.DOCENTE)) {
     requireAdministrador_(sesion);
   }
 
