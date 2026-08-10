@@ -34,7 +34,7 @@ function guardar_horas_gestion(token, datos) {
 function obtener_horas_gestion(token, directivo_id) {
   const sesion = requireSession_(token);
   const targetId = directivo_id || sesion.id;
-  if (String(targetId) !== String(sesion.id) && !esDirectivo_(sesion)) {
+  if (String(targetId) !== String(sesion.id) && !puedeSupervisar_(sesion)) {
     throw new Error('No tienes permiso para ver las horas de gestión de otro usuario');
   }
   return readRowsWhere_(

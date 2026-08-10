@@ -46,7 +46,7 @@ function listar_cursos(token, docente_id, incluir_inactivos) {
   const sesion = requireSession_(token);
   const targetId = docente_id || sesion.id;
 
-  if (String(targetId) !== String(sesion.id) && !esDirectivo_(sesion)) {
+  if (String(targetId) !== String(sesion.id) && !puedeSupervisar_(sesion)) {
     throw new Error('No tienes permiso para ver los cursos de otro docente');
   }
 
@@ -83,6 +83,57 @@ function editar_curso(token, curso_id, cambios) {
  * apuntan a este curso y tienen que seguir resolviendo su nombre para los
  * informes de meses anteriores.
  */
+/**
+ * Borra un curso y TODO lo que le cuelga, sin vuelta atrás.
+ *
+ * No es lo que se usa normalmente: para un curso que terminó está
+ * desactivar_curso, que lo esconde y conserva los informes ya
+ * entregados. Esto es para el curso creado por error o de prueba, donde
+ * dejar el rastro solo ensucia el dashboard.
+ *
+ * Borra en orden hijos → padre para que un fallo a mitad de camino no
+ * deje planeaciones apuntando a un curso que ya no existe.
+ *
+ * Solo el administrador, y devuelve el detalle de lo borrado para poder
+ * decir exactamente qué se fue.
+ */
+function eliminar_curso_definitivo(token, curso_id) {
+  const sesion = requireSession_(token);
+  requireAdministrador_(sesion);
+
+  const curso = findRowById_(SHEET_NAMES.CURSOS, curso_id);
+  if (!curso) throw new Error('Curso no encontrado');
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const borradas = {};
+    [
+      [SHEET_NAMES.PLANEACIONES, 'curso_id'],
+      [SHEET_NAMES.ACTIVIDADES, 'curso_id'],
+      [SHEET_NAMES.INFORMES, 'curso_id'],
+      [SHEET_NAMES.INSCRIPCIONES, 'curso_id'],
+      [SHEET_NAMES.REAPERTURAS, 'curso_id'],
+    ].forEach(function (par) {
+      borradas[par[0]] = eliminarFilasDonde_(par[0], function (fila) {
+        return String(fila[par[1]]) === String(curso_id);
+      });
+    });
+
+    // Los estudiantes viven aparte de los cursos desde que uno puede
+    // estar en varios: se borra la inscripción, no la persona. La ficha
+    // queda huérfana solo si no le queda ninguna inscripción.
+    borradas[SHEET_NAMES.ESTUDIANTES] = eliminarEstudiantesSinInscripcion_();
+
+    getSheet_(SHEET_NAMES.CURSOS).deleteRow(curso._row);
+    borradas[SHEET_NAMES.CURSOS] = 1;
+
+    return { ok: true, curso: curso.nombre, borradas: borradas };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function desactivar_curso(token, curso_id) {
   const sesion = requireSession_(token);
   requireRole_(sesion, [ROLES.DIRECTIVO, ROLES.AMBOS]);

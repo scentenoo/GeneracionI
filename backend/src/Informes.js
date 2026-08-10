@@ -47,7 +47,7 @@ function guardar_informe_mensual(token, curso_id, mes, narrativa, gestionNarrati
 
   const curso = findRowById_(SHEET_NAMES.CURSOS, curso_id);
   if (!curso) throw new Error('Curso no encontrado');
-  if (String(curso.docente_id) !== String(sesion.id) && !esDirectivo_(sesion)) {
+  if (String(curso.docente_id) !== String(sesion.id) && !puedeSupervisar_(sesion)) {
     throw new Error('No tienes permiso para entregar el informe de ese curso');
   }
 
@@ -99,12 +99,35 @@ function guardar_informe_mensual(token, curso_id, mes, narrativa, gestionNarrati
 }
 
 /** Las respuestas ya guardadas, para reabrir el informe y seguir editándolo. */
+/**
+ * Borra un informe ya entregado, para que el mes vuelva a figurar como
+ * pendiente. Solo el administrador.
+ *
+ * Reabrir el mes (ver Cierre.js) alcanza cuando hay que corregir algo:
+ * el docente vuelve a entregar y se pisa lo anterior. Esto es para el
+ * caso distinto de un informe que no debería existir — presentado sobre
+ * el mes equivocado, o de prueba. Sin esto el dashboard queda diciendo
+ * "entregado" para siempre sobre algo que nadie entregó.
+ */
+function eliminar_informe_mensual(token, curso_id, mes) {
+  const sesion = requireSession_(token);
+  requireAdministrador_(sesion);
+
+  const borrados = eliminarFilasDonde_(
+    SHEET_NAMES.INFORMES,
+    (i) => String(i.curso_id) === String(curso_id) && mesDeFecha_(i.mes) === mes
+  );
+  if (borrados === 0) throw new Error('No hay un informe entregado para ese curso y mes');
+
+  return { ok: true, borrados: borrados };
+}
+
 function obtener_informe_mensual(token, curso_id, mes) {
   const sesion = requireSession_(token);
 
   const curso = findRowById_(SHEET_NAMES.CURSOS, curso_id);
   if (!curso) throw new Error('Curso no encontrado');
-  if (String(curso.docente_id) !== String(sesion.id) && !esDirectivo_(sesion)) {
+  if (String(curso.docente_id) !== String(sesion.id) && !puedeSupervisar_(sesion)) {
     throw new Error('No tienes permiso para ver ese informe');
   }
 
@@ -176,7 +199,7 @@ function generar_informe_mensual(token, curso_id, mes, narrativa, gestionNarrati
   }
 
   const targetId = curso.docente_id;
-  if (String(targetId) !== String(sesion.id) && !esDirectivo_(sesion)) {
+  if (String(targetId) !== String(sesion.id) && !puedeSupervisar_(sesion)) {
     throw new Error('No tienes permiso para generar el informe de otro docente');
   }
 
@@ -396,7 +419,7 @@ function obtener_avance_sugerido(token, curso_id, mes) {
 
   const curso = findRowById_(SHEET_NAMES.CURSOS, curso_id);
   if (!curso) throw new Error('Curso no encontrado');
-  if (String(curso.docente_id) !== String(sesion.id) && !esDirectivo_(sesion)) {
+  if (String(curso.docente_id) !== String(sesion.id) && !puedeSupervisar_(sesion)) {
     throw new Error('No tienes permiso para ver ese curso');
   }
 

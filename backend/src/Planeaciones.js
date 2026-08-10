@@ -67,7 +67,7 @@ function guardar_documento_planeacion(token, planeacion_id, archivo) {
 
   const fila = findRowById_(SHEET_NAMES.PLANEACIONES, planeacion_id);
   if (!fila) throw new Error('Planeación no encontrada');
-  if (String(fila.docente_id) !== String(sesion.id) && !esDirectivo_(sesion)) {
+  if (String(fila.docente_id) !== String(sesion.id) && !puedeSupervisar_(sesion)) {
     throw new Error('No tienes permiso para modificar esa planeación');
   }
   if (!archivo || !archivo.base64) throw new Error('Falta el documento');
@@ -103,7 +103,7 @@ function obtener_planeaciones(token, docente_id, curso_id, resumen) {
   const sesion = requireSession_(token);
   const targetId = docente_id || sesion.id;
 
-  if (String(targetId) !== String(sesion.id) && !esDirectivo_(sesion)) {
+  if (String(targetId) !== String(sesion.id) && !puedeSupervisar_(sesion)) {
     throw new Error('No tienes permiso para ver planeaciones de otro docente');
   }
 
@@ -144,7 +144,7 @@ function obtener_planeacion(token, id) {
 
   const fila = findRowById_(SHEET_NAMES.PLANEACIONES, id);
   if (!fila) throw new Error(`No se encontró la planeación ${id}`);
-  if (String(fila.docente_id) !== String(sesion.id) && !esDirectivo_(sesion)) {
+  if (String(fila.docente_id) !== String(sesion.id) && !puedeSupervisar_(sesion)) {
     throw new Error('No tienes permiso para ver esa planeación');
   }
   return parsePlaneacionRow_(fila);
@@ -169,7 +169,7 @@ function editar_planeacion(token, id, cambios) {
   if (!fila) throw new Error(`No se encontró la planeación ${id}`);
 
   const esDueno = String(fila.docente_id) === String(sesion.id);
-  if (!esDueno && !esDirectivo_(sesion)) {
+  if (!esDueno && !puedeSupervisar_(sesion)) {
     throw new Error('Solo podés editar tus propias planeaciones');
   }
   requireMesAbierto_(sesion, fila.curso_id, mesDeFecha_(fila.fecha));
@@ -233,7 +233,7 @@ function obtener_estado_mes(token, curso_id, mes) {
 
   const curso = findRowById_(SHEET_NAMES.CURSOS, curso_id);
   if (!curso) throw new Error('Curso no encontrado');
-  if (String(curso.docente_id) !== String(sesion.id) && !esDirectivo_(sesion)) {
+  if (String(curso.docente_id) !== String(sesion.id) && !puedeSupervisar_(sesion)) {
     throw new Error('No tienes permiso para ver el estado de ese curso');
   }
 

@@ -111,3 +111,26 @@ function esDocente_(sesion) {
 function esDirectivo_(sesion) {
   return sesion.rol === ROLES.DIRECTIVO || sesion.rol === ROLES.AMBOS;
 }
+
+/**
+ * Supervisar es ver o tocar lo de otra persona: las planeaciones de un
+ * docente, sus estudiantes, su informe. Lo pueden el equipo directivo y
+ * también el administrador.
+ *
+ * Responde una pregunta distinta de esDirectivo_, que es "¿ocupa un cargo
+ * directivo EN EL PROGRAMA?". De eso dependen la foto opcional, saltarse
+ * el cierre de mes y la sección de gestión del informe — cosas que el
+ * administrador NO hereda, porque administrar la app no es un cargo del
+ * programa y no se cobra.
+ *
+ * Estaban mezcladas en una sola función, y al pasar al administrador a
+ * rol docente perdió el acceso a los datos de todos: podía abrir el
+ * dashboard pero no revisar la planeación de nadie.
+ *
+ * Lee es_admin de la sesión en vez de releer la Sheet: esto corre en cada
+ * lectura de planeaciones. Las acciones irreversibles siguen pasando por
+ * requireAdministrador_, que sí revalida contra la Sheet.
+ */
+function puedeSupervisar_(sesion) {
+  return esDirectivo_(sesion) || sesion.es_admin === true;
+}

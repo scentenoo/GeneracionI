@@ -69,6 +69,25 @@ function nextId_(sheetName) {
 }
 
 /**
+ * Borra todas las filas que cumplan el predicado. Devuelve cuántas.
+ *
+ * Va de abajo hacia arriba a propósito: borrar la fila 5 corre la 6 al
+ * lugar de la 5, así que recorriendo de arriba hacia abajo se saltearía
+ * una fila por cada borrado.
+ */
+function eliminarFilasDonde_(sheetName, predicate) {
+  const filas = readAllRows_(sheetName).filter(predicate);
+  if (filas.length === 0) return 0;
+
+  const sheet = getSheet_(sheetName);
+  filas
+    .map((f) => f._row)
+    .sort((a, b) => b - a)
+    .forEach((fila) => sheet.deleteRow(fila));
+  return filas.length;
+}
+
+/**
  * Escribe un solo campo de una fila que el caller ya tiene leída.
  *
  * updateRowById_ vuelve a leer la pestaña entera para encontrar la fila;

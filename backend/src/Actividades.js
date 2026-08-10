@@ -32,7 +32,7 @@ function validarActividad_(sesion, datos) {
   // cuenta dos veces.
   const curso = findRowById_(SHEET_NAMES.CURSOS, datos.curso_id);
   if (!curso) throw new Error('Elegí en el informe de qué curso va esta actividad');
-  if (String(curso.docente_id) !== String(sesion.id) && !esDirectivo_(sesion)) {
+  if (String(curso.docente_id) !== String(sesion.id) && !puedeSupervisar_(sesion)) {
     throw new Error('Ese curso no es tuyo');
   }
 
@@ -87,7 +87,7 @@ function editar_actividad(token, id, datos, fotos) {
 
   const fila = findRowById_(SHEET_NAMES.ACTIVIDADES, id);
   if (!fila) throw new Error(`No se encontró la actividad ${id}`);
-  if (String(fila.usuario_id) !== String(sesion.id) && !esDirectivo_(sesion)) {
+  if (String(fila.usuario_id) !== String(sesion.id) && !puedeSupervisar_(sesion)) {
     throw new Error('Solo podés editar tus propias actividades');
   }
 
@@ -131,7 +131,7 @@ function obtener_actividades(token, curso_id, mes) {
 
   const curso = findRowById_(SHEET_NAMES.CURSOS, curso_id);
   if (!curso) throw new Error('Curso no encontrado');
-  if (String(curso.docente_id) !== String(sesion.id) && !esDirectivo_(sesion)) {
+  if (String(curso.docente_id) !== String(sesion.id) && !puedeSupervisar_(sesion)) {
     throw new Error('No tienes permiso para ver las actividades de ese curso');
   }
 

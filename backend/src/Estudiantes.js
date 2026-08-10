@@ -98,7 +98,7 @@ function obtener_estudiantes(token, curso_id) {
   const curso = findRowById_(SHEET_NAMES.CURSOS, curso_id);
   if (!curso) throw new Error('Curso no encontrado');
 
-  if (String(curso.docente_id) !== String(sesion.id) && !esDirectivo_(sesion)) {
+  if (String(curso.docente_id) !== String(sesion.id) && !puedeSupervisar_(sesion)) {
     throw new Error('No tienes permiso para ver los estudiantes de ese curso');
   }
 
@@ -203,4 +203,22 @@ function buscar_estudiantes(token, texto) {
         .filter((i) => String(i.estudiante_id) === String(e.id))
         .map((i) => cursos[String(i.curso_id)] || `curso ${i.curso_id}`),
     }));
+}
+
+/**
+ * Borra las fichas de estudiante que ya no están inscritas en ningún
+ * curso. Devuelve cuántas.
+ *
+ * Desde que un estudiante puede estar en varios cursos, borrar un curso
+ * borra sus inscripciones pero no a la persona: alguien que además va a
+ * Robótica tiene que seguir existiendo. Solo se va el que se queda sin
+ * ninguna.
+ */
+function eliminarEstudiantesSinInscripcion_() {
+  const inscritos = {};
+  readAllRows_(SHEET_NAMES.INSCRIPCIONES).forEach((i) => {
+    inscritos[String(i.estudiante_id)] = true;
+  });
+
+  return eliminarFilasDonde_(SHEET_NAMES.ESTUDIANTES, (e) => !inscritos[String(e.id)]);
 }
