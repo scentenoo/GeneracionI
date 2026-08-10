@@ -22,7 +22,13 @@ function crear_usuario(token, datos) {
     throw new Error(`Rol inválido: ${datos.rol}`);
   }
 
-  const yaExiste = readRowsWhere_(SHEET_NAMES.USUARIOS, (u) => u.usuario === datos.usuario).length > 0;
+  // Con la misma comparación que hace el login: si "Ana" y "ana" fueran
+  // dos usuarios distintos, el segundo nunca podría entrar.
+  const buscado = usuarioNormalizado_(datos.usuario);
+  const yaExiste = readRowsWhere_(
+    SHEET_NAMES.USUARIOS,
+    (u) => usuarioNormalizado_(u.usuario) === buscado
+  ).length > 0;
   if (yaExiste) throw new Error(`Ya existe un usuario con el nombre de usuario "${datos.usuario}"`);
 
   const fila = appendRow_(SHEET_NAMES.USUARIOS, {

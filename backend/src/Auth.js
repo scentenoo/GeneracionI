@@ -25,8 +25,25 @@ function verificarPassword_(password, hashGuardado) {
   return hashPassword_(password, salt) === hash;
 }
 
+/**
+ * Normaliza un nombre de usuario para compararlo.
+ *
+ * Dos motivos. Uno: Sheets convierte a número los logins que parecen
+ * número, así que un usuario "1" volvía como 1 y `1 === "1"` es false —
+ * esa persona no podía entrar nunca, con ninguna contraseña. Dos: los
+ * docentes escriben con mayúscula al empezar y con un espacio pegado al
+ * copiar; nada de eso debería ser un usuario distinto.
+ */
+function usuarioNormalizado_(usuario) {
+  return String(usuario === undefined || usuario === null ? '' : usuario).trim().toLowerCase();
+}
+
 function login(usuario, password) {
-  const fila = readRowsWhere_(SHEET_NAMES.USUARIOS, (u) => u.usuario === usuario)[0];
+  const buscado = usuarioNormalizado_(usuario);
+  const fila = readRowsWhere_(
+    SHEET_NAMES.USUARIOS,
+    (u) => usuarioNormalizado_(u.usuario) === buscado
+  )[0];
   if (!fila || !verificarPassword_(password, fila.password_hash)) {
     throw new Error('Usuario o contraseña incorrectos');
   }
