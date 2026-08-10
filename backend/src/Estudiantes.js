@@ -169,6 +169,13 @@ function modificar_grupo(token, curso_id, cambios) {
       }
     });
 
+    // Quitar a alguien de un curso borra su inscripción, no su ficha:
+    // el que además va a Robótica tiene que seguir existiendo. Pero si no
+    // le quedó ninguna, la ficha ya no representa a nadie del programa y
+    // sin esto la pestaña Estudiantes solo acumula nombres sueltos que
+    // igual aparecen al buscar. Misma regla que al borrar un curso.
+    if ((cambios.quitar || []).length > 0) eliminarEstudiantesSinInscripcion_();
+
     return { ok: true, cambios: hechos };
   } finally {
     lock.releaseLock();
