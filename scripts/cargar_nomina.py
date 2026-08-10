@@ -36,6 +36,7 @@ import secrets
 import string
 import sys
 import unicodedata
+from datetime import date
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parents[1]
@@ -253,45 +254,59 @@ def main():
         return
 
     tomados = {u["usuario"] for u in usuarios}
-    credenciales = []
-    for item in plan:
-        nombre, p, usuario = item["nombre"], item["persona"], item["usuario"]
 
-        if usuario:
-            print(f"  {nombre}: ya existe, no lo toco")
-        else:
-            clave = contrasena_al_azar()
-            datos = {
-                "nombre": nombre,
-                "usuario": nombre_de_usuario(nombre, tomados),
-                "password_inicial": clave,
-                "rol": rol_de(p),
-                "valor_hora_docente": p["valor_hora_docente"] or "",
-                "valor_hora_directivo": p["valor_hora_directivo"] or "",
-            }
-            creado = api_client.crear_usuario(token, datos)
-            usuario = {"id": creado["id"], "nombre": nombre}
-            credenciales.append((nombre, datos["usuario"], clave, datos["rol"]))
-            print(f"  {nombre}: creado como {datos['usuario']} ({datos['rol']})")
+    # La contraseña se anota EN EL MOMENTO en que el usuario queda creado,
+    # no al final. Antes se juntaban todas en memoria y se escribían
+    # recién al terminar: un timeout de Apps Script a mitad de camino
+    # dejaba trece usuarios creados con contraseñas que ya no sabía nadie,
+    # ni ellos ni yo. Pasó.
+    nuevos = 0
+    with CREDENCIALES.open("a", encoding="utf-8") as archivo:
+        archivo.write(f"\n=== Corrida del {date.today().isoformat()} ===\n")
+        archivo.write("Repartir a mano y borrar este archivo.\n")
+        archivo.write("Cada quien la cambia al entrar, desde Cambiar contraseña.\n\n")
+        archivo.flush()
 
-        for curso, existente, motivo in item["cursos"]:
-            if motivo == "igual":
-                print(f"      curso «{curso}» ya estaba")
-            elif motivo == "parecido":
-                print(f"      curso «{curso}» NO creado: ya figura como «{existente['nombre']}»")
+        for item in plan:
+            nombre, p, usuario = item["nombre"], item["persona"], item["usuario"]
+
+            if usuario:
+                print(f"  {nombre}: ya existe, no lo toco")
             else:
-                api_client.crear_curso(token, {"docente_id": usuario["id"], "nombre": curso})
-                print(f"      curso «{curso}» creado")
+                clave = contrasena_al_azar()
+                datos = {
+                    "nombre": nombre,
+                    "usuario": nombre_de_usuario(nombre, tomados),
+                    "password_inicial": clave,
+                    "rol": rol_de(p),
+                    "valor_hora_docente": p["valor_hora_docente"] or "",
+                    "valor_hora_directivo": p["valor_hora_directivo"] or "",
+                }
+                creado = api_client.crear_usuario(token, datos)
+                usuario = {"id": creado["id"], "nombre": nombre}
+                archivo.write(
+                    f"{nombre}\n  usuario: {datos['usuario']}\n"
+                    f"  clave:   {clave}\n  rol:     {datos['rol']}\n\n"
+                )
+                archivo.flush()  # que sobreviva a un corte, no al cierre ordenado
+                nuevos += 1
+                print(f"  {nombre}: creado como {datos['usuario']} ({datos['rol']})")
 
-    if credenciales:
-        with CREDENCIALES.open("w", encoding="utf-8") as f:
-            f.write("Contraseñas iniciales — repartir a mano y borrar este archivo.\n")
-            f.write("Cada quien la cambia al entrar, desde Cambiar contraseña.\n\n")
-            for nombre, usuario, clave, rol in credenciales:
-                f.write(f"{nombre}\n  usuario: {usuario}\n  clave:   {clave}\n  rol:     {rol}\n\n")
-        print(f"\nContraseñas escritas en {CREDENCIALES}")
+            for curso, existente, motivo in item["cursos"]:
+                if motivo == "igual":
+                    print(f"      curso «{curso}» ya estaba")
+                elif motivo == "parecido":
+                    print(f"      curso «{curso}» NO creado: ya figura como «{existente['nombre']}»")
+                else:
+                    api_client.crear_curso(token, {"docente_id": usuario["id"], "nombre": curso})
+                    print(f"      curso «{curso}» creado")
+
+    if nuevos:
+        print(f"\n{nuevos} contraseñas anotadas en {CREDENCIALES}")
         print("Repartilas y borrá el archivo. No está en git.")
 
+    print("\nSe puede volver a correr las veces que haga falta: saltea lo que")
+    print("ya existe, así que si se corta a la mitad se retoma corriéndolo otra vez.")
     print("\nFalta completar a mano, desde la app: cédula, cuenta bancaria,")
     print("núcleo y rango de edades de cada curso. La nómina no los trae.")
 
