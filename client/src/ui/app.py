@@ -6,10 +6,8 @@ import customtkinter as ctk
 
 from ui.login_screen import LoginScreen
 from ui.home_screen import HomeScreen
-from ui.planeacion_screen import PlaneacionScreen
-from ui.planeacion_list_screen import PlaneacionListScreen
+from ui.planeaciones_screen import PlaneacionesScreen
 from ui.planeacion_editor_screen import PlaneacionEditorScreen
-from ui.actividades_screen import ActividadesScreen
 from ui.dashboard_screen import DashboardScreen
 from ui.informe_screen import InformeScreen
 from ui.grupo_screen import GrupoScreen
@@ -150,9 +148,7 @@ class App(ctk.CTk):
         self.pantalla_actual = HomeScreen(
             self,
             self.sesion,
-            on_nueva_planeacion=self._mostrar_planeacion,
-            on_mis_planeaciones=self._mostrar_mis_planeaciones,
-            on_actividades=self._mostrar_actividades,
+            on_planeaciones=self._mostrar_planeaciones,
             on_dashboard=self._mostrar_dashboard,
             on_informe=self._mostrar_informe,
             on_grupo=self._mostrar_grupo,
@@ -165,18 +161,15 @@ class App(ctk.CTk):
         )
         self.pantalla_actual.pack(fill="both", expand=True)
 
-    def _mostrar_planeacion(self):
+    def _mostrar_planeaciones(self):
         self._limpiar()
-        self.pantalla_actual = PlaneacionScreen(self, self.sesion, on_volver=self._mostrar_home)
-        self.pantalla_actual.pack(fill="both", expand=True)
-
-    def _mostrar_mis_planeaciones(self):
-        self._limpiar()
-        self.pantalla_actual = PlaneacionListScreen(
+        self.pantalla_actual = PlaneacionesScreen(
             self,
             self.sesion,
             on_volver=self._mostrar_home,
-            on_editar=lambda p: self._mostrar_editor_planeacion(p, self._mostrar_mis_planeaciones),
+            # Editar sale del hub al editor de pantalla completa; al volver,
+            # se regresa al hub (que abre en «Mis planeaciones» recargada).
+            on_editar=lambda p: self._mostrar_editor_planeacion(p, self._mostrar_planeaciones),
         )
         self.pantalla_actual.pack(fill="both", expand=True)
 
@@ -203,11 +196,6 @@ class App(ctk.CTk):
             listo,
             lambda exc: aviso.configure(text=str(exc), text_color="#c0392b"),
         )
-
-    def _mostrar_actividades(self):
-        self._limpiar()
-        self.pantalla_actual = ActividadesScreen(self, self.sesion, on_volver=self._mostrar_home)
-        self.pantalla_actual.pack(fill="both", expand=True)
 
     def _mostrar_dashboard(self):
         self._limpiar()

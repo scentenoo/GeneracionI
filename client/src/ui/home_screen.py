@@ -1,4 +1,10 @@
-"""Menú post-login: botones según el rol de la sesión (spec sección 8)."""
+"""Menú post-login: botones agrupados por para-qué-sirven (spec sección 8).
+
+Antes eran hasta doce botones en una sola columna, mezclando el trabajo de
+aula, la supervisión del equipo y la cuenta propia. Ahora van en tres
+secciones con un título cada una, para que quien entra encuentre lo suyo
+sin recorrer todo.
+"""
 
 from __future__ import annotations
 
@@ -7,14 +13,12 @@ from typing import Callable
 import customtkinter as ctk
 
 
-class HomeScreen(ctk.CTkFrame):
+class HomeScreen(ctk.CTkScrollableFrame):
     def __init__(
         self,
         master,
         sesion: dict,
-        on_nueva_planeacion: Callable[[], None],
-        on_mis_planeaciones: Callable[[], None],
-        on_actividades: Callable[[], None],
+        on_planeaciones: Callable[[], None],
         on_dashboard: Callable[[], None],
         on_informe: Callable[[], None],
         on_grupo: Callable[[], None],
@@ -28,11 +32,9 @@ class HomeScreen(ctk.CTkFrame):
         super().__init__(master)
 
         ctk.CTkLabel(
-            self,
-            text=f"Hola, {sesion['nombre']}",
-            font=ctk.CTkFont(size=22, weight="bold"),
-        ).pack(pady=(30, 4))
-        ctk.CTkLabel(self, text=f"Rol: {sesion['rol']}", text_color="gray").pack(pady=(0, 20))
+            self, text=f"Hola, {sesion['nombre']}", font=ctk.CTkFont(size=22, weight="bold")
+        ).pack(pady=(24, 4))
+        ctk.CTkLabel(self, text=f"Rol: {sesion['rol']}", text_color="gray").pack(pady=(0, 8))
 
         es_docente = sesion["rol"] in ("docente", "ambos")
         # El administrador entra a las pantallas de gestión aunque su rol
@@ -42,24 +44,37 @@ class HomeScreen(ctk.CTkFrame):
         es_directivo = sesion["rol"] in ("directivo", "ambos") or bool(sesion.get("es_admin"))
 
         if es_docente:
-            ctk.CTkButton(self, text="Nueva planeación de clase", width=260, command=on_nueva_planeacion).pack(
-                pady=6
-            )
-            ctk.CTkButton(self, text="Mis planeaciones", width=260, command=on_mis_planeaciones).pack(pady=6)
-            ctk.CTkButton(self, text="Otras actividades del mes", width=260, command=on_actividades).pack(pady=6)
-        ctk.CTkButton(self, text="Generar informe mensual", width=260, command=on_informe).pack(pady=6)
-        if es_directivo:
-            ctk.CTkButton(self, text="Dashboard directivo", width=260, command=on_dashboard).pack(pady=6)
-            ctk.CTkButton(self, text="Cursos", width=260, command=on_cursos).pack(pady=6)
-            ctk.CTkButton(self, text="Estudiantes de un curso", width=260, command=on_grupo).pack(pady=6)
-            ctk.CTkButton(self, text="Horas de gestión", width=260, command=on_horas_gestion).pack(pady=6)
-            ctk.CTkButton(
-                self, text="Planeaciones de un docente", width=260, command=on_planeaciones_docente
-            ).pack(pady=6)
-            ctk.CTkButton(self, text="Usuarios", width=260, command=on_usuarios).pack(pady=6)
-        ctk.CTkButton(self, text="Cambiar contraseña", width=260, command=on_cambiar_password).pack(pady=6)
+            self._seccion("Como docente")
+            self._boton("Planeaciones y actividades", on_planeaciones)
+            self._boton("Generar informe mensual", on_informe)
+        elif es_directivo:
+            # Un directivo sin componente docente igual entrega su informe
+            # de gestión, así que el botón no puede vivir solo en la sección
+            # docente.
+            self._seccion("Mi informe")
+            self._boton("Generar informe mensual", on_informe)
 
+        if es_directivo:
+            self._seccion("Dirección")
+            self._boton("Dashboard del mes", on_dashboard)
+            self._boton("Cursos", on_cursos)
+            self._boton("Estudiantes de un curso", on_grupo)
+            self._boton("Planeaciones de un docente", on_planeaciones_docente)
+            self._boton("Horas de gestión", on_horas_gestion)
+            self._boton("Usuarios", on_usuarios)
+
+        self._seccion("Mi cuenta")
+        self._boton("Cambiar contraseña", on_cambiar_password)
         # Publicar una versión bloquea a quien no la tenga, así que va
         # detrás del administrador único y no del rol directivo.
         if sesion.get("es_admin"):
-            ctk.CTkButton(self, text="Versión de la app", width=260, command=on_version).pack(pady=6)
+            self._boton("Versión de la app", on_version)
+
+    def _seccion(self, titulo: str):
+        ctk.CTkLabel(
+            self, text=titulo.upper(), text_color="gray",
+            font=ctk.CTkFont(size=12, weight="bold"), anchor="w",
+        ).pack(fill="x", padx=40, pady=(16, 2))
+
+    def _boton(self, texto: str, comando: Callable[[], None]):
+        ctk.CTkButton(self, text=texto, width=260, command=comando).pack(pady=4)

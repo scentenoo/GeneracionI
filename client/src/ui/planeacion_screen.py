@@ -31,8 +31,10 @@ MINUTOS_ESPERADOS = 120
 
 
 class PlaneacionScreen(ctk.CTkScrollableFrame):
-    def __init__(self, master, sesion: dict, on_volver: Callable[[], None]):
-        super().__init__(master, label_text="Nueva planeación de clase")
+    def __init__(self, master, sesion: dict, on_volver: Callable[[], None] | None = None):
+        # Sin `on_volver` va montada como pestaña de PlaneacionesScreen, que
+        # ya tiene su propio Volver arriba: dos seguidos confunden.
+        super().__init__(master, label_text="" if on_volver is None else "Nueva planeación de clase")
         self.sesion = sesion
         self.on_volver = on_volver
         self.foto_path: str | None = None
@@ -51,7 +53,8 @@ class PlaneacionScreen(ctk.CTkScrollableFrame):
     # --- secciones -----------------------------------------------------
 
     def _construir_encabezado(self):
-        ctk.CTkButton(self, text="← Volver", width=90, command=self.on_volver).pack(anchor="w", pady=(0, 10))
+        if self.on_volver is not None:
+            ctk.CTkButton(self, text="← Volver", width=90, command=self.on_volver).pack(anchor="w", pady=(0, 10))
 
         ctk.CTkLabel(self, text="Fecha (AAAA-MM-DD)", anchor="w").pack(fill="x")
         self.fecha_entry = ctk.CTkEntry(self)

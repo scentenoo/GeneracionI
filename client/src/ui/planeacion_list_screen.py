@@ -26,14 +26,16 @@ class PlaneacionListScreen(ctk.CTkScrollableFrame):
         self,
         master,
         sesion: dict,
-        on_volver: Callable[[], None],
         on_editar: Callable[[dict], None],
+        on_volver: Callable[[], None] | None = None,
     ):
-        super().__init__(master, label_text="Mis planeaciones")
+        # Sin `on_volver` va montada como pestaña de PlaneacionesScreen.
+        super().__init__(master, label_text="" if on_volver is None else "Mis planeaciones")
         self.sesion = sesion
         self.on_editar = on_editar
 
-        ctk.CTkButton(self, text="← Volver", width=90, command=on_volver).pack(anchor="w", pady=(0, 10))
+        if on_volver is not None:
+            ctk.CTkButton(self, text="← Volver", width=90, command=on_volver).pack(anchor="w", pady=(0, 10))
 
         self.error_label = ctk.CTkLabel(self, text="", text_color=ROJO, wraplength=560, justify="left")
         self.error_label.pack(fill="x", pady=(0, 4))

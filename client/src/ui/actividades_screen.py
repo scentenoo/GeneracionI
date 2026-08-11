@@ -22,15 +22,17 @@ from ui.tareas import cache, en_segundo_plano
 
 
 class ActividadesScreen(ctk.CTkScrollableFrame):
-    def __init__(self, master, sesion: dict, on_volver: Callable[[], None]):
-        super().__init__(master, label_text="Otras actividades del mes")
+    def __init__(self, master, sesion: dict, on_volver: Callable[[], None] | None = None):
+        # Sin `on_volver` va montada como pestaña de PlaneacionesScreen.
+        super().__init__(master, label_text="" if on_volver is None else "Otras actividades del mes")
         self.sesion = sesion
         self.es_directivo = sesion["rol"] in ("directivo", "ambos")
         self._cursos_por_nombre: dict[str, dict] = {}
         self._editando: dict | None = None
         self.foto_path: str | None = None
 
-        ctk.CTkButton(self, text="← Volver", width=90, command=on_volver).pack(anchor="w", pady=(0, 10))
+        if on_volver is not None:
+            ctk.CTkButton(self, text="← Volver", width=90, command=on_volver).pack(anchor="w", pady=(0, 10))
 
         ctk.CTkLabel(
             self,
