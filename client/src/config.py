@@ -7,15 +7,36 @@ from pathlib import Path
 
 BACKEND_URL = "https://script.google.com/macros/s/AKfycbys9dPldfgtNcO8J51jsroJkC2Ic-_qn7jkVyp_G9w0UgEjaqGH4VsN_K7bteJMEOE-/exec"
 
-# Tiene que coincidir con lo que diga Config.version_actual en la Sheet, si
-# no la app se bloquea al abrir (ver main.py).
+# La versión de esta copia de la app. Al abrir se compara contra lo que
+# diga la Sheet (ver main.py): por debajo de la mínima obligatoria queda
+# bloqueada, entre la mínima y la vigente solo avisa.
 #
 # Este número sube RECIÉN cuando se va a repartir un instalador nuevo, no
-# cada vez que se cambia código: subirlo antes bloquea la app —incluido el
-# que corre desde el código— contra una versión que todavía no existe en
-# ningún lado. El orden es: subir esto, compilar, subir el .exe a Drive, y
-# recién ahí publicar desde «Versión de la app».
+# cada vez que se cambia código. El orden es: subir esto, compilar, subir
+# el .exe a Drive, y recién ahí publicar desde «Versión de la app».
 APP_VERSION = "1.0.0"
+
+
+def comparar_versiones(a: str, b: str) -> int:
+    """-1 si a < b, 0 si iguales, 1 si a > b. Compara por número, no por
+    texto: como cadena '1.10.0' < '1.9.0', y eso bloquearía justo a quien
+    sí actualizó."""
+    def partes(v: str) -> list[int]:
+        nums = []
+        for p in str(v).split("."):
+            try:
+                nums.append(int(p))
+            except ValueError:
+                nums.append(0)
+        return nums
+
+    pa, pb = partes(a), partes(b)
+    for i in range(max(len(pa), len(pb))):
+        x = pa[i] if i < len(pa) else 0
+        y = pb[i] if i < len(pb) else 0
+        if x != y:
+            return -1 if x < y else 1
+    return 0
 
 
 def _base_dir() -> Path:

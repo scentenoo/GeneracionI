@@ -48,15 +48,19 @@ class VersionScreen(ctk.CTkScrollableFrame):
             anchor="w",
         ).pack(fill="x")
 
-        self.aviso = ctk.CTkLabel(
+        self.obligatoria_var = ctk.BooleanVar(value=False)
+        ctk.CTkCheckBox(
             self,
-            text="Ojo: quien tenga una versión distinta a la que pongas acá\n"
-                 "queda bloqueado hasta que instale la nueva.",
-            text_color="#8A6114",
-            justify="left",
-            anchor="w",
+            text="Esta versión es obligatoria",
+            variable=self.obligatoria_var,
+            command=self._actualizar_aviso,
+        ).pack(anchor="w", pady=(16, 2))
+
+        self.aviso = ctk.CTkLabel(
+            self, text="", text_color="#8A6114", justify="left", anchor="w", wraplength=450
         )
-        self.aviso.pack(fill="x", pady=(16, 4))
+        self.aviso.pack(fill="x", pady=(0, 4))
+        self._actualizar_aviso()
 
         self.error_label = ctk.CTkLabel(self, text="", text_color="#c0392b", wraplength=450, justify="left")
         self.error_label.pack(fill="x", pady=(4, 4))
@@ -66,13 +70,27 @@ class VersionScreen(ctk.CTkScrollableFrame):
 
         self._cargar()
 
+    def _actualizar_aviso(self):
+        if self.obligatoria_var.get():
+            self.aviso.configure(
+                text="Obligatoria: quien tenga una versión anterior queda bloqueado\n"
+                     "hasta que instale esta. Usala solo para un arreglo que no puede esperar."
+            )
+        else:
+            self.aviso.configure(
+                text="Opcional: quien tenga una versión anterior ve un aviso con el link,\n"
+                     "pero puede seguir usando la app. Nadie queda afuera."
+            )
+
     def _cargar(self):
         def listo(info):
             vigente = str(info.get("version", ""))
+            minima = str(info.get("version_minima", "0.0.0"))
             link = str(info.get("link_instalador", ""))
             al_dia = vigente == APP_VERSION
             self.vigente_label.configure(
-                text=f"La vigente es la {vigente}" + ("  (coincide)" if al_dia else "  (no coincide)"),
+                text=f"La vigente es la {vigente}  ·  mínima obligatoria: {minima}"
+                     + ("  (coincide)" if al_dia else "  (no coincide)"),
                 text_color="#2fa84f" if al_dia else "#c0392b",
             )
             self.version_entry.delete(0, "end")
@@ -96,10 +114,13 @@ class VersionScreen(ctk.CTkScrollableFrame):
         self.publicar_boton.configure(state="disabled", text="Publicando...")
         self.error_label.configure(text="Publicando...", text_color="gray")
 
+        obligatoria = bool(self.obligatoria_var.get())
+
         def listo(_r):
             self.publicar_boton.configure(state="normal", text="Publicar esta versión")
             self._cargar()
-            self.error_label.configure(text=f"Versión {version} publicada ✓", text_color="#2fa84f")
+            tipo = "obligatoria" if obligatoria else "opcional"
+            self.error_label.configure(text=f"Versión {version} publicada ({tipo}) ✓", text_color="#2fa84f")
 
         def fallo(exc):
             self.publicar_boton.configure(state="normal", text="Publicar esta versión")
@@ -108,7 +129,7 @@ class VersionScreen(ctk.CTkScrollableFrame):
         en_segundo_plano(
             self,
             lambda: api_client.fijar_version(
-                self.sesion["token"], version, self.link_entry.get().strip()
+                self.sesion["token"], version, self.link_entry.get().strip(), obligatoria
             ),
             listo,
             fallo,

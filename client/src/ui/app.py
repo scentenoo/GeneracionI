@@ -77,16 +77,19 @@ class App(ctk.CTk):
 
     # --- chequeo de versión, que corre de fondo al abrir (ver main.py) ---
 
-    def version_verificada(self):
-        """La versión coincide: se habilita el login.
+    def version_verificada(self, aviso: str | None = None, link: str | None = None):
+        """La versión alcanza para entrar: se habilita el login.
 
         Si veníamos de la pantalla de sin conexión —porque el usuario dio
         Reintentar y esta vez sí respondió— hay que volver al login, que
         es lo que quedó tapado.
+
+        Con `aviso` hay una versión más nueva pero no obligatoria: se
+        entra igual y el login muestra el mensaje con el link.
         """
         if not isinstance(self.pantalla_actual, LoginScreen):
             self._mostrar_login()
-        self.pantalla_actual.habilitar()
+        self.pantalla_actual.habilitar(aviso=aviso, link=link)
 
     def bloquear(self, mensaje: str, titulo: str = "No se puede usar la app",
                  al_reintentar=None, link: str | None = None):

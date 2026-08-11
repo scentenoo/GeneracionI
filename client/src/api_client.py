@@ -87,15 +87,18 @@ def _call(action: str, *params):
 
 
 def version_actual() -> dict:
-    """{version, link_instalador}. Se consulta antes de loguearse, al abrir
-    la app, así que no lleva token."""
+    """{version, version_minima, link_instalador}. Se consulta antes de
+    loguearse, al abrir la app, así que no lleva token."""
     return _call("version_actual")
 
 
-def fijar_version(token: str, version: str, link_instalador: str = "") -> dict:
-    """Publica una versión: la app bloquea a quien no la tenga. Solo el
+def fijar_version(
+    token: str, version: str, link_instalador: str = "", obligatoria: bool = False
+) -> dict:
+    """Publica una versión. Con `obligatoria`, sube el piso: quien tenga
+    una anterior queda bloqueado. Sin ella, solo se avisa. Solo el
     administrador."""
-    return _call("fijar_version", token, version, link_instalador)
+    return _call("fijar_version", token, version, link_instalador, obligatoria)
 
 
 def batch(llamadas: list[tuple[str, list]]) -> list:

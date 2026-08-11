@@ -22,7 +22,15 @@ class InformeScreen(ctk.CTkScrollableFrame):
         super().__init__(master, label_text="Generar informe mensual")
         self.sesion = sesion
         self.on_volver = on_volver
+        # Dos cosas distintas que antes iban juntas:
+        #  - es_directivo: ocupa un cargo directivo del programa. De eso
+        #    depende la sección de gestión institucional del informe.
+        #  - puede_supervisar: puede ver y bajar el informe de OTROS
+        #    docentes. Lo pueden el directivo y también el administrador,
+        #    aunque su rol sea docente. Sin esto, Samir (docente + admin) no
+        #    veía el selector de todos los cursos ni el botón de descarga.
         self.es_directivo = sesion["rol"] in ("directivo", "ambos")
+        self.puede_supervisar = self.es_directivo or bool(sesion.get("es_admin"))
         self.avances: list[AvanceSemanaEditor] = []
 
         ctk.CTkButton(self, text="← Volver", width=90, command=on_volver).pack(anchor="w", pady=(0, 10))
@@ -50,7 +58,9 @@ class InformeScreen(ctk.CTkScrollableFrame):
         ctk.CTkLabel(self, text="Curso").pack(anchor="w")
         self._cursos_por_etiqueta: dict[str, dict] = {}
         try:
-            if self.es_directivo:
+            if self.puede_supervisar:
+                # Quien supervisa elige entre TODOS los cursos, con el
+                # docente al lado para distinguir los que se llaman parecido.
                 cursos = cache.cursos(self.sesion["token"])
                 usuarios = cache.nombres_de_usuarios(self.sesion["token"])
                 self._cursos_por_etiqueta = {
@@ -203,7 +213,7 @@ class InformeScreen(ctk.CTkScrollableFrame):
             font=ctk.CTkFont(size=11),
         ).pack()
 
-        if self.es_directivo:
+        if self.puede_supervisar:
             ctk.CTkButton(
                 self, text="Descargar .docx de lo entregado", command=self._descargar
             ).pack(pady=(16, 10))

@@ -40,11 +40,39 @@ class LoginScreen(ctk.CTkFrame):
         )
         self.boton.pack(pady=20)
 
-    def habilitar(self):
-        """La llama App cuando el chequeo de versión terminó bien."""
+        # Aviso de versión nueva no obligatoria: aparece bajo el botón, sin
+        # tapar el login. Se llena recién si hay algo que avisar.
+        self.aviso_frame = ctk.CTkFrame(self, fg_color="transparent")
+
+    def habilitar(self, aviso: str | None = None, link: str | None = None):
+        """La llama App cuando el chequeo de versión terminó bien.
+
+        Con `aviso` hay una versión más nueva que no es obligatoria: se
+        deja entrar igual, pero se muestra el mensaje y, si hay, un botón
+        para descargar el instalador nuevo.
+        """
         self.boton.configure(state="normal")
         self.error_label.configure(text="")
         self.usuario_entry.focus_set()
+
+        for w in self.aviso_frame.winfo_children():
+            w.destroy()
+        if aviso:
+            self.aviso_frame.pack(pady=(0, 10))
+            ctk.CTkLabel(
+                self.aviso_frame, text=aviso, text_color="#8A6114",
+                wraplength=280, justify="center",
+            ).pack()
+            if link:
+                import webbrowser
+
+                ctk.CTkButton(
+                    self.aviso_frame, text="Descargar la versión nueva", width=220,
+                    fg_color="transparent", border_width=1,
+                    command=lambda: webbrowser.open(link),
+                ).pack(pady=(6, 0))
+        else:
+            self.aviso_frame.pack_forget()
 
     def _intentar_login(self):
         usuario = self.usuario_entry.get().strip()
