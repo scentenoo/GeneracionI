@@ -8,6 +8,7 @@ from typing import Callable
 import customtkinter as ctk
 
 import api_client
+from ui.tareas import en_segundo_plano
 
 
 class PasswordScreen(ctk.CTkFrame):
@@ -29,7 +30,8 @@ class PasswordScreen(ctk.CTkFrame):
         self.error_label = ctk.CTkLabel(self, text="", text_color="#c0392b")
         self.error_label.pack(pady=(6, 0))
 
-        ctk.CTkButton(self, text="Cambiar", command=self._cambiar).pack(pady=16)
+        self.boton = ctk.CTkButton(self, text="Cambiar", command=self._cambiar)
+        self.boton.pack(pady=16)
 
     def _cambiar(self):
         if self.nueva_entry.get() != self.confirmar_entry.get():
@@ -39,13 +41,27 @@ class PasswordScreen(ctk.CTkFrame):
             self.error_label.configure(text="La contraseña nueva necesita al menos 6 caracteres", text_color="#c0392b")
             return
 
-        try:
-            api_client.cambiar_password(self.sesion["token"], self.actual_entry.get(), self.nueva_entry.get())
-        except api_client.ApiError as exc:
-            self.error_label.configure(text=str(exc), text_color="#c0392b")
-            return
+        # En segundo plano: en los equipos lentos de la sede, hacerlo en el
+        # hilo de la interfaz congelaba la ventana ~3s sin ningún aviso.
+        self.boton.configure(state="disabled", text="Cambiando...")
+        self.error_label.configure(text="", text_color="gray")
 
-        self.error_label.configure(text="Contraseña cambiada ✓", text_color="#2fa84f")
-        self.actual_entry.delete(0, "end")
-        self.nueva_entry.delete(0, "end")
-        self.confirmar_entry.delete(0, "end")
+        actual, nueva = self.actual_entry.get(), self.nueva_entry.get()
+
+        def listo(_r):
+            self.boton.configure(state="normal", text="Cambiar")
+            self.error_label.configure(text="Contraseña cambiada ✓", text_color="#2fa84f")
+            self.actual_entry.delete(0, "end")
+            self.nueva_entry.delete(0, "end")
+            self.confirmar_entry.delete(0, "end")
+
+        def fallo(exc):
+            self.boton.configure(state="normal", text="Cambiar")
+            self.error_label.configure(text=str(exc), text_color="#c0392b")
+
+        en_segundo_plano(
+            self,
+            lambda: api_client.cambiar_password(self.sesion["token"], actual, nueva),
+            listo,
+            fallo,
+        )

@@ -8,7 +8,7 @@ from typing import Callable
 import customtkinter as ctk
 
 import api_client
-from ui.tareas import cache
+from ui.tareas import cache, en_segundo_plano
 from ui.usuario_form_fields import (
     construir_campos_perfil,
     leer_campos_perfil,
@@ -71,24 +71,29 @@ class UsuarioScreen(ctk.CTkScrollableFrame):
             **leer_campos_perfil(self.campos_perfil),
         }
 
+        # En segundo plano para no congelar la ventana en los equipos lentos.
         self.crear_boton.configure(state="disabled")
         self.error_label.configure(text="Creando...", text_color="gray")
-        self.update_idletasks()
-        try:
-            resultado = api_client.crear_usuario(self.sesion["token"], datos)
-            cache.invalidar("usuarios")
-        except api_client.ApiError as exc:
-            self.error_label.configure(text=str(exc), text_color="#c0392b")
-            return
-        finally:
+
+        def listo(resultado):
             self.crear_boton.configure(state="normal")
+            cache.invalidar("usuarios")
+            nombre_creado = datos["nombre"]
+            self.nombre_entry.delete(0, "end")
+            self.usuario_entry.delete(0, "end")
+            self.password_entry.delete(0, "end")
+            limpiar_campos_perfil(self.campos_perfil)
+            self.error_label.configure(
+                text=f"{nombre_creado} creado (id {resultado['id']}) ✓", text_color="#2fa84f"
+            )
 
-        nombre_creado = datos["nombre"]
-        self.nombre_entry.delete(0, "end")
-        self.usuario_entry.delete(0, "end")
-        self.password_entry.delete(0, "end")
-        limpiar_campos_perfil(self.campos_perfil)
+        def fallo(exc):
+            self.crear_boton.configure(state="normal")
+            self.error_label.configure(text=str(exc), text_color="#c0392b")
 
-        self.error_label.configure(
-            text=f"{nombre_creado} creado (id {resultado['id']}) ✓", text_color="#2fa84f"
+        en_segundo_plano(
+            self,
+            lambda: api_client.crear_usuario(self.sesion["token"], datos),
+            listo,
+            fallo,
         )

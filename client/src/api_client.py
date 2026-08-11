@@ -8,11 +8,22 @@ necesitan saber que por debajo hay un POST a Apps Script.
 
 from __future__ import annotations
 
+import time
+
 import requests
 
 from config import BACKEND_URL
 
 _TIMEOUT_SECONDS = 30
+
+# Apps Script, bajo carga o justo después de un deploy, a veces contesta una
+# vez con algo transitorio: un 500, un timeout, o —por sus redirects a
+# googleusercontent— hasta la respuesta de OTRA petición. Con un usuario a la
+# vez casi no pasa, pero cuando la sede sube todo junto a fin de mes sí. Un
+# reintento con una pausa breve absorbe casi todos esos casos sin que el
+# docente vea nada.
+_REINTENTOS = 2
+_PAUSA_REINTENTO_S = 2.5
 
 
 class ApiError(Exception):
@@ -32,11 +43,33 @@ class SinConexion(ApiError):
     """
 
 
-def _call(action: str, *params):
-    """Los errores de red se traducen a un mensaje que le sirva a un
-    docente. El detalle técnico de requests no le dice nada a nadie y
-    además incluye la URL del backend, que no tiene por qué andar a la
-    vista en una pantalla de error."""
+# Acciones de solo lectura: no cambian nada en la Sheet, así que reintentarlas
+# ante un fallo transitorio es seguro (a lo sumo se lee dos veces). Las de
+# escritura NO están acá: reintentar una que quizás sí se guardó duplicaría el
+# dato (dos planeaciones). El login entra igual: reintentarlo solo abre otra
+# sesión, sin efecto.
+_SOLO_LECTURA = frozenset({
+    "login", "version_actual", "listar_cursos", "listar_todos_los_cursos",
+    "listar_usuarios", "obtener_planeaciones", "obtener_planeacion",
+    "obtener_estado_mes", "obtener_estudiantes", "buscar_estudiantes",
+    "obtener_horas_gestion", "obtener_actividades", "generar_informe_mensual",
+    "obtener_informe_mensual", "obtener_avance_sugerido", "obtener_dashboard_directivo",
+    "generar_informe_gestion", "obtener_informe_gestion", "directivos_sin_curso_del_mes",
+    "estado_cierre",
+})
+
+
+class _RespuestaTransitoria(Exception):
+    """Fallo del que vale la pena reintentar (red caída, 500, respuesta que no
+    se entiende). Interno: nunca sale de _call."""
+
+    def __init__(self, publica):
+        self.publica = publica  # la excepción que se mostraría si no reintentamos
+
+
+def _una_llamada(action: str, params):
+    """Un intento. Levanta _RespuestaTransitoria para lo reintenable y las
+    excepciones públicas (ApiError/SesionExpirada) para lo definitivo."""
     try:
         resp = requests.post(
             BACKEND_URL,
@@ -44,39 +77,48 @@ def _call(action: str, *params):
             timeout=_TIMEOUT_SECONDS,
         )
     except requests.ConnectionError as exc:  # incluye fallos de DNS
-        raise SinConexion(
+        raise _RespuestaTransitoria(SinConexion(
             "No hay conexión a internet.\n\n"
             "Revisá que estés conectado a la red y volvé a intentar."
-        ) from exc
+        )) from exc
     except requests.Timeout as exc:
-        raise SinConexion(
+        raise _RespuestaTransitoria(SinConexion(
             "El servidor está tardando demasiado en responder.\n\n"
             "Puede ser la conexión. Intentá de nuevo en un momento."
-        ) from exc
+        )) from exc
     except requests.RequestException as exc:
-        raise SinConexion(
+        raise _RespuestaTransitoria(SinConexion(
             "No se pudo conectar con el servidor.\n\nIntentá de nuevo en un momento."
-        ) from exc
+        )) from exc
 
     if resp.status_code in (401, 403):
         # Le pasa al deployment de Apps Script cuando pierde el acceso
         # "Cualquier usuario". El docente no puede hacer nada con esto, así
-        # que lo importante es que sepa a quién avisarle.
+        # que lo importante es que sepa a quién avisarle. No es transitorio.
         raise ApiError(
             "El servidor rechazó la conexión.\n\n"
             "Es un problema de configuración, no tuyo: avisale a Samir."
         )
     if resp.status_code >= 500:
-        raise SinConexion(
+        raise _RespuestaTransitoria(SinConexion(
             "El servidor tuvo un problema.\n\nIntentá de nuevo en un momento."
-        )
+        ))
     if resp.status_code != 200:
         raise ApiError(f"El servidor respondió algo inesperado (código {resp.status_code}).")
 
     try:
         body = resp.json()
     except ValueError as exc:
-        raise ApiError("El servidor respondió algo que no se entiende.") from exc
+        # Apps Script devolvió HTML (una página de error) en vez de JSON:
+        # transitorio, típico justo después de un deploy.
+        raise _RespuestaTransitoria(
+            ApiError("El servidor respondió algo que no se entiende.")
+        ) from exc
+
+    if not isinstance(body, dict) or "ok" not in body:
+        # Respuesta con forma inesperada: bajo carga, Apps Script a veces
+        # devuelve el cuerpo de OTRA petición. Reintentable.
+        raise _RespuestaTransitoria(ApiError("El servidor respondió algo que no se entiende."))
 
     if not body.get("ok"):
         error = body.get("error", "Error desconocido")
@@ -84,6 +126,23 @@ def _call(action: str, *params):
             raise SesionExpirada(error)
         raise ApiError(error)
     return body.get("data")
+
+
+def _call(action: str, *params):
+    """Puerta única al backend. Un fallo transitorio (red, 500, respuesta
+    ilegible) se reintenta con una pausa breve —pero solo en acciones de
+    solo lectura, para no duplicar una escritura que quizás sí se guardó.
+    Las excepciones que llegan a la interfaz nunca traen el detalle técnico
+    ni la URL del backend."""
+    reintentable = action in _SOLO_LECTURA
+    intentos = _REINTENTOS + 1 if reintentable else 1
+    for i in range(intentos):
+        try:
+            return _una_llamada(action, params)
+        except _RespuestaTransitoria as t:
+            if i + 1 >= intentos:
+                raise t.publica from None
+            time.sleep(_PAUSA_REINTENTO_S)
 
 
 def version_actual() -> dict:

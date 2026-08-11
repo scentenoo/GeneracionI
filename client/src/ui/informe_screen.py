@@ -54,22 +54,18 @@ class InformeScreen(ctk.CTkScrollableFrame):
         self.mes_entry.pack(anchor="w", pady=(2, 10))
 
         # El informe va por curso: quien tiene dos cursos entrega dos.
+        #
+        # Acá se entrega SIEMPRE el propio, así que se muestran solo los
+        # cursos propios —incluso a un directivo o al administrador—. Bajar
+        # el informe de otro docente se hace desde «Informes del mes». Antes
+        # esta pantalla listaba todos los cursos para quien supervisa, y eso
+        # dejaba entregar (y pisar la narrativa de) el informe de otro.
         ctk.CTkLabel(self, text="Curso").pack(anchor="w")
         self._cursos_por_etiqueta: dict[str, dict] = {}
         try:
-            if self.puede_supervisar:
-                # Quien supervisa elige entre TODOS los cursos, con el
-                # docente al lado para distinguir los que se llaman parecido.
-                cursos = cache.cursos(self.sesion["token"])
-                usuarios = cache.nombres_de_usuarios(self.sesion["token"])
-                self._cursos_por_etiqueta = {
-                    f"{c['nombre']} — {usuarios.get(c['docente_id'], '')}": c
-                    for c in cursos if c.get("activo")
-                }
-            else:
-                self._cursos_por_etiqueta = {
-                    c["nombre"]: c for c in cache.mis_cursos(self.sesion["token"])
-                }
+            self._cursos_por_etiqueta = {
+                c["nombre"]: c for c in cache.mis_cursos(self.sesion["token"])
+            }
         except api_client.ApiError:
             self._cursos_por_etiqueta = {}
 
