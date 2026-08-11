@@ -25,6 +25,8 @@ const ACCIONES_PERMITIDAS_ = {
   buscar_estudiantes,
   modificar_grupo,
   guardar_horas_gestion,
+  editar_horas_gestion,
+  eliminar_horas_gestion,
   obtener_horas_gestion,
   guardar_actividad,
   editar_actividad,

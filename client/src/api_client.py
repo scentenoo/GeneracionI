@@ -226,6 +226,16 @@ def guardar_horas_gestion(token: str, datos: dict) -> dict:
     return _call("guardar_horas_gestion", token, datos)
 
 
+def editar_horas_gestion(token: str, id_: int, cambios: dict) -> dict:
+    """Solo el dueño puede corregir su propia hora de gestión."""
+    return _call("editar_horas_gestion", token, id_, cambios)
+
+
+def eliminar_horas_gestion(token: str, id_: int) -> dict:
+    """Solo el dueño puede eliminar su propia hora de gestión."""
+    return _call("eliminar_horas_gestion", token, id_)
+
+
 def obtener_horas_gestion(token: str, directivo_id: int | None = None) -> list[dict]:
     return _call("obtener_horas_gestion", token, directivo_id)
 
