@@ -126,3 +126,19 @@ def previsualizar_informe(contexto: dict) -> tuple[Path, bool]:
             pass
     abrir_con_el_sistema(ruta)
     return ruta, es_pdf
+
+
+def previsualizar_informe_gestion(contexto: dict) -> tuple[Path, bool]:
+    """Vista previa del informe de gestión de un directivo sin curso."""
+    limpiar_borradores()
+    salida = _carpeta_temporal() / f"gestion_{uuid.uuid4().hex[:8]}.docx"
+    docx_generator.generar_informe_gestion_docx(contexto, salida)
+
+    ruta, es_pdf = _a_pdf_si_se_puede(salida)
+    if es_pdf:
+        try:
+            salida.unlink()
+        except OSError:
+            pass
+    abrir_con_el_sistema(ruta)
+    return ruta, es_pdf

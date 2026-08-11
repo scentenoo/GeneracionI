@@ -314,6 +314,32 @@ def obtener_avance_sugerido(token: str, curso_id: int, mes: str) -> list[dict]:
     return _call("obtener_avance_sugerido", token, curso_id, mes)
 
 
+# --- Informe de gestión (directivo sin curso) ----------------------------------
+
+def guardar_informe_gestion(token: str, mes: str, gestion_narrativa: dict) -> dict:
+    """Entrega el informe de gestión del mes de un directivo sin curso."""
+    return _call("guardar_informe_gestion", token, mes, gestion_narrativa)
+
+
+def obtener_informe_gestion(token: str, directivo_id: int | None, mes: str) -> dict | None:
+    """Lo entregado, o None. Sin directivo_id, el del propio usuario."""
+    return _call("obtener_informe_gestion", token, directivo_id, mes)
+
+
+def generar_informe_gestion(
+    token: str, directivo_id: int | None, mes: str, gestion_narrativa: dict | None = None
+) -> dict:
+    """Contexto docxtpl del informe de gestión. Sin narrativa, usa lo
+    entregado (así lo descarga quien supervisa)."""
+    return _call("generar_informe_gestion", token, directivo_id, mes, gestion_narrativa)
+
+
+def directivos_sin_curso_del_mes(token: str, mes: str) -> list[dict]:
+    """Directivos sin curso propio y si entregaron su informe de gestión,
+    para «Informes del mes»."""
+    return _call("directivos_sin_curso_del_mes", token, mes)
+
+
 # --- Administración de usuarios (rol directivo) --------------------------------
 
 def crear_usuario(token: str, datos: dict) -> dict:

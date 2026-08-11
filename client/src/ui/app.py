@@ -10,6 +10,7 @@ from ui.planeaciones_screen import PlaneacionesScreen
 from ui.planeacion_editor_screen import PlaneacionEditorScreen
 from ui.dashboard_screen import DashboardScreen
 from ui.informe_screen import InformeScreen
+from ui.informe_gestion_screen import InformeGestionScreen
 from ui.informes_mes_screen import InformesMesScreen
 from ui.grupo_screen import GrupoScreen
 from ui.cursos_screen import CursosScreen
@@ -205,9 +206,33 @@ class App(ctk.CTk):
         self.pantalla_actual.pack(fill="both", expand=True)
 
     def _mostrar_informe(self):
+        """El informe de un directivo SIN curso es otro documento (solo
+        gestión), así que se decide qué pantalla mostrar según si tiene
+        cursos propios. Se consulta primero —del caché, normalmente sin
+        viaje— para no montar la pantalla equivocada."""
         self._limpiar()
-        self.pantalla_actual = InformeScreen(self, self.sesion, on_volver=self._mostrar_home)
-        self.pantalla_actual.pack(fill="both", expand=True)
+        cargando = ctk.CTkFrame(self)
+        cargando.pack(fill="both", expand=True)
+        ctk.CTkLabel(cargando, text="Abriendo...", text_color="gray").pack(padx=30, pady=60)
+        self.pantalla_actual = cargando
+
+        es_directivo = self.sesion["rol"] in ("directivo", "ambos")
+
+        def listo(mis_cursos):
+            self._limpiar()
+            if es_directivo and not mis_cursos:
+                self.pantalla_actual = InformeGestionScreen(self, self.sesion, on_volver=self._mostrar_home)
+            else:
+                self.pantalla_actual = InformeScreen(self, self.sesion, on_volver=self._mostrar_home)
+            self.pantalla_actual.pack(fill="both", expand=True)
+
+        en_segundo_plano(
+            self,
+            lambda: cache.mis_cursos(self.sesion["token"]),
+            listo,
+            # Ante un error de red, cae al informe docente (el caso común).
+            lambda _exc: listo([1]),
+        )
 
     def _mostrar_informes_mes(self):
         self._limpiar()

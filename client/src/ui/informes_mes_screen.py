@@ -23,6 +23,18 @@ import customtkinter as ctk
 
 import api_client
 from services import date_utils, docx_generator
+
+
+def _contexto_y_docx(token, estado, mes, ruta):
+    """Baja el contexto del informe (docente o de gestión) y arma el
+    .docx. Concentra acá la rama por tipo para no repetirla en la descarga
+    de a uno y en el ZIP."""
+    if estado.get("tipo") == "gestion":
+        contexto = api_client.generar_informe_gestion(token, estado["directivo_id"], mes)
+        docx_generator.generar_informe_gestion_docx(contexto, ruta)
+    else:
+        contexto = api_client.generar_informe_mensual(token, estado["curso_id"], mes)
+        docx_generator.generar_informe_mensual_docx(contexto, ruta)
 from ui.tareas import en_segundo_plano, en_segundo_plano_con_progreso
 
 ROJO, VERDE, GRIS = "#c0392b", "#2fa84f", "gray"
@@ -80,6 +92,20 @@ class InformesMesScreen(ctk.CTkScrollableFrame):
         self.todos_boton.configure(state="disabled")
         mes = self.mes_entry.get().strip()
 
+        def traer():
+            # Los cursos (informe docente) y los directivos sin curso
+            # (informe de gestión) van en la misma lista. Se marcan con
+            # `tipo` para saber cómo bajar cada uno.
+            cursos = api_client.obtener_dashboard_directivo(self.sesion["token"], mes)
+            for c in cursos:
+                c["tipo"] = "curso"
+            directivos = api_client.directivos_sin_curso_del_mes(self.sesion["token"], mes)
+            for d in directivos:
+                d["tipo"] = "gestion"
+                d["curso"] = f"Gestión — {d['nombre']}"
+                d["docente"] = d["nombre"]
+            return cursos + directivos
+
         def listo(estados):
             self._estados = estados
             entregados = [e for e in estados if e.get("informe_entregado")]
@@ -99,7 +125,7 @@ class InformesMesScreen(ctk.CTkScrollableFrame):
 
         en_segundo_plano(
             self,
-            lambda: api_client.obtener_dashboard_directivo(self.sesion["token"], mes),
+            traer,
             listo,
             lambda exc: self.resumen_label.configure(text=str(exc), text_color=ROJO),
         )
@@ -147,8 +173,7 @@ class InformesMesScreen(ctk.CTkScrollableFrame):
         self.progreso_label.configure(text=f"Armando el informe de {estado['curso']}...", text_color=GRIS)
 
         def trabajo():
-            contexto = api_client.generar_informe_mensual(self.sesion["token"], estado["curso_id"], mes)
-            docx_generator.generar_informe_mensual_docx(contexto, ruta)
+            _contexto_y_docx(self.sesion["token"], estado, mes, ruta)
             return ruta
 
         def listo(r):
@@ -191,9 +216,8 @@ class InformesMesScreen(ctk.CTkScrollableFrame):
                 for i, estado in enumerate(entregados):
                     reportar((i, total, estado["curso"]))
                     try:
-                        contexto = api_client.generar_informe_mensual(token, estado["curso_id"], mes)
                         tmp = os.path.join(tempfile.gettempdir(), _nombre_archivo(estado["curso"], mes))
-                        docx_generator.generar_informe_mensual_docx(contexto, tmp)
+                        _contexto_y_docx(token, estado, mes, tmp)
                         zf.write(tmp, _nombre_archivo(estado["curso"], mes))
                         os.remove(tmp)
                     except Exception as exc:  # noqa: BLE001 — se reporta al final
