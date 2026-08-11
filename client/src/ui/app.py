@@ -10,6 +10,7 @@ from ui.planeaciones_screen import PlaneacionesScreen
 from ui.planeacion_editor_screen import PlaneacionEditorScreen
 from ui.dashboard_screen import DashboardScreen
 from ui.informe_screen import InformeScreen
+from ui.informes_mes_screen import InformesMesScreen
 from ui.grupo_screen import GrupoScreen
 from ui.cursos_screen import CursosScreen
 from ui.horas_gestion_screen import HorasGestionScreen
@@ -151,6 +152,7 @@ class App(ctk.CTk):
             on_planeaciones=self._mostrar_planeaciones,
             on_dashboard=self._mostrar_dashboard,
             on_informe=self._mostrar_informe,
+            on_informes_mes=self._mostrar_informes_mes,
             on_grupo=self._mostrar_grupo,
             on_cursos=self._mostrar_cursos,
             on_horas_gestion=self._mostrar_horas_gestion,
@@ -205,6 +207,11 @@ class App(ctk.CTk):
     def _mostrar_informe(self):
         self._limpiar()
         self.pantalla_actual = InformeScreen(self, self.sesion, on_volver=self._mostrar_home)
+        self.pantalla_actual.pack(fill="both", expand=True)
+
+    def _mostrar_informes_mes(self):
+        self._limpiar()
+        self.pantalla_actual = InformesMesScreen(self, self.sesion, on_volver=self._mostrar_home)
         self.pantalla_actual.pack(fill="both", expand=True)
 
     def _mostrar_grupo(self):

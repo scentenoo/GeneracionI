@@ -4,14 +4,13 @@ el .docx con docxtpl. Ver services/docx_generator.py."""
 
 from __future__ import annotations
 
-from tkinter import filedialog
 from typing import Callable
 
 import customtkinter as ctk
 
 import api_client
 from ui.tareas import cache
-from services import date_utils, docx_generator, pdf_converter, vista_previa
+from services import date_utils, vista_previa
 from ui.avance_semana_editor import AvanceSemanaEditor
 from ui.tareas import en_segundo_plano
 from ui.widgets import MIN_PALABRAS, contar_palabras
@@ -213,9 +212,17 @@ class InformeScreen(ctk.CTkScrollableFrame):
             font=ctk.CTkFont(size=11),
         ).pack()
 
+        # Descargar el informe de OTROS docentes ya no vive acá: se mudó a
+        # «Informes del mes», en Dirección, que además baja todos en un ZIP.
+        # Esta pantalla vuelve a ser solo para armar y entregar el propio.
         if self.puede_supervisar:
-            ctk.CTkButton(
-                self, text="Descargar .docx de lo entregado", command=self._descargar
+            ctk.CTkLabel(
+                self,
+                text="Para bajar informes ya entregados (los tuyos o los de otros),\n"
+                     "usá «Informes del mes» en el menú.",
+                text_color="gray",
+                font=ctk.CTkFont(size=11),
+                justify="center",
             ).pack(pady=(16, 10))
 
     # --- armado ------------------------------------------------------------
@@ -441,42 +448,3 @@ class InformeScreen(ctk.CTkScrollableFrame):
             lambda exc: self.entregado_label.configure(text=str(exc), text_color="#c0392b"),
         )
 
-    def _descargar(self):
-        """El directivo baja el .docx de un informe ya entregado, sin tener
-        que volver a llenar nada."""
-        curso = self._curso_seleccionado()
-        if not curso:
-            self.error_label.configure(text="Elegí un curso.", text_color="#c0392b")
-            return
-
-        mes = self.mes_entry.get().strip()
-        self.error_label.configure(text="Armando el documento...", text_color="gray")
-        self.update_idletasks()
-
-        def listo(contexto):
-            ruta = filedialog.asksaveasfilename(
-                title="Guardar informe mensual",
-                defaultextension=".docx",
-                filetypes=[("Word", "*.docx")],
-                initialfile=f"informe_{curso['nombre']}_{mes}.docx".replace(" ", "_"),
-            )
-            if not ruta:
-                self.error_label.configure(text="No se guardó: cancelaste el diálogo.", text_color="gray")
-                return
-
-            docx_generator.generar_informe_mensual_docx(contexto, ruta)
-            try:
-                pdf_converter.docx_a_pdf(ruta)
-                self.error_label.configure(text=f"Guardado: {ruta}  (también el PDF)", text_color="#2fa84f")
-            except pdf_converter.ConversionNoDisponible:
-                self.error_label.configure(
-                    text=f"Guardado: {ruta}  (sin PDF automático en este equipo)", text_color="#2fa84f"
-                )
-
-        en_segundo_plano(
-            self,
-            # Sin narrativa, el backend usa lo que ya está entregado.
-            lambda: api_client.generar_informe_mensual(self.sesion["token"], curso["id"], mes),
-            listo,
-            lambda exc: self.error_label.configure(text=str(exc), text_color="#c0392b"),
-        )

@@ -117,6 +117,40 @@ def en_segundo_plano(
     threading.Thread(target=correr, daemon=True).start()
 
 
+def en_segundo_plano_con_progreso(
+    widget,
+    trabajo: Callable[[Callable[[object], None]], object],
+    al_progreso: Callable[[object], None],
+    al_terminar: Callable[[object], None],
+    al_fallar: Callable[[Exception], None] | None = None,
+):
+    """Como en_segundo_plano, pero `trabajo` recibe un `reportar(valor)`
+    para ir avisando cómo avanza. Cada `reportar` entrega el valor a
+    `al_progreso` ya en el hilo de Tk, así una descarga larga puede pintar
+    una barra sin congelar la ventana ni tocar widgets desde el worker.
+    """
+    global _entrega_iniciada
+    if not _entrega_iniciada:
+        _entrega_iniciada = True
+        _bombear(widget.winfo_toplevel())
+
+    def correr():
+        def reportar(valor):
+            _cola.put((widget, al_progreso, valor))
+
+        try:
+            resultado = trabajo(reportar)
+        except Exception as exc:  # noqa: BLE001
+            if al_fallar is not None:
+                _cola.put((widget, al_fallar, exc))
+            else:
+                traceback.print_exc(file=sys.stderr)
+        else:
+            _cola.put((widget, al_terminar, resultado))
+
+    threading.Thread(target=correr, daemon=True).start()
+
+
 class Cache:
     """Guarda en memoria lo que no cambia dentro de una sesión — la lista
     de usuarios y la de cursos, que hoy se vuelven a pedir cada vez que se
