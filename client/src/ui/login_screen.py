@@ -4,7 +4,10 @@ sección 8). Funcionalmente ya llama al backend real; lo que falta es
 estética y pulir la experiencia.
 
 El botón arranca deshabilitado hasta que el chequeo de versión que corre
-de fondo confirme que la app está al día (ver main.py).
+de fondo confirme que la app está al día (ver main.py). Mientras se espera
+—verificar versión, ingresar— se muestra la animación de «Cargando» en vez
+de un texto quieto: con la latencia de Apps Script, un texto fijo parece
+que la app se colgó.
 """
 
 from __future__ import annotations
@@ -14,6 +17,7 @@ from typing import Callable
 import customtkinter as ctk
 
 import api_client
+from ui.cargando import Cargando
 from ui.tareas import en_segundo_plano
 
 
@@ -32,13 +36,18 @@ class LoginScreen(ctk.CTkFrame):
         self.password_entry.pack(pady=8)
         self.password_entry.bind("<Return>", lambda _e: self._intentar_login())
 
-        self.error_label = ctk.CTkLabel(self, text="Verificando versión...", text_color="gray")
-        self.error_label.pack(pady=(4, 0))
-
         self.boton = ctk.CTkButton(
             self, text="Ingresar", command=self._intentar_login, width=260, state="disabled"
         )
         self.boton.pack(pady=20)
+
+        # Animación de "estoy trabajando". Arranca visible: lo primero que
+        # pasa es el chequeo de versión, que también tarda.
+        self.cargando = Cargando(self, texto="Verificando versión...")
+        self.cargando.pack(pady=(0, 6))
+
+        self.error_label = ctk.CTkLabel(self, text="", text_color="#c0392b")
+        self.error_label.pack(pady=(4, 0))
 
         # Aviso de versión nueva no obligatoria: aparece bajo el botón, sin
         # tapar el login. Se llena recién si hay algo que avisar.
@@ -51,6 +60,8 @@ class LoginScreen(ctk.CTkFrame):
         deja entrar igual, pero se muestra el mensaje y, si hay, un botón
         para descargar el instalador nuevo.
         """
+        self.cargando.detener()
+        self.cargando.pack_forget()
         self.boton.configure(state="normal")
         self.error_label.configure(text="")
         self.usuario_entry.focus_set()
@@ -82,7 +93,11 @@ class LoginScreen(ctk.CTkFrame):
             return
 
         self.boton.configure(state="disabled", text="Ingresando...")
-        self.error_label.configure(text="", text_color="gray")
+        self.error_label.configure(text="")
+        # Animación mientras espera la respuesta del backend.
+        self.cargando.configurar_texto("Ingresando...")
+        self.cargando.iniciar()
+        self.cargando.pack(pady=(0, 6))
 
         en_segundo_plano(
             self,
@@ -92,8 +107,11 @@ class LoginScreen(ctk.CTkFrame):
         )
 
     def _al_entrar(self, sesion):
+        self.cargando.detener()
         self.on_login_exitoso(sesion)
 
     def _al_fallar(self, exc):
+        self.cargando.detener()
+        self.cargando.pack_forget()
         self.boton.configure(state="normal", text="Ingresar")
         self.error_label.configure(text=str(exc), text_color="#c0392b")

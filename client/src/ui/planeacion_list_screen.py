@@ -16,6 +16,7 @@ import customtkinter as ctk
 
 import api_client
 from services import date_utils
+from ui.cargando import Cargando
 from ui.tareas import en_segundo_plano
 
 ROJO, VERDE, GRIS = "#c0392b", "#2fa84f", "gray"
@@ -48,10 +49,13 @@ class PlaneacionListScreen(ctk.CTkScrollableFrame):
     def _cargar(self):
         for w in self.lista_contenedor.winfo_children():
             w.destroy()
-        self.error_label.configure(text="Cargando...", text_color=GRIS)
+        self.error_label.configure(text="")
+        cargando = Cargando(self.lista_contenedor, texto="Cargando...")
+        cargando.pack(pady=20)
 
         def listo(planeaciones):
-            self.error_label.configure(text="")
+            cargando.detener()
+            cargando.destroy()
             if not planeaciones:
                 ctk.CTkLabel(
                     self.lista_contenedor,
@@ -64,11 +68,16 @@ class PlaneacionListScreen(ctk.CTkScrollableFrame):
             for p in planeaciones:
                 self._fila_planeacion(p)
 
+        def fallo(exc):
+            cargando.detener()
+            cargando.destroy()
+            self.error_label.configure(text=str(exc), text_color=ROJO)
+
         en_segundo_plano(
             self,
             lambda: api_client.obtener_planeaciones(self.sesion["token"], resumen=True),
             listo,
-            lambda exc: self.error_label.configure(text=str(exc), text_color=ROJO),
+            fallo,
         )
 
     def _fila_planeacion(self, p: dict):

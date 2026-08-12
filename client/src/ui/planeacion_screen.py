@@ -71,25 +71,32 @@ class PlaneacionScreen(ctk.CTkScrollableFrame):
         self.objetivo.pack(fill="x", pady=4)
 
     def _cargar_cursos(self):
-        try:
-            cursos = cache.mis_cursos(self.sesion["token"])
-        except api_client.ApiError as exc:
-            self.error_label.configure(text=str(exc))
-            return
+        # En segundo plano: leer los cursos podía costar un viaje al backend
+        # si el caché todavía no estaba caliente, y hacerlo en el hilo de la
+        # interfaz congelaba «Nueva clase» al abrirla.
+        self.curso_menu.configure(values=["Cargando..."])
+        self.curso_menu.set("Cargando...")
 
-        self._cursos_por_nombre = {c["nombre"]: c for c in cursos}
-        nombres = list(self._cursos_por_nombre)
-        if not nombres:
-            self.curso_menu.configure(values=["(no tenés cursos asignados)"])
-            self.curso_menu.set("(no tenés cursos asignados)")
-            self.error_label.configure(
-                text="No tenés ningún curso asignado. Pedile al equipo directivo que te cree uno."
-            )
-            return
+        def listo(cursos):
+            self._cursos_por_nombre = {c["nombre"]: c for c in cursos}
+            nombres = list(self._cursos_por_nombre)
+            if not nombres:
+                self.curso_menu.configure(values=["(no tenés cursos asignados)"])
+                self.curso_menu.set("(no tenés cursos asignados)")
+                self.error_label.configure(
+                    text="No tenés ningún curso asignado. Pedile al equipo directivo que te cree uno."
+                )
+                return
+            self.curso_menu.configure(values=nombres)
+            self.curso_menu.set(nombres[0])
+            self._cargar_asistencia()
 
-        self.curso_menu.configure(values=nombres)
-        self.curso_menu.set(nombres[0])
-        self._cargar_asistencia()
+        en_segundo_plano(
+            self,
+            lambda: cache.mis_cursos(self.sesion["token"]),
+            listo,
+            lambda exc: self.error_label.configure(text=str(exc), text_color="#c0392b"),
+        )
 
     def _curso_actual(self) -> dict | None:
         return self._cursos_por_nombre.get(self.curso_menu.get())

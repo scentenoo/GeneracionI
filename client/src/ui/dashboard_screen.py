@@ -19,6 +19,7 @@ import customtkinter as ctk
 
 import api_client
 from services import date_utils
+from ui.cargando import Cargando
 from ui.tareas import en_segundo_plano
 
 # Rojo: ni siquiera puede entregar el informe, le faltan clases.
@@ -155,12 +156,16 @@ class DashboardScreen(ctk.CTkScrollableFrame):
         mes = self.mes_entry.get().strip()
         self.consulta += 1
         consulta = self.consulta
-        self.resumen_label.configure(text="Cargando...", text_color=GRIS)
+        self.resumen_label.configure(text="", text_color=GRIS)
         self.detalle_label.configure(text="")
+        cargando = Cargando(self.tarjetas, texto="Cargando el mes...")
+        cargando.pack(pady=20)
 
         def listo(estados):
             if consulta != self.consulta:
                 return
+            cargando.detener()
+            cargando.destroy()
             if not estados:
                 self.resumen_label.configure(text="Todavía no hay cursos.", text_color=GRIS)
                 return
@@ -182,12 +187,18 @@ class DashboardScreen(ctk.CTkScrollableFrame):
             for estado in sorted(estados, key=lambda e: (self._clasificar(e)[0], e.get("curso", ""))):
                 self._tarjeta(estado)
 
+        def fallo(exc):
+            if consulta != self.consulta:
+                return
+            cargando.detener()
+            cargando.destroy()
+            self.resumen_label.configure(text=str(exc), text_color=ROJO)
+
         en_segundo_plano(
             self,
             lambda: api_client.obtener_dashboard_directivo(self.sesion["token"], mes),
             listo,
-            lambda exc: consulta == self.consulta
-            and self.resumen_label.configure(text=str(exc), text_color=ROJO),
+            fallo,
         )
 
     def _tarjeta(self, estado: dict):

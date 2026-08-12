@@ -4,6 +4,7 @@ from tkinter import messagebox
 
 import customtkinter as ctk
 
+from ui.cargando import Cargando
 from ui.login_screen import LoginScreen
 from ui.home_screen import HomeScreen
 from ui.planeaciones_screen import PlaneacionesScreen
@@ -69,6 +70,18 @@ class App(ctk.CTk):
         for widget in self.winfo_children():
             widget.destroy()
         self.pantalla_actual = None
+
+    def _pantalla_cargando(self, texto: str):
+        """Pantalla de transición con la animación de «trabajando», para las
+        aperturas que primero tienen que ir a buscar algo al backend. Devuelve
+        el widget Cargando por si hay que cambiarle el texto ante un error."""
+        self._limpiar()
+        marco = ctk.CTkFrame(self)
+        marco.pack(fill="both", expand=True)
+        cargando = Cargando(marco, texto=texto)
+        cargando.place(relx=0.5, rely=0.5, anchor="center")
+        self.pantalla_actual = marco
+        return cargando
 
     def _mostrar_login(self):
         self._limpiar()
@@ -179,12 +192,7 @@ class App(ctk.CTk):
     def _mostrar_editor_planeacion(self, planeacion, on_volver):
         """Las listas traen un resumen sin bloques ni temas, así que la
         completa se pide recién acá, para la que se va a editar."""
-        self._limpiar()
-        cargando = ctk.CTkFrame(self)
-        cargando.pack(fill="both", expand=True)
-        aviso = ctk.CTkLabel(cargando, text="Cargando la planeación...", text_color="gray")
-        aviso.pack(padx=30, pady=60)
-        self.pantalla_actual = cargando
+        cargando = self._pantalla_cargando("Cargando la planeación...")
 
         def listo(completa):
             self._limpiar()
@@ -193,11 +201,15 @@ class App(ctk.CTk):
             )
             self.pantalla_actual.pack(fill="both", expand=True)
 
+        def fallo(exc):
+            cargando.detener()
+            cargando.configurar_texto(str(exc))
+
         en_segundo_plano(
             self,
             lambda: api_client.obtener_planeacion(self.sesion["token"], planeacion["id"]),
             listo,
-            lambda exc: aviso.configure(text=str(exc), text_color="#c0392b"),
+            fallo,
         )
 
     def _mostrar_dashboard(self):
@@ -210,11 +222,7 @@ class App(ctk.CTk):
         gestión), así que se decide qué pantalla mostrar según si tiene
         cursos propios. Se consulta primero —del caché, normalmente sin
         viaje— para no montar la pantalla equivocada."""
-        self._limpiar()
-        cargando = ctk.CTkFrame(self)
-        cargando.pack(fill="both", expand=True)
-        ctk.CTkLabel(cargando, text="Abriendo...", text_color="gray").pack(padx=30, pady=60)
-        self.pantalla_actual = cargando
+        self._pantalla_cargando("Abriendo...")
 
         es_directivo = self.sesion["rol"] in ("directivo", "ambos")
 
