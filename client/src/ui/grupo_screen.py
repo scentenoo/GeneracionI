@@ -12,6 +12,7 @@ from typing import Callable
 import customtkinter as ctk
 
 import api_client
+from ui.cargando import Cargando
 from ui.tareas import cache, en_segundo_plano
 
 
@@ -93,6 +94,8 @@ class GrupoScreen(ctk.CTkScrollableFrame):
         en_segundo_plano(self, traer, listo, self._mostrar_error)
 
     def _mostrar_error(self, exc):
+        for w in self.lista_contenedor.winfo_children():
+            w.destroy()
         self.error_label.configure(text=str(exc), text_color="#c0392b")
 
     def _curso_actual(self) -> dict | None:
@@ -107,10 +110,13 @@ class GrupoScreen(ctk.CTkScrollableFrame):
         if not curso:
             return
 
-        self._trabajando("Cargando estudiantes...")
+        self.error_label.configure(text="")
+        Cargando(self.lista_contenedor, texto="Cargando estudiantes...").pack(pady=16)
 
         def listo(estudiantes):
-            self.error_label.configure(text="")
+            for w in self.lista_contenedor.winfo_children():
+                w.destroy()
+            self._checkboxes.clear()
             if not estudiantes:
                 ctk.CTkLabel(
                     self.lista_contenedor, text="Todavía no hay estudiantes.", text_color="gray"

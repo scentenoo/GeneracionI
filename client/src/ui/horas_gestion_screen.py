@@ -16,6 +16,7 @@ import customtkinter as ctk
 
 import api_client
 from services import date_utils
+from ui.cargando import Cargando
 from ui.tareas import en_segundo_plano
 
 ROJO, VERDE, GRIS = "#c0392b", "#2fa84f", "gray"
@@ -159,8 +160,7 @@ class HorasGestionScreen(ctk.CTkScrollableFrame):
     def _cargar_lista(self):
         for w in self.lista_contenedor.winfo_children():
             w.destroy()
-        cargando = ctk.CTkLabel(self.lista_contenedor, text="Cargando...", text_color=GRIS)
-        cargando.pack(anchor="w")
+        Cargando(self.lista_contenedor, texto="Cargando...").pack(pady=16)
 
         def listo(actividades):
             for w in self.lista_contenedor.winfo_children():
@@ -175,11 +175,16 @@ class HorasGestionScreen(ctk.CTkScrollableFrame):
             for a in actividades:
                 self._fila(a)
 
+        def fallo(exc):
+            for w in self.lista_contenedor.winfo_children():
+                w.destroy()
+            self.error_label.configure(text=str(exc), text_color=ROJO)
+
         en_segundo_plano(
             self,
             lambda: api_client.obtener_horas_gestion(self.sesion["token"]),
             listo,
-            lambda exc: self.error_label.configure(text=str(exc), text_color=ROJO),
+            fallo,
         )
 
     def _fila(self, a: dict):

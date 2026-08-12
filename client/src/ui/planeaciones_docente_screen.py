@@ -15,6 +15,7 @@ import customtkinter as ctk
 
 import api_client
 from services import date_utils
+from ui.cargando import Cargando
 from ui.tareas import cache, en_segundo_plano
 
 
@@ -74,10 +75,12 @@ class PlaneacionesDocenteScreen(ctk.CTkScrollableFrame):
         if docente_id is None:
             return
 
-        self.error_label.configure(text="Cargando...", text_color="gray")
+        self.error_label.configure(text="")
+        Cargando(self.contenido, texto="Cargando...").pack(pady=16)
 
         def listo(planeaciones):
-            self.error_label.configure(text="")
+            for w in self.contenido.winfo_children():
+                w.destroy()
             if not planeaciones:
                 ctk.CTkLabel(
                     self.contenido, text="Este docente todavía no tiene planeaciones.", text_color="gray"
@@ -88,13 +91,18 @@ class PlaneacionesDocenteScreen(ctk.CTkScrollableFrame):
             for p in planeaciones:
                 self._fila_planeacion(p)
 
+        def fallo(exc):
+            for w in self.contenido.winfo_children():
+                w.destroy()
+            self.error_label.configure(text=str(exc), text_color="#c0392b")
+
         en_segundo_plano(
             self,
             # Resumen: la lista solo muestra fecha y curso, no hace falta
             # arrastrar los bloques de cada una.
             lambda: api_client.obtener_planeaciones(self.sesion["token"], docente_id, resumen=True),
             listo,
-            lambda exc: self.error_label.configure(text=str(exc), text_color="#c0392b"),
+            fallo,
         )
 
     def _fila_planeacion(self, p: dict):

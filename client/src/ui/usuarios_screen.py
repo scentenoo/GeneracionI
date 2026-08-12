@@ -19,6 +19,7 @@ import customtkinter as ctk
 import api_client
 from services import date_utils
 from ui.editar_usuario_screen import EditarUsuarioScreen
+from ui.cargando import Cargando
 from ui.tareas import cache, en_segundo_plano
 from ui.usuario_screen import UsuarioScreen
 
@@ -103,9 +104,12 @@ class ListaUsuariosTab(ctk.CTkScrollableFrame):
     def _cargar(self):
         for w in self.tarjetas.winfo_children():
             w.destroy()
-        self.resumen_label.configure(text="Cargando...", text_color=GRIS)
+        self.resumen_label.configure(text="", text_color=GRIS)
+        Cargando(self.tarjetas, texto="Cargando usuarios...").pack(pady=16)
 
         def listo(usuarios):
+            for w in self.tarjetas.winfo_children():
+                w.destroy()
             nunca = sum(1 for u in usuarios if not u.get("ultimo_acceso"))
             self.resumen_label.configure(text=f"{len(usuarios)} usuarios", text_color=self.color_normal)
             self.detalle_label.configure(
@@ -114,11 +118,16 @@ class ListaUsuariosTab(ctk.CTkScrollableFrame):
             for usuario in sorted(usuarios, key=lambda u: str(u.get("nombre", "")).lower()):
                 self._tarjeta(usuario)
 
+        def fallo(exc):
+            for w in self.tarjetas.winfo_children():
+                w.destroy()
+            self.resumen_label.configure(text=str(exc), text_color=ROJO)
+
         en_segundo_plano(
             self,
             lambda: cache.usuarios(self.sesion["token"]),
             listo,
-            lambda exc: self.resumen_label.configure(text=str(exc), text_color=ROJO),
+            fallo,
         )
 
     def _puede_restablecer(self, usuario: dict) -> bool:

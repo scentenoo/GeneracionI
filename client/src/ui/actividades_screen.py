@@ -18,6 +18,7 @@ import customtkinter as ctk
 
 import api_client
 from services import date_utils, image_utils
+from ui.cargando import Cargando
 from ui.tareas import cache, en_segundo_plano
 
 
@@ -93,21 +94,28 @@ class ActividadesScreen(ctk.CTkScrollableFrame):
         self._cargar_cursos()
 
     def _cargar_cursos(self):
-        try:
-            cursos = cache.mis_cursos(self.sesion["token"])
-        except api_client.ApiError as exc:
-            self.error_label.configure(text=str(exc), text_color="#c0392b")
-            return
+        # En segundo plano para no congelar la pestaña al abrirla si el
+        # caché de cursos todavía no está caliente.
+        self.curso_menu.configure(values=["Cargando..."])
+        self.curso_menu.set("Cargando...")
 
-        self._cursos_por_nombre = {c["nombre"]: c for c in cursos}
-        nombres = list(self._cursos_por_nombre)
-        if not nombres:
-            self.curso_menu.configure(values=["(no tenés cursos)"])
-            self.curso_menu.set("(no tenés cursos)")
-            return
-        self.curso_menu.configure(values=nombres)
-        self.curso_menu.set(nombres[0])
-        self._cargar_lista()
+        def listo(cursos):
+            self._cursos_por_nombre = {c["nombre"]: c for c in cursos}
+            nombres = list(self._cursos_por_nombre)
+            if not nombres:
+                self.curso_menu.configure(values=["(no tenés cursos)"])
+                self.curso_menu.set("(no tenés cursos)")
+                return
+            self.curso_menu.configure(values=nombres)
+            self.curso_menu.set(nombres[0])
+            self._cargar_lista()
+
+        en_segundo_plano(
+            self,
+            lambda: cache.mis_cursos(self.sesion["token"]),
+            listo,
+            lambda exc: self.error_label.configure(text=str(exc), text_color="#c0392b"),
+        )
 
     def _curso_actual(self) -> dict | None:
         return self._cursos_por_nombre.get(self.curso_menu.get())
@@ -124,9 +132,12 @@ class ActividadesScreen(ctk.CTkScrollableFrame):
             return
 
         mes = self._mes()
-        self.total_label.configure(text=f"Cargando las de {mes}...", text_color="gray")
+        self.total_label.configure(text="", text_color="gray")
+        Cargando(self.lista_contenedor, texto=f"Cargando las de {mes}...").pack(pady=16)
 
         def listo(actividades):
+            for w in self.lista_contenedor.winfo_children():
+                w.destroy()
             total = sum(
                 (float(a.get("horas_sede") or 0) + float(a.get("horas_externas") or 0))
                 for a in actividades
@@ -145,11 +156,16 @@ class ActividadesScreen(ctk.CTkScrollableFrame):
             for a in actividades:
                 self._fila(a)
 
+        def fallo(exc):
+            for w in self.lista_contenedor.winfo_children():
+                w.destroy()
+            self.total_label.configure(text=str(exc), text_color="#c0392b")
+
         en_segundo_plano(
             self,
             lambda: api_client.obtener_actividades(self.sesion["token"], curso["id"], mes),
             listo,
-            lambda exc: self.total_label.configure(text=str(exc), text_color="#c0392b"),
+            fallo,
         )
 
     def _fila(self, a: dict):

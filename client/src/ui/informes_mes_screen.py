@@ -23,6 +23,10 @@ import customtkinter as ctk
 
 import api_client
 from services import date_utils, docx_generator
+from ui.cargando import Cargando
+from ui.tareas import en_segundo_plano, en_segundo_plano_con_progreso
+
+ROJO, VERDE, GRIS = "#c0392b", "#2fa84f", "gray"
 
 
 def _contexto_y_docx(token, estado, mes, ruta):
@@ -35,9 +39,6 @@ def _contexto_y_docx(token, estado, mes, ruta):
     else:
         contexto = api_client.generar_informe_mensual(token, estado["curso_id"], mes)
         docx_generator.generar_informe_mensual_docx(contexto, ruta)
-from ui.tareas import en_segundo_plano, en_segundo_plano_con_progreso
-
-ROJO, VERDE, GRIS = "#c0392b", "#2fa84f", "gray"
 
 
 def _nombre_archivo(curso: str, mes: str) -> str:
@@ -88,8 +89,9 @@ class InformesMesScreen(ctk.CTkScrollableFrame):
     def _cargar(self):
         for w in self.tarjetas.winfo_children():
             w.destroy()
-        self.resumen_label.configure(text="Cargando...", text_color=GRIS)
+        self.resumen_label.configure(text="", text_color=GRIS)
         self.todos_boton.configure(state="disabled")
+        Cargando(self.tarjetas, texto="Cargando el mes...").pack(pady=16)
         mes = self.mes_entry.get().strip()
 
         def traer():
@@ -107,6 +109,8 @@ class InformesMesScreen(ctk.CTkScrollableFrame):
             return cursos + directivos
 
         def listo(estados):
+            for w in self.tarjetas.winfo_children():
+                w.destroy()
             self._estados = estados
             entregados = [e for e in estados if e.get("informe_entregado")]
             self.resumen_label.configure(
@@ -123,12 +127,12 @@ class InformesMesScreen(ctk.CTkScrollableFrame):
             for estado in sorted(estados, key=lambda e: (not e.get("informe_entregado"), str(e.get("curso", "")).lower())):
                 self._tarjeta(estado, mes)
 
-        en_segundo_plano(
-            self,
-            traer,
-            listo,
-            lambda exc: self.resumen_label.configure(text=str(exc), text_color=ROJO),
-        )
+        def fallo(exc):
+            for w in self.tarjetas.winfo_children():
+                w.destroy()
+            self.resumen_label.configure(text=str(exc), text_color=ROJO)
+
+        en_segundo_plano(self, traer, listo, fallo)
 
     def _tarjeta(self, estado: dict, mes: str):
         entregado = bool(estado.get("informe_entregado"))

@@ -19,6 +19,7 @@ from typing import Callable
 import customtkinter as ctk
 
 import api_client
+from ui.cargando import Cargando
 from ui.tareas import cache, en_segundo_plano
 
 
@@ -100,8 +101,7 @@ class CursosScreen(ctk.CTkScrollableFrame):
     def _cargar_lista(self):
         for w in self.lista_contenedor.winfo_children():
             w.destroy()
-        cargando = ctk.CTkLabel(self.lista_contenedor, text="Cargando...", text_color="gray")
-        cargando.pack(anchor="w")
+        Cargando(self.lista_contenedor, texto="Cargando...").pack(pady=16)
 
         def listo(cursos):
             for w in self.lista_contenedor.winfo_children():
@@ -120,11 +120,16 @@ class CursosScreen(ctk.CTkScrollableFrame):
             for curso in sorted(activos, key=lambda c: (not incompleto(c), str(c["nombre"]).lower())):
                 self._fila_curso(curso, incompleto(curso))
 
+        def fallo(exc):
+            for w in self.lista_contenedor.winfo_children():
+                w.destroy()
+            self.error_label.configure(text=str(exc), text_color="#c0392b")
+
         en_segundo_plano(
             self,
             lambda: cache.cursos(self.sesion["token"]),
             listo,
-            lambda exc: self.error_label.configure(text=str(exc), text_color="#c0392b"),
+            fallo,
         )
 
     def _fila_curso(self, curso: dict, incompleto: bool):
