@@ -18,6 +18,17 @@ function guardar_planeacion(token, datos, fotos) {
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
+    // Una clase es única por curso y fecha: no hay dos clases del mismo
+    // curso el mismo día (son 4 semanales al mes). Si ya existe una, se
+    // ACTUALIZA en vez de agregar otra. Así, si el docente aprieta Guardar
+    // varias veces porque la app se ve trabada —o si el cliente cortó por
+    // timeout pero el servidor sí había guardado— nunca quedan duplicados.
+    const dia = fechaISO_(datos.fecha);
+    const existente = readRowsWhere_(
+      SHEET_NAMES.PLANEACIONES,
+      (p) => String(p.curso_id) === String(curso.id) && fechaISO_(p.fecha) === dia
+    )[0];
+
     const fotoId = guardarArchivoBase64_(
       'Fotos de clase',
       fotos.foto_clase.base64,
@@ -25,7 +36,7 @@ function guardar_planeacion(token, datos, fotos) {
       nombreDeFoto_('clase', curso.nombre, datos.fecha)
     );
 
-    const fila = appendRow_(SHEET_NAMES.PLANEACIONES, {
+    const campos = {
       docente_id: sesion.id,
       curso_id: curso.id,
       fecha: datos.fecha,
@@ -40,10 +51,24 @@ function guardar_planeacion(token, datos, fotos) {
       // viva al grupo actual (evita que cambios posteriores alteren planeaciones ya guardadas).
       asistencia: JSON.stringify(datos.asistencia || []),
       horas: sumarMinutosBloques_(datos.bloques) / 60,
-      creado_en: new Date().toISOString(),
-    });
+    };
 
-    return { ok: true, id: fila.id };
+    if (existente) {
+      // La foto vieja queda huérfana en Drive: se manda a la papelera.
+      if (existente.foto_clase_drive_id && existente.foto_clase_drive_id !== fotoId) {
+        try {
+          DriveApp.getFileById(existente.foto_clase_drive_id).setTrashed(true);
+        } catch (e) {
+          // Ya no existe o no es accesible: no frena la actualización.
+        }
+      }
+      updateRowById_(SHEET_NAMES.PLANEACIONES, existente.id, campos);
+      return { ok: true, id: existente.id, actualizado: true };
+    }
+
+    campos.creado_en = new Date().toISOString();
+    const fila = appendRow_(SHEET_NAMES.PLANEACIONES, campos);
+    return { ok: true, id: fila.id, actualizado: false };
   } finally {
     lock.releaseLock();
   }
