@@ -20,6 +20,8 @@ const ACCIONES_PERMITIDAS_ = {
   obtener_estado_mes,
   estado_cierre,
   fijar_dia_de_corte,
+  fijar_fecha_de_cierre,
+  fecha_de_cierre,
   reabrir_mes,
   revisar_planeacion,
   revisar_informe,

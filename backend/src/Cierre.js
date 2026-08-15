@@ -25,8 +25,22 @@ function diaDeCorte_() {
   return Math.floor(guardado);
 }
 
-/** El día en que se cierra ese mes: 'YYYY-MM' -> 'YYYY-MM-DD'. */
+/**
+ * El día en que se cierra ese mes: 'YYYY-MM' -> 'YYYY-MM-DD'.
+ *
+ * Desde el piloto, los directivos fijan una fecha exacta por mes con el
+ * calendario (Config cierre_YYYY-MM). Si un mes no tiene fecha propia, se
+ * cae al día de corte de siempre (día N del mes siguiente), que sirve de
+ * valor por defecto para los meses que nadie tocó.
+ */
 function fechaDeCierre_(mes) {
+  const fijada = leerConfig_('cierre_' + mes);
+  if (fijada) {
+    // Sheets autoconvierte '2026-10-28' a Date, así que se normaliza con
+    // fechaISO_ en vez de comparar el string crudo (que vuelve como Date).
+    const iso = fechaISO_(fijada);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
+  }
   const partes = String(mes).split('-');
   const anio = Number(partes[0]);
   const numeroDeMes = Number(partes[1]); // 1..12
@@ -96,6 +110,37 @@ function estado_cierre(token, curso_id, mes) {
     reabierto: !!(reapertura && reapertura.abierta === true),
     dia_de_corte: diaDeCorte_(),
     fecha_cierre: fechaDeCierre_(mes),
+  };
+}
+
+/**
+ * Fija la fecha exacta en que se cierra un mes puntual (la que el directivo
+ * elige en el calendario). Distinta cada mes, sin regla fija. Se guarda en
+ * Config como cierre_YYYY-MM.
+ */
+function fijar_fecha_de_cierre(token, mes, fecha) {
+  const sesion = requireSession_(token);
+  requireRole_(sesion, [ROLES.DIRECTIVO, ROLES.AMBOS]);
+
+  if (!/^\d{4}-\d{2}$/.test(String(mes))) throw new Error('El mes va como AAAA-MM');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(fecha))) throw new Error('La fecha va como AAAA-MM-DD');
+  // No tiene sentido cerrar un mes antes de que empiece.
+  if (String(fecha) < String(mes) + '-01') {
+    throw new Error('La fecha de cierre no puede ser anterior al mes que cierra');
+  }
+
+  escribirConfig_('cierre_' + mes, String(fecha));
+  return { ok: true, mes: mes, fecha_cierre: String(fecha) };
+}
+
+/** La fecha en que se cierra un mes, y si fue fijada a mano o es el valor por defecto. */
+function fecha_de_cierre(token, mes) {
+  requireSession_(token);
+  if (!/^\d{4}-\d{2}$/.test(String(mes))) throw new Error('El mes va como AAAA-MM');
+  return {
+    mes: mes,
+    fecha_cierre: fechaDeCierre_(mes),
+    fijada: !!leerConfig_('cierre_' + mes),
   };
 }
 

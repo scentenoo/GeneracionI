@@ -2,5 +2,6 @@ customtkinter>=5.2
 requests>=2.31
 Pillow>=10.0
 docxtpl>=0.17
+tkcalendar>=1.5
 pyinstaller>=6.0
 pywin32>=306; sys_platform == "win32"

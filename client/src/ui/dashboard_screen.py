@@ -12,10 +12,12 @@ uno y atrasado en el otro.
 
 from __future__ import annotations
 
+import datetime
 from tkinter import messagebox
 from typing import Callable
 
 import customtkinter as ctk
+from tkcalendar import DateEntry
 
 import api_client
 from services import date_utils
@@ -68,46 +70,68 @@ class DashboardScreen(ctk.CTkScrollableFrame):
     # --- cierre del mes -------------------------------------------------
 
     def _construir_corte(self):
-        """El día de corte vive acá y no en una pantalla aparte: es el
-        mismo lugar donde el directivo mira quién va atrasado y decide a
-        quién reabrirle el mes."""
+        """El cierre vive acá y no en una pantalla aparte: es el mismo lugar
+        donde el directivo mira quién va atrasado y decide a quién reabrirle
+        el mes. La fecha es exacta por mes y se elige en el calendario: cada
+        mes puede cerrar un día distinto."""
         marco = ctk.CTkFrame(self, corner_radius=8)
         marco.pack(fill="x", pady=(0, 12))
 
         fila = ctk.CTkFrame(marco, fg_color="transparent")
         fila.pack(fill="x", padx=12, pady=10)
 
-        ctk.CTkLabel(fila, text="El mes se cierra el día").pack(side="left")
-        self.corte_entry = ctk.CTkEntry(fila, width=45)
-        self.corte_entry.pack(side="left", padx=6)
-        ctk.CTkLabel(fila, text="del mes siguiente").pack(side="left")
-        ctk.CTkButton(fila, text="Guardar", width=80, command=self._guardar_corte).pack(
-            side="right"
+        ctk.CTkLabel(fila, text="Este mes se cierra el").pack(side="left")
+        # DateEntry (tkcalendar) es ttk, no customtkinter, pero convive bien
+        # dentro del frame. Muestra un calendario desplegable al hacer clic.
+        self.cierre_cal = DateEntry(
+            fila, width=12, date_pattern="yyyy-mm-dd", locale="es",
+            background="#2fa84f", foreground="white", borderwidth=2,
         )
+        self.cierre_cal.pack(side="left", padx=6)
+        ctk.CTkButton(fila, text="Guardar", width=80, command=self._guardar_corte).pack(side="right")
 
         self.corte_aviso = ctk.CTkLabel(
             marco,
-            text="Pasada esa fecha los docentes no pueden cargar, editar ni borrar "
-                 "nada de ese mes. Ustedes sí.",
+            text="Elegí en el calendario el día en que se cierra el mes que estás mirando. "
+                 "Pasada esa fecha los docentes no pueden cargar, editar ni borrar nada de ese "
+                 "mes. Ustedes sí.",
             text_color=GRIS, font=ctk.CTkFont(size=11),
             anchor="w", justify="left", wraplength=600,
         )
         self.corte_aviso.pack(fill="x", padx=12, pady=(0, 10))
 
+    def _prefijar_cierre(self, mes: str):
+        """Trae del backend la fecha de cierre del mes que se está mirando y
+        la deja puesta en el calendario."""
+        def listo(r):
+            fecha = str(r.get("fecha_cierre") or "")
+            try:
+                self.cierre_cal.set_date(datetime.date.fromisoformat(fecha))
+            except (ValueError, TypeError):
+                pass
+
+        en_segundo_plano(
+            self,
+            lambda: api_client.fecha_de_cierre(self.sesion["token"], mes),
+            listo,
+            lambda _e: None,
+        )
+
     def _guardar_corte(self):
-        dia = self.corte_entry.get().strip()
+        mes = self.mes_entry.get().strip()
+        fecha = self.cierre_cal.get_date().isoformat()
         self.corte_aviso.configure(text="Guardando...", text_color=GRIS)
 
         def listo(r):
             self.corte_aviso.configure(
-                text=f"Listo: los meses se cierran el día {r['dia_de_corte']} del mes siguiente.",
+                text=f"Listo: {mes} se cierra el {date_utils.a_fecha_corta(r['fecha_cierre'])}.",
                 text_color=VERDE,
             )
             self._cargar()
 
         en_segundo_plano(
             self,
-            lambda: api_client.fijar_dia_de_corte(self.sesion["token"], dia),
+            lambda: api_client.fijar_fecha_de_cierre(self.sesion["token"], mes, fecha),
             listo,
             lambda exc: self.corte_aviso.configure(text=str(exc), text_color=ROJO),
         )
@@ -180,9 +204,7 @@ class DashboardScreen(ctk.CTkScrollableFrame):
                 text=f"{al_dia} de {len(estados)} cursos con todas las clases cargadas  ·  {mes}"
             )
 
-            corte = estados[0].get("dia_de_corte")
-            if corte and not self.corte_entry.get().strip():
-                self.corte_entry.insert(0, str(corte))
+            self._prefijar_cierre(mes)
 
             for estado in sorted(estados, key=lambda e: (self._clasificar(e)[0], e.get("curso", ""))):
                 self._tarjeta(estado)

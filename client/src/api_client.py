@@ -57,7 +57,7 @@ _SOLO_LECTURA = frozenset({
     "obtener_horas_gestion", "obtener_actividades", "generar_informe_mensual",
     "obtener_informe_mensual", "obtener_avance_sugerido", "obtener_dashboard_directivo",
     "generar_informe_gestion", "obtener_informe_gestion", "directivos_sin_curso_del_mes",
-    "estado_cierre",
+    "estado_cierre", "fecha_de_cierre",
 })
 
 
@@ -492,6 +492,17 @@ def estado_cierre(token: str, curso_id: int, mes: str) -> dict:
 def fijar_dia_de_corte(token: str, dia: int) -> dict:
     """El día del mes siguiente en que se cierra el mes anterior. Directivo."""
     return _call("fijar_dia_de_corte", token, dia)
+
+
+def fijar_fecha_de_cierre(token: str, mes: str, fecha: str) -> dict:
+    """La fecha exacta (AAAA-MM-DD) en que se cierra un mes puntual, elegida
+    en el calendario. Directivo."""
+    return _call("fijar_fecha_de_cierre", token, mes, fecha)
+
+
+def fecha_de_cierre(token: str, mes: str) -> dict:
+    """La fecha en que se cierra un mes: {mes, fecha_cierre, fijada}."""
+    return _call("fecha_de_cierre", token, mes)
 
 
 def reabrir_mes(token: str, curso_id: int, mes: str, abierta: bool = True) -> dict:

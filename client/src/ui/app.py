@@ -158,40 +158,69 @@ class App(ctk.CTk):
         # Deja el caché listo mientras el usuario mira el menú, así las
         # pantallas abren sin esperar viajes al backend.
         en_segundo_plano(self, lambda: cache.precargar(sesion), lambda _r: None, lambda _e: None)
-        # Al entrar, avisar qué le devolvieron para corregir. Va aparte del
-        # caché para que un fallo del aviso no impida usar la app.
-        en_segundo_plano(
-            self,
-            lambda: api_client.mis_devoluciones(sesion["token"]),
-            self._avisar_devoluciones,
-            lambda _e: None,
-        )
+        # Al entrar, avisar qué le devolvieron para corregir y cuándo cierra
+        # el mes. Va aparte del caché para que un fallo del aviso no impida
+        # usar la app.
+        en_segundo_plano(self, lambda: self._datos_aviso(sesion), self._avisos_al_entrar, lambda _e: None)
 
-    def _avisar_devoluciones(self, devoluciones: list):
-        """Aviso al entrar: lo que un revisor devolvió para corregir, con el
-        motivo. Si no hay nada, no molesta."""
-        if not devoluciones:
+    def _datos_aviso(self, sesion: dict) -> dict:
+        """Junta en un solo viaje lo que se muestra al entrar."""
+        from services import date_utils
+
+        devoluciones = api_client.mis_devoluciones(sesion["token"])
+        cierre = api_client.fecha_de_cierre(sesion["token"], date_utils.hoy_iso()[:7])
+        return {"devoluciones": devoluciones, "cierre": cierre}
+
+    def _avisos_al_entrar(self, datos: dict):
+        """Aviso al entrar: lo devuelto para corregir (con motivo) y, si está
+        cerca, cuándo se cierra el mes. Si no hay nada que decir, no molesta."""
+        from services import date_utils
+
+        devoluciones = datos.get("devoluciones") or []
+        cierre = datos.get("cierre") or {}
+
+        partes = []
+        if devoluciones:
+            lineas = []
+            for d in devoluciones:
+                por = d.get("por") or "el revisor"
+                motivo = d.get("motivo") or "(sin motivo)"
+                if d.get("tipo") == "planeacion":
+                    cabeza = f"• Planeación de {d.get('curso') or 'tu curso'} ({d.get('fecha', '')})"
+                else:
+                    cabeza = f"• Informe del mes {d.get('mes', '')}"
+                lineas.append(f"{cabeza}\n   Devuelto por {por}: {motivo}")
+            plural = "cosas" if len(devoluciones) > 1 else "cosa"
+            partes.append(
+                f"Un revisor te devolvió {len(devoluciones)} {plural} para corregir y volver a "
+                "enviar:\n\n" + "\n\n".join(lineas) +
+                "\n\nCorregilas y guardá de nuevo: vuelven a quedar pendientes de revisión."
+            )
+
+        # El cierre solo se avisa si falta poco (y no pasó): recordárselo cada
+        # día del mes sería ruido.
+        fecha_cierre = str(cierre.get("fecha_cierre") or "")
+        dias = self._dias_hasta(fecha_cierre)
+        if dias is not None and 0 <= dias <= 5:
+            cuando = "hoy" if dias == 0 else ("mañana" if dias == 1 else f"en {dias} días")
+            partes.append(
+                f"Ojo: el mes se cierra {cuando} ({date_utils.a_fecha_corta(fecha_cierre)}). "
+                "Después de esa fecha no vas a poder cargar ni corregir nada de este mes."
+            )
+
+        if not partes:
             return
+        messagebox.showwarning("Antes de empezar", "\n\n———\n\n".join(partes))
 
-        lineas = []
-        for d in devoluciones:
-            por = d.get("por") or "el revisor"
-            motivo = d.get("motivo") or "(sin motivo)"
-            if d.get("tipo") == "planeacion":
-                cabeza = f"• Planeación de {d.get('curso') or 'tu curso'} ({d.get('fecha', '')})"
-            else:
-                cabeza = f"• Informe del mes {d.get('mes', '')}"
-            lineas.append(f"{cabeza}\n   Devuelto por {por}: {motivo}")
+    @staticmethod
+    def _dias_hasta(fecha_iso: str):
+        import datetime
 
-        cuerpo = "\n\n".join(lineas)
-        plural = "cosas" if len(devoluciones) > 1 else "cosa"
-        messagebox.showwarning(
-            "Tenés devoluciones por corregir",
-            f"Un revisor te devolvió {len(devoluciones)} {plural} para corregir "
-            "y volver a enviar:\n\n"
-            f"{cuerpo}\n\n"
-            "Entrá a corregirlas y guardá de nuevo: vuelven a quedar pendientes de revisión.",
-        )
+        try:
+            objetivo = datetime.date.fromisoformat(fecha_iso)
+        except (ValueError, TypeError):
+            return None
+        return (objetivo - datetime.date.today()).days
 
     def _mostrar_home(self):
         self._limpiar()
