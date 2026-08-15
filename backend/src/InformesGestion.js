@@ -156,6 +156,9 @@ function generar_informe_gestion(token, directivo_id, mes, gestionNarrativa) {
 
     firma_base64: firma ? firma.base64 : null,
     firma_mime: firma ? firma.mimeType : null,
+
+    // Historial de revisión, para la hoja final si fue devuelto alguna vez.
+    historial: historialDe_('informe', `${claveGestion_(targetId)}|${mes}`),
   };
 }
 

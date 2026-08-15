@@ -79,6 +79,19 @@ function registrarEntrega_(tipo, ref, sheetName, filaId, autor) {
   registrarRevision_(tipo, ref, eraDevuelto ? 'reenviado' : 'entregado', '', autor);
 }
 
+/**
+ * Borra el historial de un documento. Los ids de fila se reusan (nextId_
+ * es maxId+1), así que si no se limpian las Revisiones al eliminar una
+ * planeación o un informe, una nueva con el mismo id heredaría el
+ * historial de la vieja. Lo llaman los borrados de planeación y de curso.
+ */
+function borrarRevisiones_(tipo, ref) {
+  return eliminarFilasDonde_(
+    SHEET_NAMES.REVISIONES,
+    (r) => r.tipo === tipo && String(r.ref) === String(ref)
+  );
+}
+
 /** El historial completo de un documento, ordenado del más viejo al más nuevo. */
 function historialDe_(tipo, ref) {
   return readRowsWhere_(

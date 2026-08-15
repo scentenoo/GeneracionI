@@ -16,6 +16,7 @@ from typing import Callable
 import customtkinter as ctk
 
 import api_client
+from services import date_utils, vista_previa
 from ui.lista_dinamica import ListaDinamica
 from ui.tareas import en_segundo_plano
 from ui.widgets import CampoConContador, MIN_PALABRAS
@@ -141,26 +142,76 @@ class PlaneacionEditorScreen(ctk.CTkScrollableFrame):
             return f"Los avances necesitan mínimo {MIN_PALABRAS} palabras"
         return None
 
+    def _momentos_cambios(self) -> dict:
+        return {
+            clave: {"texto": self.momentos[clave]["texto"].get(), "minutos": self._minutos_de(clave)}
+            for clave in self.momentos
+        }
+
+    def _contexto_documento(self, historial: list | None) -> dict:
+        """Lo que va a la plantilla del .docx al regenerarlo tras editar. La
+        asistencia no se edita acá: se toma tal cual quedó guardada."""
+        m = self._momentos_cambios()
+        asistencia = [
+            {"nombre": a.get("nombre", ""), "presente": "Sí" if a.get("presente") else "No"}
+            for a in (self.planeacion.get("asistencia") or [])
+        ]
+        return {
+            "fecha": date_utils.a_fecha_larga(self.fecha_entry.get().strip()),
+            "grupo": self.planeacion.get("grupo") or "",
+            "objetivo": self.objetivo.get(),
+            "temas_vistos": self.temas_lista.valores(),
+            "momento_inicial_min": str(m["inicial"]["minutos"]),
+            "momento_inicial_texto": m["inicial"]["texto"],
+            "momento_desarrollo_min": str(m["desarrollo"]["minutos"]),
+            "momento_desarrollo_texto": m["desarrollo"]["texto"],
+            "momento_final_min": str(m["final"]["minutos"]),
+            "momento_final_texto": m["final"]["texto"],
+            "observaciones": self.observaciones.get(),
+            "avances": self.avances.get(),
+            "asistencia": asistencia,
+            "historial": historial or [],
+        }
+
     def _guardar(self):
         error = self._validar()
         if error:
             self.error_label.configure(text=error, text_color="#c0392b")
             return
 
+        planeacion_id = self.planeacion["id"]
         cambios = {
             "fecha": self.fecha_entry.get().strip(),
             "objetivo": self.objetivo.get(),
             "temas_vistos": self.temas_lista.valores(),
-            "momentos": {
-                clave: {"texto": self.momentos[clave]["texto"].get(), "minutos": self._minutos_de(clave)}
-                for clave in self.momentos
-            },
+            "momentos": self._momentos_cambios(),
             "observaciones": self.observaciones.get(),
             "avances": self.avances.get(),
         }
 
         self.guardar_boton.configure(state="disabled", text="Guardando...")
         self.error_label.configure(text="Guardando...", text_color="gray")
+
+        def trabajo():
+            resultado = api_client.editar_planeacion(self.sesion["token"], planeacion_id, cambios)
+            # Regenera el documento en Drive con el texto corregido y, si la
+            # planeación fue devuelta alguna vez, con la hoja de historial al
+            # final. Si algo falla acá, la edición ya quedó guardada: el
+            # documento es evidencia, no el dato.
+            try:
+                foto = api_client.obtener_foto_planeacion(self.sesion["token"], planeacion_id)
+                if foto:
+                    historial = api_client.historial_revision(
+                        self.sesion["token"], "planeacion", str(planeacion_id)
+                    )
+                    contexto = self._contexto_documento(historial)
+                    archivo = vista_previa.planeacion_para_subir_desde_base64(
+                        contexto, foto["base64"], foto.get("mimeType", "")
+                    )
+                    api_client.guardar_documento_planeacion(self.sesion["token"], planeacion_id, archivo)
+            except Exception:  # noqa: BLE001 — la edición ya se guardó
+                pass
+            return resultado
 
         def listo(_resultado):
             self.guardar_boton.configure(state="normal", text="Guardar cambios")
@@ -172,10 +223,4 @@ class PlaneacionEditorScreen(ctk.CTkScrollableFrame):
             self.guardar_boton.configure(state="normal", text="Guardar cambios")
             self.error_label.configure(text=str(exc), text_color="#c0392b")
 
-        en_segundo_plano(
-            self,
-            lambda: api_client.editar_planeacion(self.sesion["token"], self.planeacion["id"], cambios),
-            listo,
-            fallo,
-            bloquea_cierre=True,
-        )
+        en_segundo_plano(self, trabajo, listo, fallo, bloquea_cierre=True)

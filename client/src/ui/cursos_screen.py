@@ -251,7 +251,7 @@ class DialogoEditarCurso(ctk.CTkToplevel):
         self.on_guardar = on_guardar
 
         self.title("Editar curso")
-        self.geometry("380x340")
+        self.geometry("380x430")
         self.transient(master.winfo_toplevel())
         # Esperar a que la ventana exista antes de robar el foco, si no
         # customtkinter tira error en algunos equipos.
@@ -274,6 +274,15 @@ class DialogoEditarCurso(ctk.CTkToplevel):
         self.hasta_entry.pack(side="left")
         if curso.get("edad_hasta"):
             self.hasta_entry.insert(0, str(curso["edad_hasta"]))
+
+        # El color decide quién revisa el curso: verde lo revisa Mariangel,
+        # morado Lorena (ver Config revisor_verde/revisor_morado).
+        ctk.CTkLabel(self, text="Color (define quién lo revisa)", anchor="w").pack(
+            fill="x", padx=20, pady=(10, 0)
+        )
+        self.color_menu = ctk.CTkOptionMenu(self, width=340, values=["(sin asignar)", "verde", "morado"])
+        self.color_menu.pack(padx=20)
+        self.color_menu.set(str(curso.get("color") or "(sin asignar)"))
 
         self.error_label = ctk.CTkLabel(self, text="", text_color="#c0392b", wraplength=340)
         self.error_label.pack(pady=(10, 0))
@@ -303,11 +312,13 @@ class DialogoEditarCurso(ctk.CTkToplevel):
             self.error_label.configure(text="El nombre no puede quedar vacío.")
             return
 
+        color = self.color_menu.get()
         cambios = {
             "nombre": nombre,
             "nucleo": self.nucleo_entry.get().strip(),
             "edad_desde": self.desde_entry.get().strip(),
             "edad_hasta": self.hasta_entry.get().strip(),
+            "color": "" if color == "(sin asignar)" else color,
         }
         self.guardar_boton.configure(state="disabled", text="Guardando...")
         self.on_guardar(self.curso["id"], cambios, self)

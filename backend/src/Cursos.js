@@ -108,6 +108,18 @@ function eliminar_curso_definitivo(token, curso_id) {
   lock.waitLock(30000);
   try {
     const borradas = {};
+
+    // El historial de revisión cuelga por ref (id de planeación, o
+    // curso|mes del informe), no por curso, así que hay que limpiarlo a
+    // mano antes de borrar las filas — si no, queda suelto y como los ids
+    // se reusan lo heredaría otro documento.
+    readRowsWhere_(SHEET_NAMES.PLANEACIONES, function (p) {
+      return String(p.curso_id) === String(curso_id);
+    }).forEach(function (p) { borrarRevisiones_('planeacion', String(p.id)); });
+    readRowsWhere_(SHEET_NAMES.INFORMES, function (i) {
+      return String(i.curso_id) === String(curso_id);
+    }).forEach(function (i) { borrarRevisiones_('informe', curso_id + '|' + mesDeFecha_(i.mes)); });
+
     [
       [SHEET_NAMES.PLANEACIONES, 'curso_id'],
       [SHEET_NAMES.ACTIVIDADES, 'curso_id'],

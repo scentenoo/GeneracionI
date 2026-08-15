@@ -17,6 +17,7 @@ from ui.grupo_screen import GrupoScreen
 from ui.cursos_screen import CursosScreen
 from ui.horas_gestion_screen import HorasGestionScreen
 from ui.planeaciones_docente_screen import PlaneacionesDocenteScreen
+from ui.revisar_screen import RevisarScreen
 from ui.usuarios_screen import UsuariosScreen
 from ui.password_screen import PasswordScreen
 from ui.version_screen import VersionScreen
@@ -171,6 +172,7 @@ class App(ctk.CTk):
             on_cursos=self._mostrar_cursos,
             on_horas_gestion=self._mostrar_horas_gestion,
             on_planeaciones_docente=self._mostrar_planeaciones_docente,
+            on_revisar=self._mostrar_revisar,
             on_usuarios=self._mostrar_usuarios,
             on_cambiar_password=self._mostrar_password,
             on_version=self._mostrar_version,
@@ -270,6 +272,11 @@ class App(ctk.CTk):
             on_volver=self._mostrar_home,
             on_editar=lambda p: self._mostrar_editor_planeacion(p, self._mostrar_planeaciones_docente),
         )
+        self.pantalla_actual.pack(fill="both", expand=True)
+
+    def _mostrar_revisar(self):
+        self._limpiar()
+        self.pantalla_actual = RevisarScreen(self, self.sesion, on_volver=self._mostrar_home)
         self.pantalla_actual.pack(fill="both", expand=True)
 
     def _mostrar_usuarios(self):

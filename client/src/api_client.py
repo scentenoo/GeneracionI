@@ -51,6 +51,8 @@ class SinConexion(ApiError):
 _SOLO_LECTURA = frozenset({
     "login", "version_actual", "listar_cursos", "listar_todos_los_cursos",
     "listar_usuarios", "obtener_planeaciones", "obtener_planeacion",
+    "obtener_foto_planeacion", "pendientes_de_revision", "mis_devoluciones",
+    "historial_revision",
     "obtener_estado_mes", "obtener_estudiantes", "buscar_estudiantes",
     "obtener_horas_gestion", "obtener_actividades", "generar_informe_mensual",
     "obtener_informe_mensual", "obtener_avance_sugerido", "obtener_dashboard_directivo",
@@ -219,6 +221,12 @@ def obtener_planeaciones(
 def obtener_planeacion(token: str, id_: int) -> dict:
     """Una sola planeación completa, para abrirla en el editor."""
     return _call("obtener_planeacion", token, id_)
+
+
+def obtener_foto_planeacion(token: str, id_: int) -> dict | None:
+    """La foto de clase de una planeación, en base64, para regenerar su
+    .docx al editarla. None si no tiene foto."""
+    return _call("obtener_foto_planeacion", token, id_)
 
 
 def editar_planeacion(token: str, id_: int, cambios: dict) -> dict:

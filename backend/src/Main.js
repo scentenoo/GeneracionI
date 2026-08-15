@@ -14,6 +14,7 @@ const ACCIONES_PERMITIDAS_ = {
   guardar_documento_planeacion,
   obtener_planeaciones,
   obtener_planeacion,
+  obtener_foto_planeacion,
   editar_planeacion,
   eliminar_planeacion,
   obtener_estado_mes,

@@ -26,6 +26,7 @@ class HomeScreen(ctk.CTkScrollableFrame):
         on_cursos: Callable[[], None],
         on_horas_gestion: Callable[[], None],
         on_planeaciones_docente: Callable[[], None],
+        on_revisar: Callable[[], None],
         on_usuarios: Callable[[], None],
         on_cambiar_password: Callable[[], None],
         on_version: Callable[[], None],
@@ -59,6 +60,7 @@ class HomeScreen(ctk.CTkScrollableFrame):
             self._seccion("Dirección")
             self._boton("Dashboard del mes", on_dashboard)
             self._boton("Informes del mes", on_informes_mes)
+            self._boton("Revisar planeaciones e informes", on_revisar)
             self._boton("Cursos", on_cursos)
             self._boton("Estudiantes de un curso", on_grupo)
             self._boton("Planeaciones de un docente", on_planeaciones_docente)

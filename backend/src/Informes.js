@@ -366,6 +366,10 @@ function generar_informe_mensual(token, curso_id, mes, narrativa, gestionNarrati
   context.firma_base64 = firma ? firma.base64 : null;
   context.firma_mime = firma ? firma.mimeType : null;
 
+  // El historial de revisión se imprime al final del documento si el
+  // informe fue devuelto alguna vez (ver docx_generator._anexar_historial).
+  context.historial = historialDe_('informe', `${curso_id}|${mes}`);
+
   return context;
 }
 

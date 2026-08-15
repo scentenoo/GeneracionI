@@ -14,7 +14,9 @@ import io
 from pathlib import Path
 
 from docxtpl import DocxTemplate, InlineImage
-from docx.shared import Mm
+from docx import Document
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.shared import Mm, Pt, RGBColor
 
 from config import TEMPLATES_DIR
 
@@ -24,6 +26,59 @@ INFORME_GESTION_TEMPLATE = TEMPLATES_DIR / "informe_gestion.docx"
 
 _IMG_WIDTH_GRANDE_MM = 90
 _IMG_WIDTH_CHICA_MM = 55
+
+# Cómo se lee cada acción del historial en la hoja final del documento.
+_ACCIONES = {
+    "entregado": "Entregado",
+    "reenviado": "Reenviado corregido",
+    "devuelto": "Devuelto para corregir",
+    "aprobado": "Aprobado",
+}
+
+
+def _anexar_historial(ruta_salida: Path, historial: list | None) -> None:
+    """Agrega al final del documento la hoja de revisión —quién lo entregó,
+    quién lo devolvió y por qué, quién lo aprobó y cuándo—, como la hoja de
+    auditoría del programa. Solo se agrega a un archivo que fue devuelto
+    alguna vez; en uno aprobado de una no tiene nada que contar.
+    """
+    if not historial:
+        return
+    if not any(e.get("accion") == "devuelto" for e in historial):
+        return
+
+    doc = Document(str(ruta_salida))
+    doc.add_page_break()
+
+    titulo = doc.add_paragraph()
+    run = titulo.add_run("Historial de revisión")
+    run.bold = True
+    run.font.size = Pt(14)
+
+    sub = doc.add_paragraph()
+    r = sub.add_run(
+        "Registro de entregas, devoluciones y aprobación de este documento."
+    )
+    r.italic = True
+    r.font.color.rgb = RGBColor(0x60, 0x60, 0x60)
+
+    tabla = doc.add_table(rows=1, cols=4)
+    tabla.style = "Table Grid"
+    encabezados = ["Fecha", "Acción", "Responsable", "Motivo"]
+    for celda, texto in zip(tabla.rows[0].cells, encabezados):
+        p = celda.paragraphs[0]
+        run = p.add_run(texto)
+        run.bold = True
+
+    for e in historial:
+        fila = tabla.add_row().cells
+        fecha = str(e.get("fecha", "")).replace("T", " ")[:16]
+        fila[0].text = fecha
+        fila[1].text = _ACCIONES.get(e.get("accion", ""), e.get("accion", ""))
+        fila[2].text = str(e.get("autor", ""))
+        fila[3].text = str(e.get("motivo", ""))
+
+    doc.save(str(ruta_salida))
 
 
 def _imagen_desde_base64(tpl: DocxTemplate, base64_str: str | None, ancho_mm: int) -> InlineImage | str:
@@ -46,6 +101,7 @@ def generar_planeacion_docx(contexto: dict, foto_clase_path: str, ruta_salida: s
 
     ruta_salida = Path(ruta_salida)
     tpl.save(str(ruta_salida))
+    _anexar_historial(ruta_salida, contexto.get("historial"))
     return ruta_salida
 
 
@@ -75,6 +131,7 @@ def generar_informe_mensual_docx(contexto: dict, ruta_salida: str | Path) -> Pat
 
     ruta_salida = Path(ruta_salida)
     tpl.save(str(ruta_salida))
+    _anexar_historial(ruta_salida, contexto.get("historial"))
     return ruta_salida
 
 
@@ -89,4 +146,5 @@ def generar_informe_gestion_docx(contexto: dict, ruta_salida: str | Path) -> Pat
 
     ruta_salida = Path(ruta_salida)
     tpl.save(str(ruta_salida))
+    _anexar_historial(ruta_salida, contexto.get("historial"))
     return ruta_salida

@@ -123,6 +123,23 @@ function guardar_documento_planeacion(token, planeacion_id, archivo) {
 }
 
 /**
+ * La foto de clase de una planeación, en base64, para regenerar su .docx
+ * al editarla (el documento se arma en el cliente y necesita la imagen).
+ * Devuelve null si la planeación no tiene foto.
+ */
+function obtener_foto_planeacion(token, id) {
+  const sesion = requireSession_(token);
+  const fila = findRowById_(SHEET_NAMES.PLANEACIONES, id);
+  if (!fila) throw new Error(`No se encontró la planeación ${id}`);
+  if (String(fila.docente_id) !== String(sesion.id) && !puedeSupervisar_(sesion)) {
+    throw new Error('No tienes permiso para ver esa planeación');
+  }
+  if (!fila.foto_clase_drive_id) return null;
+  const foto = archivoABase64_(fila.foto_clase_drive_id);
+  return foto ? { base64: foto.base64, mimeType: foto.mimeType } : null;
+}
+
+/**
  * Docente ve solo las suyas; directivo puede pedir las de cualquiera.
  * Con `curso_id` se acota a un curso — que es lo que necesita el informe
  * mensual, ya que va por curso y no por persona.
@@ -180,7 +197,11 @@ function obtener_planeacion(token, id) {
   if (String(fila.docente_id) !== String(sesion.id) && !puedeSupervisar_(sesion)) {
     throw new Error('No tienes permiso para ver esa planeación');
   }
-  return parsePlaneacionRow_(fila);
+  const datos = parsePlaneacionRow_(fila);
+  // El historial de revisión viaja con la planeación para imprimirse al
+  // final del documento cuando fue devuelta alguna vez (ver docx_generator).
+  datos.historial = historialDe_('planeacion', String(id));
+  return datos;
 }
 
 function parsePlaneacionRow_(p) {
@@ -260,6 +281,9 @@ function eliminar_planeacion(token, id) {
       }
     }
     getSheet_(SHEET_NAMES.PLANEACIONES).deleteRow(fila._row);
+    // Los ids se reusan, así que el historial de esta planeación no puede
+    // quedar suelto para que lo herede la próxima con el mismo id.
+    borrarRevisiones_('planeacion', String(id));
     return { ok: true };
   } finally {
     lock.releaseLock();

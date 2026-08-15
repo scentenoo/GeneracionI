@@ -111,6 +111,24 @@ def planeacion_para_subir(contexto: dict, foto_clase_path: str) -> dict:
     }
 
 
+def planeacion_para_subir_desde_base64(contexto: dict, foto_base64: str, foto_mime: str) -> dict:
+    """Como planeacion_para_subir pero con la foto en base64 (la que ya está
+    en Drive), para regenerar el .docx al editar una planeación. La foto se
+    escribe a un archivo temporal porque docxtpl necesita una ruta."""
+    import base64
+
+    ext = ".png" if "png" in (foto_mime or "") else ".jpg"
+    foto_tmp = _carpeta_temporal() / f"foto_{uuid.uuid4().hex[:8]}{ext}"
+    foto_tmp.write_bytes(base64.b64decode(foto_base64))
+    try:
+        return planeacion_para_subir(contexto, str(foto_tmp))
+    finally:
+        try:
+            foto_tmp.unlink()
+        except OSError:
+            pass
+
+
 def previsualizar_informe(contexto: dict) -> tuple[Path, bool]:
     """Igual pero para el informe mensual, cuyo contexto ya viene armado
     desde el backend."""
