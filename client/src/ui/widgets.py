@@ -16,8 +16,9 @@ class CampoConContador(ctk.CTkFrame):
     a partir de MIN_PALABRAS (spec sección 6: "contador en vivo mientras el
     docente escribe")."""
 
-    def __init__(self, master, etiqueta: str, alto: int = 90, **kwargs):
+    def __init__(self, master, etiqueta: str, alto: int = 90, minimo: int = MIN_PALABRAS, **kwargs):
         super().__init__(master, fg_color="transparent", **kwargs)
+        self.minimo = minimo
 
         ctk.CTkLabel(self, text=etiqueta, anchor="w").pack(fill="x")
         self.textbox = ctk.CTkTextbox(self, height=alto)
@@ -31,8 +32,8 @@ class CampoConContador(ctk.CTkFrame):
 
     def _actualizar_contador(self):
         n = contar_palabras(self.get())
-        color = "#2fa84f" if n >= MIN_PALABRAS else "#c0392b"
-        self.contador_label.configure(text=f"{n} palabras (mínimo {MIN_PALABRAS})", text_color=color)
+        color = "#2fa84f" if n >= self.minimo else "#c0392b"
+        self.contador_label.configure(text=f"{n} palabras (mínimo {self.minimo})", text_color=color)
 
     def get(self) -> str:
         return self.textbox.get("1.0", "end").strip()

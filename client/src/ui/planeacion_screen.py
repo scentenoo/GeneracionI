@@ -1,10 +1,14 @@
-"""Formulario de planeación de clase por bloques + checklist de asistencia
-(spec sección 8). Punto de partida funcional para que Generación-I lo
-termine de diseñar — hoy ya guarda de verdad contra el backend.
+"""Formulario de planeación de clase — formato Diario Pedagógico del
+programa (spec sección 8 + ajuste del piloto).
 
-El curso sale de un desplegable con los cursos de ese docente: no se
-escribe a mano, y quien tiene varios elige cuál. Al cambiar de curso se
-recarga la lista de estudiantes, porque la asistencia es por curso.
+La clase se describe en tres momentos —inicial, desarrollo y final—, cada
+uno con su texto y sus minutos, y con un mínimo de palabras distinto
+(inicial 80, desarrollo 100, final 70). Las dos columnas de al lado —la
+reflexión pedagógica (observaciones) y los avances/retrocesos— son de toda
+la clase, una sola vez.
+
+El curso sale de un desplegable con los cursos de ese docente; al cambiar
+de curso se recarga la asistencia, que es por curso.
 """
 
 from __future__ import annotations
@@ -18,32 +22,36 @@ import customtkinter as ctk
 
 import api_client
 from services import date_utils, image_utils, vista_previa
-from ui.bloque_editor import BloqueEditor
 from ui.lista_dinamica import ListaDinamica
 from ui.tareas import cache, en_segundo_plano
 from ui.widgets import CampoConContador, MIN_PALABRAS
 
 MINUTOS_MINIMOS = 120
-# Una clase dura 2 horas y se cobra por eso. Pasarse no está prohibido
-# —a veces la clase se estira— pero sí suele ser un error de tipeo, y en
-# el informe mensual esas horas se suman y descuadran la cuenta de cobro.
 MINUTOS_ESPERADOS = 120
+
+# (clave, etiqueta, mínimo de palabras, minutos sugeridos)
+MOMENTOS = [
+    ("inicial", "Momento inicial", 80, 60),
+    ("desarrollo", "Momento de desarrollo", 100, 40),
+    ("final", "Momento final", 70, 20),
+]
 
 
 class PlaneacionScreen(ctk.CTkScrollableFrame):
     def __init__(self, master, sesion: dict, on_volver: Callable[[], None] | None = None):
-        # Sin `on_volver` va montada como pestaña de PlaneacionesScreen, que
-        # ya tiene su propio Volver arriba: dos seguidos confunden.
+        # Sin `on_volver` va montada como pestaña de PlaneacionesScreen.
         super().__init__(master, label_text="" if on_volver is None else "Nueva planeación de clase")
         self.sesion = sesion
         self.on_volver = on_volver
         self.foto_path: str | None = None
-        self.bloques: list[BloqueEditor] = []
         self._cursos_por_nombre: dict[str, dict] = {}
+        # Por momento: {clave: {"minutos": Entry, "texto": CampoConContador}}
+        self.momentos: dict[str, dict] = {}
 
         self._construir_encabezado()
         self._construir_temas_vistos()
-        self._construir_bloques()
+        self._construir_momentos()
+        self._construir_columnas_clase()
         self._construir_foto()
         self._construir_asistencia()
         self._construir_acciones()
@@ -71,9 +79,6 @@ class PlaneacionScreen(ctk.CTkScrollableFrame):
         self.objetivo.pack(fill="x", pady=4)
 
     def _cargar_cursos(self):
-        # En segundo plano: leer los cursos podía costar un viaje al backend
-        # si el caché todavía no estaba caliente, y hacerlo en el hilo de la
-        # interfaz congelaba «Nueva clase» al abrirla.
         self.curso_menu.configure(values=["Cargando..."])
         self.curso_menu.set("Cargando...")
 
@@ -106,39 +111,64 @@ class PlaneacionScreen(ctk.CTkScrollableFrame):
         self.temas_lista = ListaDinamica(self, placeholder="Tema visto")
         self.temas_lista.pack(fill="x", pady=(2, 0))
 
-    def _construir_bloques(self):
+    def _construir_momentos(self):
         encabezado = ctk.CTkFrame(self, fg_color="transparent")
         encabezado.pack(fill="x", pady=(16, 4))
-        ctk.CTkLabel(encabezado, text="Momentos de la clase", font=ctk.CTkFont(weight="bold")).pack(side="left")
+        ctk.CTkLabel(
+            encabezado, text="Momentos de la clase y tiempos", font=ctk.CTkFont(weight="bold")
+        ).pack(side="left")
         self.minutos_label = ctk.CTkLabel(encabezado, text="", font=ctk.CTkFont(size=12))
         self.minutos_label.pack(side="right")
 
-        self.bloques_contenedor = ctk.CTkFrame(self, fg_color="transparent")
-        self.bloques_contenedor.pack(fill="x")
-        ctk.CTkButton(self, text="+ Agregar bloque", command=self._agregar_bloque).pack(anchor="w", pady=(6, 0))
-        self._agregar_bloque()
+        for clave, etiqueta, minimo, minutos_sug in MOMENTOS:
+            marco = ctk.CTkFrame(self, border_width=1, corner_radius=8)
+            marco.pack(fill="x", pady=6)
 
-    def _agregar_bloque(self):
-        bloque = BloqueEditor(
-            self.bloques_contenedor, len(self.bloques) + 1, self._quitar_bloque, self._actualizar_minutos
-        )
-        bloque.pack(fill="x", pady=6)
-        self.bloques.append(bloque)
+            fila = ctk.CTkFrame(marco, fg_color="transparent")
+            fila.pack(fill="x", padx=10, pady=(8, 0))
+            ctk.CTkLabel(fila, text=etiqueta, font=ctk.CTkFont(weight="bold")).pack(side="left")
+            ctk.CTkLabel(fila, text="Minutos:").pack(side="left", padx=(12, 4))
+            minutos_entry = ctk.CTkEntry(fila, width=60)
+            minutos_entry.insert(0, str(minutos_sug))
+            minutos_entry.pack(side="left")
+            minutos_entry.bind("<KeyRelease>", lambda _e: self._actualizar_minutos())
+
+            texto = CampoConContador(marco, "Qué pasó en este momento", alto=110, minimo=minimo)
+            texto.pack(fill="x", padx=10, pady=(4, 10))
+
+            self.momentos[clave] = {"minutos": minutos_entry, "texto": texto}
+
         self._actualizar_minutos()
 
-    def _quitar_bloque(self, bloque: BloqueEditor):
-        if len(self.bloques) <= 1:
-            return  # siempre tiene que quedar al menos un bloque
-        self.bloques.remove(bloque)
-        bloque.destroy()
-        self._actualizar_minutos()
+    def _minutos_de(self, clave: str) -> int:
+        try:
+            return int(self.momentos[clave]["minutos"].get().strip() or 0)
+        except ValueError:
+            return 0
 
     def _actualizar_minutos(self):
-        total = sum(b.minutos() for b in self.bloques)
+        total = sum(self._minutos_de(c) for c in self.momentos)
         color = "#2fa84f" if total >= MINUTOS_MINIMOS else "#c0392b"
-        self.minutos_label.configure(
-            text=f"{total} de {MINUTOS_MINIMOS} min mínimos", text_color=color
+        self.minutos_label.configure(text=f"{total} de {MINUTOS_MINIMOS} min mínimos", text_color=color)
+
+    def _construir_columnas_clase(self):
+        ctk.CTkLabel(
+            self, text="Sobre toda la clase", font=ctk.CTkFont(weight="bold")
+        ).pack(fill="x", pady=(16, 0))
+        self.observaciones = CampoConContador(
+            self,
+            "Observaciones de clase que contribuyan a la fundamentación de Generación-I "
+            "(pequeña reflexión pedagógica, incluye también lo disciplinar)",
+            alto=100,
         )
+        self.observaciones.pack(fill="x", pady=4)
+        self.avances = CampoConContador(
+            self,
+            "Avances o retrocesos observados en clase "
+            "(se puede nombrar al estudiante, tipo evaluación cualitativa)",
+            alto=100,
+        )
+        self.avances.pack(fill="x", pady=4)
 
     def _construir_foto(self):
         ctk.CTkLabel(self, text="Foto de la clase", anchor="w", font=ctk.CTkFont(weight="bold")).pack(
@@ -176,64 +206,75 @@ class PlaneacionScreen(ctk.CTkScrollableFrame):
         if not curso:
             return
 
-        try:
-            estudiantes = api_client.obtener_estudiantes(self.sesion["token"], curso["id"])
-        except api_client.ApiError as exc:
+        def listo(estudiantes):
+            for w in self.asistencia_contenedor.winfo_children():
+                w.destroy()
+            if not estudiantes:
+                ctk.CTkLabel(
+                    self.asistencia_contenedor,
+                    text="Este curso todavía no tiene estudiantes (los carga el directivo).",
+                    text_color="gray",
+                ).pack(anchor="w")
+                return
+            for est in estudiantes:
+                var = ctk.BooleanVar(value=True)
+                ctk.CTkCheckBox(self.asistencia_contenedor, text=est["nombre"], variable=var).pack(anchor="w", pady=2)
+                self.asistencia_vars[est["nombre"]] = var
+
+        def fallo(exc):
+            for w in self.asistencia_contenedor.winfo_children():
+                w.destroy()
             ctk.CTkLabel(
                 self.asistencia_contenedor, text=f"No se pudo cargar el grupo: {exc}", text_color="#c0392b"
             ).pack(anchor="w")
-            return
 
-        if not estudiantes:
-            ctk.CTkLabel(
-                self.asistencia_contenedor,
-                text="Este curso todavía no tiene estudiantes (los carga el directivo).",
-                text_color="gray",
-            ).pack(anchor="w")
-            return
-
-        for est in estudiantes:
-            var = ctk.BooleanVar(value=True)
-            ctk.CTkCheckBox(self.asistencia_contenedor, text=est["nombre"], variable=var).pack(anchor="w", pady=2)
-            self.asistencia_vars[est["nombre"]] = var
+        en_segundo_plano(
+            self,
+            lambda: api_client.obtener_estudiantes(self.sesion["token"], curso["id"]),
+            listo,
+            fallo,
+        )
 
     def _construir_acciones(self):
         self.error_label = ctk.CTkLabel(self, text="", text_color="#c0392b", wraplength=450, justify="left")
         self.error_label.pack(fill="x", pady=(16, 4))
 
-        # Primero se revisa el documento, después se sube: guardar queda
-        # deshabilitado hasta haber visto la vista previa.
-        self.previsualizar_boton = ctk.CTkButton(
-            self, text="Ver vista previa", command=self._previsualizar
-        )
+        self.previsualizar_boton = ctk.CTkButton(self, text="Ver vista previa", command=self._previsualizar)
         self.previsualizar_boton.pack(pady=(0, 6))
-
         self.guardar_boton = ctk.CTkButton(
             self, text="Guardar planeación", command=self._guardar, state="disabled"
         )
         self.guardar_boton.pack(pady=(0, 10))
-
         ctk.CTkLabel(
-            self,
-            text="Revisá la vista previa para poder guardar.",
-            text_color="gray",
-            font=ctk.CTkFont(size=11),
+            self, text="Revisá la vista previa para poder guardar.",
+            text_color="gray", font=ctk.CTkFont(size=11),
         ).pack()
 
-    # --- vista previa ------------------------------------------------------
+    # --- datos ------------------------------------------------------------
+
+    def _momentos_datos(self) -> dict:
+        return {
+            clave: {"texto": self.momentos[clave]["texto"].get(), "minutos": self._minutos_de(clave)}
+            for clave in self.momentos
+        }
 
     def _contexto_documento(self) -> dict:
-        """Lo que va a la plantilla, armado con lo que hay en pantalla."""
+        """Lo que va a la plantilla del .docx."""
         curso = self._curso_actual()
+        m = self._momentos_datos()
         return {
             "fecha": date_utils.a_fecha_larga(self.fecha_entry.get().strip()),
             "grupo": curso["nombre"] if curso else "",
             "objetivo": self.objetivo.get(),
             "temas_vistos": self.temas_lista.valores(),
-            "bloques": [
-                dict(b.a_dict(), momento=f"{b.momento_entry.get().strip()} ({b.minutos()} min)")
-                for b in self.bloques
-            ],
+            "momento_inicial_min": str(m["inicial"]["minutos"]),
+            "momento_inicial_texto": m["inicial"]["texto"],
+            "momento_desarrollo_min": str(m["desarrollo"]["minutos"]),
+            "momento_desarrollo_texto": m["desarrollo"]["texto"],
+            "momento_final_min": str(m["final"]["minutos"]),
+            "momento_final_texto": m["final"]["texto"],
+            "observaciones": self.observaciones.get(),
+            "avances": self.avances.get(),
             "asistencia": [
                 {"nombre": nombre, "presente": "Sí" if var.get() else "No"}
                 for nombre, var in self.asistencia_vars.items()
@@ -241,16 +282,13 @@ class PlaneacionScreen(ctk.CTkScrollableFrame):
         }
 
     def _confirmar_exceso(self) -> bool:
-        """Avisa si la clase pasa de las 2 horas. Devuelve False si el
-        docente prefiere volver a revisar los minutos."""
-        total = sum(b.minutos() for b in self.bloques)
+        total = sum(self._minutos_de(c) for c in self.momentos)
         if total <= MINUTOS_ESPERADOS:
             return True
-
         horas = total / 60
         return messagebox.askyesno(
             "La clase pasa de 2 horas",
-            f"Los bloques suman {total} minutos ({horas:.1f} horas) y una clase "
+            f"Los momentos suman {total} minutos ({horas:.1f} horas) y una clase "
             f"son {MINUTOS_ESPERADOS} minutos.\n\n"
             "Esas horas se suman en el informe del mes y en la cuenta de cobro.\n\n"
             "¿Los minutos están bien así?",
@@ -264,12 +302,11 @@ class PlaneacionScreen(ctk.CTkScrollableFrame):
             self.error_label.configure(text=error, text_color="#c0392b")
             return
         if not self._confirmar_exceso():
-            self.error_label.configure(text="Revisá los minutos de cada bloque.", text_color="#8A6114")
+            self.error_label.configure(text="Revisá los minutos de cada momento.", text_color="#8A6114")
             return
 
         self.previsualizar_boton.configure(state="disabled", text="Generando...")
         self.error_label.configure(text="Armando el documento...", text_color="gray")
-        self.update_idletasks()
 
         def trabajo():
             return vista_previa.previsualizar_planeacion(self._contexto_documento(), self.foto_path)
@@ -286,9 +323,7 @@ class PlaneacionScreen(ctk.CTkScrollableFrame):
 
         def fallo(exc):
             self.previsualizar_boton.configure(state="normal", text="Ver vista previa")
-            self.error_label.configure(
-                text=f"No se pudo armar la vista previa: {exc}", text_color="#c0392b"
-            )
+            self.error_label.configure(text=f"No se pudo armar la vista previa: {exc}", text_color="#c0392b")
 
         en_segundo_plano(self, trabajo, listo, fallo)
 
@@ -303,16 +338,18 @@ class PlaneacionScreen(ctk.CTkScrollableFrame):
             return f"El objetivo necesita mínimo {MIN_PALABRAS} palabras"
         if not self.temas_lista.valores():
             return "Agregá al menos un tema visto"
-        for i, bloque in enumerate(self.bloques, start=1):
-            if not bloque.momento_entry.get().strip():
-                return f"Bloque {i}: falta el momento"
-            if bloque.minutos() <= 0:
-                return f"Bloque {i}: falta cuántos minutos duró"
-            if not bloque.observacion.es_valido() or not bloque.avance.es_valido():
-                return f"Bloque {i}: la observación y los avances necesitan {MIN_PALABRAS} palabras cada uno"
-        total_minutos = sum(b.minutos() for b in self.bloques)
-        if total_minutos < MINUTOS_MINIMOS:
-            return f"Los bloques suman {total_minutos} min y la clase necesita al menos {MINUTOS_MINIMOS}"
+        for clave, etiqueta, minimo, _sug in MOMENTOS:
+            if self._minutos_de(clave) <= 0:
+                return f"{etiqueta}: falta cuántos minutos duró"
+            if not self.momentos[clave]["texto"].es_valido():
+                return f"{etiqueta}: necesita mínimo {minimo} palabras"
+        total = sum(self._minutos_de(c) for c in self.momentos)
+        if total < MINUTOS_MINIMOS:
+            return f"Los momentos suman {total} min y la clase necesita al menos {MINUTOS_MINIMOS}"
+        if not self.observaciones.es_valido():
+            return f"Las observaciones de clase necesitan mínimo {MIN_PALABRAS} palabras"
+        if not self.avances.es_valido():
+            return f"Los avances necesitan mínimo {MIN_PALABRAS} palabras"
         if not self.foto_path:
             return "Falta la foto de la clase"
 
@@ -327,43 +364,34 @@ class PlaneacionScreen(ctk.CTkScrollableFrame):
         if error:
             self.error_label.configure(text=error, text_color="#c0392b")
             return
-        # Se vuelve a preguntar acá y no solo en la vista previa: entre una
-        # cosa y la otra el docente pudo haber corregido los minutos.
         if not self._confirmar_exceso():
-            self.error_label.configure(text="Revisá los minutos de cada bloque.", text_color="#8A6114")
+            self.error_label.configure(text="Revisá los minutos de cada momento.", text_color="#8A6114")
             return
 
         self.guardar_boton.configure(state="disabled", text="Guardando...")
         self.previsualizar_boton.configure(state="disabled")
         self.error_label.configure(text="Comprimiendo la foto y subiendo...", text_color="gray")
-        self.update_idletasks()
 
         datos = {
             "fecha": self.fecha_entry.get().strip(),
             "curso_id": self._curso_actual()["id"],
             "objetivo": self.objetivo.get(),
             "temas_vistos": self.temas_lista.valores(),
-            "bloques": [b.a_dict() for b in self.bloques],
+            "momentos": self._momentos_datos(),
+            "observaciones": self.observaciones.get(),
+            "avances": self.avances.get(),
             "asistencia": [
                 {"nombre": nombre, "presente": var.get()} for nombre, var in self.asistencia_vars.items()
             ],
         }
-
         contexto = self._contexto_documento()
 
         def trabajo():
-            # La compresión de la foto también tarda, así que va al hilo.
             fotos = {"foto_clase": image_utils.foto_a_payload(self.foto_path)}
             resultado = api_client.guardar_planeacion(self.sesion["token"], datos, fotos)
-
-            # El documento va después y aparte: si falla, la clase igual
-            # quedó registrada. Lo único que se pierde es el link del
-            # informe, que se puede rehacer editando la planeación.
             try:
                 archivo = vista_previa.planeacion_para_subir(contexto, self.foto_path)
-                api_client.guardar_documento_planeacion(
-                    self.sesion["token"], resultado["id"], archivo
-                )
+                api_client.guardar_documento_planeacion(self.sesion["token"], resultado["id"], archivo)
             except Exception:  # noqa: BLE001
                 traceback.print_exc(file=sys.stderr)
                 resultado = dict(resultado, sin_documento=True)
@@ -397,16 +425,15 @@ class PlaneacionScreen(ctk.CTkScrollableFrame):
         fecha y el curso porque suelen repetirse en la misma sesión."""
         self.objetivo.set("")
         self.temas_lista.limpiar()
-
-        for bloque in self.bloques:
-            bloque.destroy()
-        self.bloques = []
-        self._agregar_bloque()
+        for clave, _e, _m, sug in MOMENTOS:
+            self.momentos[clave]["texto"].set("")
+            self.momentos[clave]["minutos"].delete(0, "end")
+            self.momentos[clave]["minutos"].insert(0, str(sug))
+        self.observaciones.set("")
+        self.avances.set("")
+        self._actualizar_minutos()
 
         self.foto_path = None
         self.foto_label.configure(text="Ninguna foto seleccionada", text_color="gray")
-
-        # La próxima planeación también hay que revisarla antes de subirla.
         self.guardar_boton.configure(state="disabled")
-
         self._cargar_asistencia()

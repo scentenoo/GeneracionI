@@ -36,7 +36,8 @@ def _imagen_desde_base64(tpl: DocxTemplate, base64_str: str | None, ancho_mm: in
 
 
 def generar_planeacion_docx(contexto: dict, foto_clase_path: str, ruta_salida: str | Path) -> Path:
-    """contexto: fecha, grupo, objetivo, temas_vistos[], bloques[], asistencia[].
+    """contexto: fecha, grupo, objetivo, temas_vistos[], los tres momentos
+    (momento_*_min/texto), observaciones, avances, asistencia[].
     foto_clase_path: ruta local a la foto ya comprimida (ver image_utils.py)."""
     tpl = DocxTemplate(str(PLANEACION_TEMPLATE))
     ctx = dict(contexto)
