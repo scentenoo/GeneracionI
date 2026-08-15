@@ -88,10 +88,12 @@ function guardar_informe_mensual(token, curso_id, mes, narrativa, gestionNarrati
     const existente = buscarInforme_(curso_id, mes);
     if (existente) {
       updateRowById_(SHEET_NAMES.INFORMES, existente.id, fila);
+      registrarEntrega_('informe', `${curso_id}|${mes}`, SHEET_NAMES.INFORMES, existente.id, sesion.usuario);
       return { ok: true, id: existente.id, actualizado: true };
     }
     fila.creado_en = fila.actualizado_en;
     const creada = appendRow_(SHEET_NAMES.INFORMES, fila);
+    registrarEntrega_('informe', `${curso_id}|${mes}`, SHEET_NAMES.INFORMES, creada.id, sesion.usuario);
     return { ok: true, id: creada.id, actualizado: false };
   } finally {
     lock.releaseLock();

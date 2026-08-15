@@ -47,6 +47,9 @@ const ESQUEMA_SHEETS_ = {
   ],
   [SHEET_NAMES.CURSOS]: [
     'id', 'docente_id', 'nombre', 'nucleo', 'edad_desde', 'edad_hasta', 'activo',
+    // Color de revisión: 'verde' lo revisa Mariangel, 'morado' Lorena
+    // (ver Config revisor_verde / revisor_morado).
+    'color',
   ],
   [SHEET_NAMES.PLANEACIONES]: [
     'id', 'docente_id', 'curso_id', 'fecha', 'grupo', 'objetivo', 'temas_vistos',
@@ -55,6 +58,8 @@ const ESQUEMA_SHEETS_ = {
     // Formato Diario Pedagógico: los tres momentos (JSON) y las dos
     // columnas de toda la clase. `bloques` queda por compatibilidad.
     'momentos', 'observaciones', 'avances',
+    // Revisión: pendiente / aprobado / devuelto.
+    'estado', 'revisado_por', 'revisado_en', 'motivo_devolucion',
   ],
   // Lo que se factura y no es una clase: reuniones, claustros, informes.
   // En el informe de julio de Samir eran 8 de las 16 horas del mes, así que
@@ -73,6 +78,8 @@ const ESQUEMA_SHEETS_ = {
     'incluye_gestion', 'gestion_objetivos', 'gestion_logros',
     'gestion_novedades', 'gestion_estrategias', 'gestion_pendientes',
     'creado_en', 'actualizado_en',
+    // Revisión: pendiente / aprobado / devuelto.
+    'estado', 'revisado_por', 'revisado_en', 'motivo_devolucion',
   ],
   // Una ficha por persona. `curso_id` quedó de cuando el estudiante
   // colgaba de un solo curso; hoy manda Inscripciones (ver migrarAInscripciones).
@@ -89,6 +96,14 @@ const ESQUEMA_SHEETS_ = {
   // después de la fecha de corte.
   [SHEET_NAMES.REAPERTURAS]: [
     'id', 'curso_id', 'mes', 'abierta', 'abierto_por', 'actualizado_en',
+  ],
+  // Historial de revisión: una fila por acción (entregado, devuelto,
+  // reenviado, aprobado). Va al final del documento devuelto, como la hoja
+  // de auditoría del programa.
+  //   tipo: 'planeacion' | 'informe'
+  //   ref: id de la planeación, o "<curso_id>|<mes>" para el informe
+  [SHEET_NAMES.REVISIONES]: [
+    'id', 'tipo', 'ref', 'accion', 'motivo', 'autor', 'fecha',
   ],
   [SHEET_NAMES.CONFIG]: ['key', 'value'],
 };

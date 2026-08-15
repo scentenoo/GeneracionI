@@ -58,10 +58,12 @@ function guardar_informe_gestion(token, mes, gestionNarrativa) {
     const existente = buscarInforme_(clave, mes);
     if (existente) {
       updateRowById_(SHEET_NAMES.INFORMES, existente.id, fila);
+      registrarEntrega_('informe', `${clave}|${mes}`, SHEET_NAMES.INFORMES, existente.id, sesion.usuario);
       return { ok: true, id: existente.id, actualizado: true };
     }
     fila.creado_en = fila.actualizado_en;
     const creada = appendRow_(SHEET_NAMES.INFORMES, fila);
+    registrarEntrega_('informe', `${clave}|${mes}`, SHEET_NAMES.INFORMES, creada.id, sesion.usuario);
     return { ok: true, id: creada.id, actualizado: false };
   } finally {
     lock.releaseLock();

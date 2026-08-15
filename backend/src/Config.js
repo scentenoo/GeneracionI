@@ -14,6 +14,7 @@ const SHEET_NAMES = {
   INSCRIPCIONES: 'Inscripciones',
   HORAS_GESTION: 'HorasGestion',
   REAPERTURAS: 'Reaperturas',
+  REVISIONES: 'Revisiones',
   CONFIG: 'Config',
 };
 

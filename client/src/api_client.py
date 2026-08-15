@@ -399,6 +399,38 @@ def directivos_sin_curso_del_mes(token: str, mes: str) -> list[dict]:
     return _call("directivos_sin_curso_del_mes", token, mes)
 
 
+# --- Revisión (aprobar / devolver) ---------------------------------------------
+
+def revisar_planeacion(token: str, id_: int, aprobar: bool, motivo: str = "") -> dict:
+    """El revisor del curso aprueba o devuelve una planeación. Devolver
+    necesita motivo."""
+    return _call("revisar_planeacion", token, id_, aprobar, motivo)
+
+
+def revisar_informe(token: str, curso_id, mes: str, aprobar: bool, motivo: str = "") -> dict:
+    return _call("revisar_informe", token, curso_id, mes, aprobar, motivo)
+
+
+def pendientes_de_revision(token: str, mes: str) -> dict:
+    """Lo que le toca revisar al directivo este mes: {planeaciones[], informes[]}."""
+    return _call("pendientes_de_revision", token, mes)
+
+
+def mis_devoluciones(token: str) -> list[dict]:
+    """Lo que le devolvieron al docente, con motivo — para el aviso al entrar."""
+    return _call("mis_devoluciones", token)
+
+
+def historial_revision(token: str, tipo: str, ref) -> list[dict]:
+    """El historial de un documento (entregado/devuelto/reenviado/aprobado)."""
+    return _call("historial_revision", token, tipo, ref)
+
+
+def fijar_revisores(token: str, revisor_verde_id, revisor_morado_id) -> dict:
+    """Solo administrador. Fija quién revisa los cursos verdes y los morados."""
+    return _call("fijar_revisores", token, revisor_verde_id, revisor_morado_id)
+
+
 # --- Administración de usuarios (rol directivo) --------------------------------
 
 def crear_usuario(token: str, datos: dict) -> dict:

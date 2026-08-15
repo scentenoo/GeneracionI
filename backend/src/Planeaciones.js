@@ -68,11 +68,14 @@ function guardar_planeacion(token, datos, fotos) {
         }
       }
       updateRowById_(SHEET_NAMES.PLANEACIONES, existente.id, campos);
+      // Guardar de nuevo la deja pendiente de revisión otra vez.
+      registrarEntrega_('planeacion', existente.id, SHEET_NAMES.PLANEACIONES, existente.id, sesion.usuario);
       return { ok: true, id: existente.id, actualizado: true };
     }
 
     campos.creado_en = new Date().toISOString();
     const fila = appendRow_(SHEET_NAMES.PLANEACIONES, campos);
+    registrarEntrega_('planeacion', fila.id, SHEET_NAMES.PLANEACIONES, fila.id, sesion.usuario);
     return { ok: true, id: fila.id, actualizado: false };
   } finally {
     lock.releaseLock();
@@ -223,6 +226,9 @@ function editar_planeacion(token, id, cambios) {
     }
 
     const cambiosReales = updateRowById_(SHEET_NAMES.PLANEACIONES, id, cambiosSerializados);
+    // Editarla la vuelve a dejar pendiente de revisión (si venía devuelta,
+    // queda como reenviada).
+    registrarEntrega_('planeacion', id, SHEET_NAMES.PLANEACIONES, id, sesion.usuario);
     return { ok: true, cambios: cambiosReales.length };
   } finally {
     lock.releaseLock();
