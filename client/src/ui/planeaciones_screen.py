@@ -38,10 +38,12 @@ class PlaneacionesScreen(ctk.CTkFrame):
 
         self.tabview = ctk.CTkTabview(self, command=self._al_cambiar_pestana)
         self.tabview.pack(fill="both", expand=True, padx=8, pady=8)
-        for nombre in ("Nueva clase", "Mis planeaciones", "Otras actividades"):
+        # Los docentes piensan las clases como "horas en sede" y lo demás
+        # como "horas externas": así lo pidieron en el piloto.
+        for nombre in ("Horas en sede", "Mis planeaciones", "Horas externas"):
             self.tabview.add(nombre)
 
-        self.nueva = PlaneacionScreen(self.tabview.tab("Nueva clase"), sesion)
+        self.nueva = PlaneacionScreen(self.tabview.tab("Horas en sede"), sesion)
         self.nueva.pack(fill="both", expand=True)
 
         self.mias = PlaneacionListScreen(
@@ -49,10 +51,10 @@ class PlaneacionesScreen(ctk.CTkFrame):
         )
         self.mias.pack(fill="both", expand=True)
 
-        self.actividades = ActividadesScreen(self.tabview.tab("Otras actividades"), sesion)
+        self.actividades = ActividadesScreen(self.tabview.tab("Horas externas"), sesion)
         self.actividades.pack(fill="both", expand=True)
 
-        self.tabview.set("Nueva clase")
+        self.tabview.set("Horas en sede")
 
     def _al_cambiar_pestana(self):
         # Al volver a «Mis planeaciones» se recarga, para que aparezca lo

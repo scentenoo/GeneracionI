@@ -4,8 +4,13 @@ const MIN_PALABRAS_DETALLE = 20;
 const MIN_LARGO_PASSWORD = 6;
 const CLASES_ESPERADAS_POR_MES = 4;
 
-/** Cada clase tiene que sumar al menos 2 horas repartidas entre sus bloques. */
+/** Cada clase tiene que sumar al menos 2 horas repartidas entre sus momentos. */
 const MINUTOS_MINIMOS_CLASE = 120;
+
+// Mínimo de palabras por momento del Diario Pedagógico (formato del
+// programa): el inicio se describe corto, el desarrollo es el grueso de la
+// clase, el cierre otra vez más breve.
+const MIN_PALABRAS_MOMENTO = { inicial: 80, desarrollo: 100, final: 70 };
 
 function contarPalabras_(texto) {
   return String(texto || '')
@@ -14,12 +19,11 @@ function contarPalabras_(texto) {
     .filter(Boolean).length;
 }
 
-function requireMinPalabras_(texto, nombreCampo) {
+function requireMinPalabras_(texto, nombreCampo, minimo) {
+  const min = minimo || MIN_PALABRAS_DETALLE;
   const n = contarPalabras_(texto);
-  if (n < MIN_PALABRAS_DETALLE) {
-    throw new Error(
-      `"${nombreCampo}" necesita mínimo ${MIN_PALABRAS_DETALLE} palabras (tiene ${n})`
-    );
+  if (n < min) {
+    throw new Error(`"${nombreCampo}" necesita mínimo ${min} palabras (tiene ${n})`);
   }
 }
 
@@ -33,12 +37,26 @@ function sumarMinutosBloques_(bloques) {
   return (bloques || []).reduce((suma, b) => suma + (Number(b.minutos) || 0), 0);
 }
 
+const MOMENTOS_PLANEACION = ['inicial', 'desarrollo', 'final'];
+const NOMBRE_MOMENTO = { inicial: 'Momento inicial', desarrollo: 'Momento de desarrollo', final: 'Momento final' };
+
+function sumarMinutosMomentos_(momentos) {
+  return MOMENTOS_PLANEACION.reduce(
+    (suma, clave) => suma + (Number((momentos || {})[clave] && momentos[clave].minutos) || 0), 0
+  );
+}
+
 /**
- * `esDirectivo` afecta una sola regla: solo un directivo puede guardar una
- * planeación sin ningún estudiante presente.
+ * Formato "Diario Pedagógico" del programa. La clase se describe en tres
+ * momentos —inicial, desarrollo y final— cada uno con su texto y sus
+ * minutos, y con un mínimo de palabras distinto (el desarrollo es el
+ * grueso). Las dos columnas de al lado —la reflexión pedagógica
+ * (observaciones) y los avances/retrocesos— son de TODA la clase, una sola
+ * vez, no por momento.
  *
- * Los temas vistos son una lista de viñetas, no un texto de detalle, así
- * que no llevan el mínimo de 20 palabras — basta con que haya uno.
+ * `esDirectivo` afecta una sola regla: solo un directivo puede guardar una
+ * planeación sin ningún estudiante presente. Los temas vistos son una lista
+ * de viñetas, así que no llevan mínimo de palabras.
  */
 function validarPlaneacion_(datos, fotos, esDirectivo) {
   if (!datos.fecha) throw new Error('Falta la fecha');
@@ -49,22 +67,22 @@ function validarPlaneacion_(datos, fotos, esDirectivo) {
   const temas = (datos.temas_vistos || []).filter((t) => String(t).trim());
   if (temas.length === 0) throw new Error('Agregá al menos un tema visto');
 
-  if (!Array.isArray(datos.bloques) || datos.bloques.length === 0) {
-    throw new Error('La planeación necesita al menos un bloque/momento de clase');
-  }
-  datos.bloques.forEach((b, i) => {
-    if (!b.momento) throw new Error(`Bloque ${i + 1}: falta el momento`);
-    if (!Number(b.minutos)) throw new Error(`Bloque ${i + 1}: falta cuántos minutos duró`);
-    requireMinPalabras_(b.observacion, `Bloque ${i + 1} - observación pedagógica`);
-    requireMinPalabras_(b.avance, `Bloque ${i + 1} - avances/retrocesos`);
+  const momentos = datos.momentos || {};
+  MOMENTOS_PLANEACION.forEach((clave) => {
+    const m = momentos[clave] || {};
+    if (!Number(m.minutos)) throw new Error(`${NOMBRE_MOMENTO[clave]}: falta cuántos minutos duró`);
+    requireMinPalabras_(m.texto, NOMBRE_MOMENTO[clave], MIN_PALABRAS_MOMENTO[clave]);
   });
 
-  const minutos = sumarMinutosBloques_(datos.bloques);
+  const minutos = sumarMinutosMomentos_(momentos);
   if (minutos < MINUTOS_MINIMOS_CLASE) {
     throw new Error(
-      `Los bloques suman ${minutos} minutos y la clase necesita al menos ${MINUTOS_MINIMOS_CLASE} (2 horas)`
+      `Los momentos suman ${minutos} minutos y la clase necesita al menos ${MINUTOS_MINIMOS_CLASE} (2 horas)`
     );
   }
+
+  requireMinPalabras_(datos.observaciones, 'Observaciones de clase (reflexión pedagógica)');
+  requireMinPalabras_(datos.avances, 'Avances o retrocesos observados');
 
   const presentes = (datos.asistencia || []).filter((a) => a.presente).length;
   if (presentes === 0 && !esDirectivo) {

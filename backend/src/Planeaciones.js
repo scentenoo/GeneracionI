@@ -45,12 +45,17 @@ function guardar_planeacion(token, datos, fotos) {
       grupo: curso.nombre,
       objetivo: datos.objetivo,
       temas_vistos: JSON.stringify(datos.temas_vistos || []),
-      bloques: JSON.stringify(datos.bloques),
+      // Formato Diario Pedagógico: los tres momentos y las dos columnas de
+      // toda la clase. `bloques` queda vacío (era el formato viejo).
+      bloques: '[]',
+      momentos: JSON.stringify(datos.momentos || {}),
+      observaciones: datos.observaciones || '',
+      avances: datos.avances || '',
       foto_clase_drive_id: fotoId,
       // Snapshot: la asistencia queda tal cual estaba ese día, no referencia
       // viva al grupo actual (evita que cambios posteriores alteren planeaciones ya guardadas).
       asistencia: JSON.stringify(datos.asistencia || []),
-      horas: sumarMinutosBloques_(datos.bloques) / 60,
+      horas: sumarMinutosMomentos_(datos.momentos) / 60,
     };
 
     if (existente) {
@@ -179,6 +184,9 @@ function parsePlaneacionRow_(p) {
   return Object.assign({}, p, {
     temas_vistos: JSON.parse(p.temas_vistos || '[]'),
     bloques: JSON.parse(p.bloques || '[]'),
+    momentos: JSON.parse(p.momentos || '{}'),
+    observaciones: p.observaciones || '',
+    avances: p.avances || '',
     asistencia: JSON.parse(p.asistencia || '[]'),
   });
 }
@@ -203,11 +211,16 @@ function editar_planeacion(token, id, cambios) {
   lock.waitLock(30000);
   try {
     const cambiosSerializados = Object.assign({}, cambios);
-    ['temas_vistos', 'bloques', 'asistencia'].forEach((campo) => {
+    ['temas_vistos', 'bloques', 'momentos', 'asistencia'].forEach((campo) => {
       if (cambiosSerializados[campo] !== undefined) {
         cambiosSerializados[campo] = JSON.stringify(cambiosSerializados[campo]);
       }
     });
+    // Si cambiaron los momentos, recalcular las horas para que no queden
+    // desfasadas de los minutos nuevos.
+    if (cambios.momentos !== undefined) {
+      cambiosSerializados.horas = sumarMinutosMomentos_(cambios.momentos) / 60;
+    }
 
     const cambiosReales = updateRowById_(SHEET_NAMES.PLANEACIONES, id, cambiosSerializados);
     return { ok: true, cambios: cambiosReales.length };

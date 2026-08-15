@@ -52,6 +52,9 @@ const ESQUEMA_SHEETS_ = {
     'id', 'docente_id', 'curso_id', 'fecha', 'grupo', 'objetivo', 'temas_vistos',
     'bloques', 'foto_clase_drive_id', 'asistencia', 'horas', 'creado_en',
     'doc_drive_id',
+    // Formato Diario Pedagógico: los tres momentos (JSON) y las dos
+    // columnas de toda la clase. `bloques` queda por compatibilidad.
+    'momentos', 'observaciones', 'avances',
   ],
   // Lo que se factura y no es una clase: reuniones, claustros, informes.
   // En el informe de julio de Samir eran 8 de las 16 horas del mes, así que
