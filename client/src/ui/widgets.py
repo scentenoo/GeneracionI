@@ -44,4 +44,54 @@ class CampoConContador(ctk.CTkFrame):
         self._actualizar_contador()
 
     def es_valido(self) -> bool:
-        return contar_palabras(self.get()) >= MIN_PALABRAS
+        return contar_palabras(self.get()) >= self.minimo
+
+
+class CampoConInstruccion(ctk.CTkFrame):
+    """Campo de texto con la pregunta arriba y la instrucción como marca de
+    agua adentro: el texto gris de guía desaparece al escribir y vuelve si el
+    campo queda vacío. Así el docente ve qué se espera sin que la instrucción
+    se confunda con su respuesta."""
+
+    def __init__(self, master, etiqueta: str, instruccion: str = "", alto: int = 70):
+        super().__init__(master, fg_color="transparent")
+        ctk.CTkLabel(self, text=etiqueta, anchor="w", justify="left", wraplength=560).pack(
+            fill="x", pady=(10, 0)
+        )
+        self.instruccion = instruccion
+        self.textbox = ctk.CTkTextbox(self, height=alto)
+        self.textbox.pack(fill="x", pady=(2, 0))
+        self._color_normal = self.textbox.cget("text_color")
+        self._placeholder = False
+        self.textbox.bind("<FocusIn>", self._al_entrar)
+        self.textbox.bind("<FocusOut>", self._al_salir)
+        self._poner_placeholder()
+
+    def _poner_placeholder(self):
+        if self.instruccion:
+            self.textbox.delete("1.0", "end")
+            self.textbox.insert("1.0", self.instruccion)
+            self.textbox.configure(text_color="gray")
+            self._placeholder = True
+
+    def _al_entrar(self, _e=None):
+        if self._placeholder:
+            self.textbox.delete("1.0", "end")
+            self.textbox.configure(text_color=self._color_normal)
+            self._placeholder = False
+
+    def _al_salir(self, _e=None):
+        if not self.textbox.get("1.0", "end").strip():
+            self._poner_placeholder()
+
+    def get(self) -> str:
+        return "" if self._placeholder else self.textbox.get("1.0", "end").strip()
+
+    def set(self, texto: str):
+        if texto:
+            self.textbox.delete("1.0", "end")
+            self.textbox.configure(text_color=self._color_normal)
+            self.textbox.insert("1.0", texto)
+            self._placeholder = False
+        else:
+            self._poner_placeholder()

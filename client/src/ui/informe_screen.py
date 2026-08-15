@@ -13,7 +13,7 @@ from ui.tareas import cache
 from services import date_utils, vista_previa
 from ui.avance_semana_editor import AvanceSemanaEditor
 from ui.tareas import en_segundo_plano
-from ui.widgets import MIN_PALABRAS, contar_palabras
+from ui.widgets import CampoConInstruccion, MIN_PALABRAS, contar_palabras
 
 
 class InformeScreen(ctk.CTkScrollableFrame):
@@ -89,22 +89,45 @@ class InformeScreen(ctk.CTkScrollableFrame):
         )
         self.faltantes_label.pack(fill="x", pady=(4, 0))
 
-    def _campo(self, etiqueta: str) -> ctk.CTkTextbox:
-        ctk.CTkLabel(self, text=etiqueta, anchor="w").pack(fill="x", pady=(10, 0))
-        box = ctk.CTkTextbox(self, height=70)
-        box.pack(fill="x", pady=(2, 0))
-        return box
+    def _campo(self, etiqueta: str, instruccion: str = "") -> CampoConInstruccion:
+        campo = CampoConInstruccion(self, etiqueta, instruccion)
+        campo.pack(fill="x")
+        return campo
 
     def _construir_narrativa(self):
-        ctk.CTkLabel(self, text="Desarrollo del curso en el mes", font=ctk.CTkFont(weight="bold")).pack(
+        ctk.CTkLabel(self, text="2. Desarrollo del curso en el mes", font=ctk.CTkFont(weight="bold")).pack(
             anchor="w", pady=(16, 0)
         )
-        self.objetivo_box = self._campo("¿Cuáles eran los objetivos del mes y en qué medida se cumplieron?")
-        self.logros_box = self._campo("Principales logros y avances de los estudiantes")
-        self.dificultades_box = self._campo("Dificultades, inconvenientes o novedades")
-        self.estrategias_box = self._campo("Estrategias / ajustes metodológicos implementados")
-        self.situacion_box = self._campo("Situación excepcionalmente positiva del mes")
-        self.ctei_box = self._campo("¿Cómo integró el componente CTeI en el mes?")
+        # Preguntas e instrucciones tal cual el formato oficial del programa
+        # (formato informe mensual.docx). La instrucción va como marca de agua.
+        self.objetivo_box = self._campo(
+            "2.1. ¿Cuáles eran los objetivos o metas planteadas para el mes y en qué medida se cumplieron?",
+            "Texto amplio: describa con amplitud los objetivos del mes, no un texto por salir del paso.",
+        )
+        self.logros_box = self._campo(
+            "2.2. Principales logros y avances observados en los estudiantes durante el mes.",
+            "Háganlos a conciencia, revisando el nivel del grupo y los avances; sirve de insumo para "
+            "mostrar que el programa avanza.",
+        )
+        self.dificultades_box = self._campo(
+            "2.3. Dificultades, inconvenientes o novedades presentadas.",
+            "En lista.",
+        )
+        self.estrategias_box = self._campo(
+            "2.4. Estrategias, ajustes metodológicos implementados durante el mes.",
+            "Describa con amplitud las estrategias desarrolladas en las clases; preste especial atención "
+            "a si tuvo que hacer adecuaciones con estudiantes con discapacidad o trastornos del desarrollo.",
+        )
+        self.situacion_box = self._campo(
+            "2.5. Describa alguna situación excepcionalmente positiva que haya notado en algún estudiante o grupo.",
+            "Escriba las cosas positivas dignas de resaltar y mostrar; lo que escriba acá se publica en la "
+            "bitácora al final del año.",
+        )
+        self.ctei_box = self._campo(
+            "2.6. ¿Cómo integró el componente CTeI (ciencia, tecnología e innovación) en el mes?",
+            "Todos los cursos deben integrar la misionalidad científica de Generación-I; describa AMPLIAMENTE "
+            "cómo se desarrolló.",
+        )
 
     def _construir_avance_semanal(self):
         ctk.CTkLabel(self, text="Evaluación de avance por tema", font=ctk.CTkFont(weight="bold")).pack(
@@ -223,8 +246,10 @@ class InformeScreen(ctk.CTkScrollableFrame):
 
     # --- armado ------------------------------------------------------------
 
-    def _texto(self, box: ctk.CTkTextbox) -> str:
-        return box.get("1.0", "end").strip()
+    def _texto(self, campo) -> str:
+        # Los campos narrativos y de gestión son CampoConInstruccion: su
+        # .get() ya devuelve "" cuando lo que se ve es la marca de agua.
+        return campo.get()
 
     def _curso_seleccionado(self) -> dict | None:
         return self._cursos_por_etiqueta.get(self.curso_menu.get())
@@ -412,7 +437,7 @@ class InformeScreen(ctk.CTkScrollableFrame):
             self.entregado_label.configure(
                 text="Ya entregado — podés corregirlo y volver a entregar.", text_color="#2fa84f"
             )
-            for box, clave in [
+            for campo, clave in [
                 (self.objetivo_box, "objetivo_cumplimiento"),
                 (self.logros_box, "logros_avances"),
                 (self.dificultades_box, "dificultades"),
@@ -420,19 +445,17 @@ class InformeScreen(ctk.CTkScrollableFrame):
                 (self.situacion_box, "situacion_positiva"),
                 (self.ctei_box, "ctei_integracion"),
             ]:
-                box.delete("1.0", "end")
-                box.insert("1.0", guardado.get(clave, "") or "")
+                campo.set(guardado.get(clave, "") or "")
 
             if self.es_directivo:
-                for box, clave in [
+                for campo, clave in [
                     (self.gestion_objetivos_box, "gestion_objetivos"),
                     (self.gestion_logros_box, "gestion_logros"),
                     (self.gestion_novedades_box, "gestion_novedades"),
                     (self.gestion_estrategias_box, "gestion_estrategias"),
                     (self.gestion_pendientes_box, "gestion_pendientes"),
                 ]:
-                    box.delete("1.0", "end")
-                    box.insert("1.0", guardado.get(clave, "") or "")
+                    campo.set(guardado.get(clave, "") or "")
                 self.incluir_gestion_var.set(bool(guardado.get("incluye_gestion")))
 
         en_segundo_plano(
