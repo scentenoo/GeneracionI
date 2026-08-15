@@ -158,6 +158,40 @@ class App(ctk.CTk):
         # Deja el caché listo mientras el usuario mira el menú, así las
         # pantallas abren sin esperar viajes al backend.
         en_segundo_plano(self, lambda: cache.precargar(sesion), lambda _r: None, lambda _e: None)
+        # Al entrar, avisar qué le devolvieron para corregir. Va aparte del
+        # caché para que un fallo del aviso no impida usar la app.
+        en_segundo_plano(
+            self,
+            lambda: api_client.mis_devoluciones(sesion["token"]),
+            self._avisar_devoluciones,
+            lambda _e: None,
+        )
+
+    def _avisar_devoluciones(self, devoluciones: list):
+        """Aviso al entrar: lo que un revisor devolvió para corregir, con el
+        motivo. Si no hay nada, no molesta."""
+        if not devoluciones:
+            return
+
+        lineas = []
+        for d in devoluciones:
+            por = d.get("por") or "el revisor"
+            motivo = d.get("motivo") or "(sin motivo)"
+            if d.get("tipo") == "planeacion":
+                cabeza = f"• Planeación de {d.get('curso') or 'tu curso'} ({d.get('fecha', '')})"
+            else:
+                cabeza = f"• Informe del mes {d.get('mes', '')}"
+            lineas.append(f"{cabeza}\n   Devuelto por {por}: {motivo}")
+
+        cuerpo = "\n\n".join(lineas)
+        plural = "cosas" if len(devoluciones) > 1 else "cosa"
+        messagebox.showwarning(
+            "Tenés devoluciones por corregir",
+            f"Un revisor te devolvió {len(devoluciones)} {plural} para corregir "
+            "y volver a enviar:\n\n"
+            f"{cuerpo}\n\n"
+            "Entrá a corregirlas y guardá de nuevo: vuelven a quedar pendientes de revisión.",
+        )
 
     def _mostrar_home(self):
         self._limpiar()
