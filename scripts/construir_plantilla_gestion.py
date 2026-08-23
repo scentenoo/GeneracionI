@@ -13,10 +13,18 @@ que copiar, así que se arma de cero.
 Cuidado con los {%tr ...%}: el for y el endfor van en filas SEPARADAS de la
 tabla. Inline con los datos, docxtpl tira "unknown tag 'endfor'" — nos pasó
 al construir la plantilla docente.
+
+El membrete (escudo, ADMINISTRACIÓN MUNICIPAL, pie de página) sale de
+_membrete_municipio.py, compartido con construir_plantilla_planeacion.py.
+Sin CÓDIGO/VERSIÓN a propósito: a diferencia del Diario Pedagógico, nunca
+existió un documento oficial real de "horas de gestión" del que copiar un
+código de trámite — el equipo directivo lo confirmó. Mejor sin esa columna
+que con un número inventado.
 """
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 from docx import Document
@@ -29,6 +37,9 @@ RAIZ = Path(__file__).resolve().parents[1]
 SALIDA = RAIZ / "templates" / "informe_gestion.docx"
 
 AZUL = RGBColor(0x1F, 0x37, 0x64)
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _membrete_municipio import armar_membrete_  # noqa: E402
 
 
 def titulo(doc, texto, size=14):
@@ -59,8 +70,8 @@ def campo(doc, etiqueta, marcador):
 
 def main():
     doc = Document()
+    armar_membrete_(doc, "INFORME MENSUAL DE GESTIÓN")
 
-    titulo(doc, "INFORME MENSUAL DE GESTIÓN", 15)
     titulo(doc, "Generación-I", 12)
 
     doc.add_paragraph()

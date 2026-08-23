@@ -9,20 +9,26 @@ contrato de variables en client/src/ui/planeacion_screen._contexto_documento.
 
 Cuidado con los {%tr ...%} de la tabla de asistencia: el for y el endfor
 van en filas SEPARADAS, o docxtpl tira "unknown tag 'endfor'".
+
+El membrete (encabezado y pie de página) sale de _membrete_municipio.py,
+compartido con construir_plantilla_gestion.py. Acá copia el formato oficial
+real —CÓDIGO PC-PA-003-F03, VERSIÓN 0— comparado contra un documento real
+que pasó el equipo directivo.
 """
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.shared import Pt, RGBColor
 
 RAIZ = Path(__file__).resolve().parents[1]
 SALIDA = RAIZ / "templates" / "planeacion_individual.docx"
 
-AZUL = RGBColor(0x1F, 0x37, 0x64)
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _membrete_municipio import armar_membrete_  # noqa: E402
 
 
 def celda_titulo(celda, texto):
@@ -33,14 +39,7 @@ def celda_titulo(celda, texto):
 
 def main():
     doc = Document()
-
-    t = doc.add_paragraph()
-    t.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    r = t.add_run("DIARIO PEDAGÓGICO")
-    r.bold = True
-    r.font.size = Pt(15)
-    r.font.color.rgb = AZUL
-    doc.add_paragraph()
+    armar_membrete_(doc, "DIARIO PEDAGÓGICO", codigo_tramite="PC-PA-003-F03", version_tramite="0")
 
     # Encabezado clave/valor
     enc = doc.add_table(rows=4, cols=2)
