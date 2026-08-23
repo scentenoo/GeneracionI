@@ -5,11 +5,13 @@ import customtkinter as ctk
 
 import api_client
 from config import APP_VERSION, comparar_versiones
+from ui import ctk_parches
 from ui.app import App
 from ui.tareas import en_segundo_plano
 
 
 def main():
+    ctk_parches.aplicar()
     ctk.set_appearance_mode("system")
     ctk.set_default_color_theme("green")
 

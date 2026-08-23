@@ -7,8 +7,8 @@ venv/
 build/
 dist/
 
-# PyInstaller (se regenera con el comando del README, no hace falta versionarlo)
-*.spec
+# PyInstaller: el .spec del cliente SÍ se versiona (lleva el ícono y el
+# fix multiplataforma de la ruta de entrada) — solo se ignoran backups.
 *.spec.bak
 
 # Node / clasp

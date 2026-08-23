@@ -44,9 +44,20 @@ class PlaneacionListScreen(ctk.CTkScrollableFrame):
         self.lista_contenedor = ctk.CTkFrame(self, fg_color="transparent")
         self.lista_contenedor.pack(fill="both", expand=True)
 
+        # «Mis planeaciones» se recarga cada vez que se entra a la pestaña
+        # (ver PlaneacionesScreen._al_cambiar_pestana): si dos cargas quedan
+        # en vuelo a la vez —por ejemplo, entrar y salir rápido dos veces—,
+        # las dos terminan agregando filas sin saber una de la otra, y la
+        # lista queda duplicada. Este número identifica cuál es la carga
+        # vigente: si una respuesta llega y ya no es la última que se pidió,
+        # se descarta en vez de agregarse encima.
+        self._version_carga = 0
         self._cargar()
 
     def _cargar(self):
+        self._version_carga += 1
+        version = self._version_carga
+
         for w in self.lista_contenedor.winfo_children():
             w.destroy()
         self.error_label.configure(text="")
@@ -54,6 +65,8 @@ class PlaneacionListScreen(ctk.CTkScrollableFrame):
         cargando.pack(pady=20)
 
         def listo(planeaciones):
+            if version != self._version_carga:
+                return  # una carga más nueva ya arrancó; esta quedó vieja
             cargando.detener()
             cargando.destroy()
             if not planeaciones:
@@ -69,6 +82,8 @@ class PlaneacionListScreen(ctk.CTkScrollableFrame):
                 self._fila_planeacion(p)
 
         def fallo(exc):
+            if version != self._version_carga:
+                return
             cargando.detener()
             cargando.destroy()
             self.error_label.configure(text=str(exc), text_color=ROJO)
