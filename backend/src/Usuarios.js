@@ -310,7 +310,7 @@ function subir_firma(token, usuario_id, imagen) {
   lock.waitLock(30000);
   try {
     const nuevoId = reemplazarArchivo_(
-      'Firmas',
+      ['Firmas'],
       usuario.firma_drive_id,
       imagen.base64,
       imagen.mimeType || 'image/png',

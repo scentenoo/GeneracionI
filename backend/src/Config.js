@@ -44,11 +44,3 @@ function getSpreadsheet_() {
 function getDriveRootFolder_() {
   return DriveApp.getFolderById(getScriptProperty_('DRIVE_ROOT_FOLDER_ID'));
 }
-
-/** Subcarpeta dentro de la raíz dedicada, se crea si no existe. */
-function getOrCreateDriveSubfolder_(name) {
-  const root = getDriveRootFolder_();
-  const existing = root.getFoldersByName(name);
-  if (existing.hasNext()) return existing.next();
-  return root.createFolder(name);
-}

@@ -55,7 +55,7 @@ function guardar_actividad(token, datos, fotos) {
     let fotoId = '';
     if (fotos && fotos.foto) {
       fotoId = guardarArchivoBase64_(
-        'Fotos de actividades',
+        ['Actividades', curso.nombre, nombreCarpetaMes_(datos.fecha), 'Fotos'],
         fotos.foto.base64,
         fotos.foto.mimeType || 'image/jpeg',
         nombreDeFoto_('actividad', curso.nombre, datos.fecha)
@@ -110,7 +110,7 @@ function editar_actividad(token, id, datos, fotos) {
 
     if (fotos && fotos.foto) {
       cambios.foto_drive_id = reemplazarArchivo_(
-        'Fotos de actividades',
+        ['Actividades', curso.nombre, nombreCarpetaMes_(datos.fecha), 'Fotos'],
         fila.foto_drive_id,
         fotos.foto.base64,
         fotos.foto.mimeType || 'image/jpeg',
@@ -154,13 +154,7 @@ function eliminar_actividad(token, id) {
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
-    if (fila.foto_drive_id) {
-      try {
-        DriveApp.getFileById(fila.foto_drive_id).setTrashed(true);
-      } catch (e) {
-        // La foto ya no existe o no es accesible: no bloquea el borrado.
-      }
-    }
+    trasharSiExiste_(fila.foto_drive_id);
     getSheet_(SHEET_NAMES.ACTIVIDADES).deleteRow(fila._row);
     return { ok: true };
   } finally {

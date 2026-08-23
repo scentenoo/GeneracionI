@@ -30,7 +30,7 @@ function guardar_planeacion(token, datos, fotos) {
     )[0];
 
     const fotoId = guardarArchivoBase64_(
-      'Fotos de clase',
+      ['Planeaciones', curso.nombre, nombreCarpetaMes_(datos.fecha), 'Fotos'],
       fotos.foto_clase.base64,
       fotos.foto_clase.mimeType || 'image/jpeg',
       nombreDeFoto_('clase', curso.nombre, datos.fecha)
@@ -109,7 +109,7 @@ function guardar_documento_planeacion(token, planeacion_id, archivo) {
   lock.waitLock(30000);
   try {
     const id = reemplazarArchivo_(
-      'Planeaciones',
+      ['Planeaciones', fila.grupo, nombreCarpetaMes_(fila.fecha), 'Documentos'],
       fila.doc_drive_id,
       archivo.base64,
       archivo.mimeType || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -273,13 +273,8 @@ function eliminar_planeacion(token, id) {
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
-    if (fila.foto_clase_drive_id) {
-      try {
-        DriveApp.getFileById(fila.foto_clase_drive_id).setTrashed(true);
-      } catch (e) {
-        // La foto ya no existe o no es accesible: no bloquea el borrado de la fila.
-      }
-    }
+    trasharSiExiste_(fila.foto_clase_drive_id);
+    trasharSiExiste_(fila.doc_drive_id);
     getSheet_(SHEET_NAMES.PLANEACIONES).deleteRow(fila._row);
     // Los ids se reusan, así que el historial de esta planeación no puede
     // quedar suelto para que lo herede la próxima con el mismo id.
