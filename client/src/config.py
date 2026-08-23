@@ -14,7 +14,7 @@ BACKEND_URL = "https://script.google.com/macros/s/AKfycbys9dPldfgtNcO8J51jsroJkC
 # Este número sube RECIÉN cuando se va a repartir un instalador nuevo, no
 # cada vez que se cambia código. El orden es: subir esto, compilar, subir
 # el .exe a Drive, y recién ahí publicar desde «Versión de la app».
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.1.0"
 
 
 def comparar_versiones(a: str, b: str) -> int:
