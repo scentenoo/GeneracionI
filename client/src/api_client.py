@@ -51,7 +51,7 @@ class SinConexion(ApiError):
 _SOLO_LECTURA = frozenset({
     "login", "version_actual", "listar_cursos", "listar_todos_los_cursos",
     "listar_usuarios", "obtener_planeaciones", "obtener_planeacion",
-    "obtener_foto_planeacion", "pendientes_de_revision", "mis_devoluciones",
+    "obtener_foto_planeacion", "revision_del_mes", "mis_devoluciones",
     "historial_revision",
     "obtener_estado_mes", "obtener_estudiantes", "buscar_estudiantes",
     "obtener_horas_gestion", "obtener_actividades", "generar_informe_mensual",
@@ -362,6 +362,14 @@ def generar_informe_mensual(
     )
 
 
+def guardar_documento_informe(token: str, curso_id: int, mes: str, archivo: dict) -> dict:
+    """Sube a Drive el .docx del informe ya entregado, para que quede
+    archivado y el revisor lo pueda abrir directo.
+
+    archivo: {"base64": ..., "mimeType": ...}"""
+    return _call("guardar_documento_informe", token, curso_id, mes, archivo)
+
+
 def guardar_informe_mensual(
     token: str,
     curso_id: int,
@@ -427,9 +435,10 @@ def revisar_informe(token: str, curso_id, mes: str, aprobar: bool, motivo: str =
     return _call("revisar_informe", token, curso_id, mes, aprobar, motivo)
 
 
-def pendientes_de_revision(token: str, mes: str) -> dict:
-    """Lo que le toca revisar al directivo este mes: {planeaciones[], informes[]}."""
-    return _call("pendientes_de_revision", token, mes)
+def revision_del_mes(token: str, mes: str) -> dict:
+    """Todas las planeaciones e informes del mes con su estado (no solo lo
+    pendiente): {planeaciones[], informes[]}."""
+    return _call("revision_del_mes", token, mes)
 
 
 def mis_devoluciones(token: str) -> list[dict]:

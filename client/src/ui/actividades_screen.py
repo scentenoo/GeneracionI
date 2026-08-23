@@ -60,10 +60,7 @@ class ActividadesScreen(ctk.CTkScrollableFrame):
 
         fila_horas = ctk.CTkFrame(self, fg_color="transparent")
         fila_horas.pack(fill="x", pady=(4, 0))
-        ctk.CTkLabel(fila_horas, text="Horas en sede", width=110, anchor="w").pack(side="left")
-        self.horas_sede_entry = ctk.CTkEntry(fila_horas, width=60)
-        self.horas_sede_entry.pack(side="left")
-        ctk.CTkLabel(fila_horas, text="   externas", width=90, anchor="w").pack(side="left")
+        ctk.CTkLabel(fila_horas, text="Horas externas", width=110, anchor="w").pack(side="left")
         self.horas_externas_entry = ctk.CTkEntry(fila_horas, width=60)
         self.horas_externas_entry.pack(side="left")
 
@@ -194,6 +191,16 @@ class ActividadesScreen(ctk.CTkScrollableFrame):
             info, text=f"{fecha}  ·  {'  ·  '.join(horas)}", text_color="gray", anchor="w"
         ).pack(fill="x")
 
+        if not a.get("foto_drive_id"):
+            ctk.CTkLabel(info, text="sin foto", text_color="#8A6114", anchor="w").pack(fill="x")
+
+        if a.get("bloqueada"):
+            ctk.CTkLabel(
+                info, text="Mes cerrado — pedile al equipo directivo que lo reabra",
+                text_color="gray", anchor="w", font=ctk.CTkFont(size=11),
+            ).pack(fill="x", pady=(4, 0))
+            return
+
         botones = ctk.CTkFrame(fila, fg_color="transparent")
         botones.pack(side="right", padx=10)
         ctk.CTkButton(
@@ -201,9 +208,6 @@ class ActividadesScreen(ctk.CTkScrollableFrame):
             command=lambda: self._eliminar(a["id"], str(a.get("descripcion", ""))),
         ).pack(pady=2)
         ctk.CTkButton(botones, text="Editar", width=80, command=lambda: self._editar(a)).pack(pady=2)
-
-        if not a.get("foto_drive_id"):
-            ctk.CTkLabel(info, text="sin foto", text_color="#8A6114", anchor="w").pack(fill="x")
 
     # --- foto y modo edición ------------------------------------------------
 
@@ -235,8 +239,6 @@ class ActividadesScreen(ctk.CTkScrollableFrame):
         self.fecha_entry.insert(0, str(a["fecha"])[:10])
         self.descripcion_entry.delete(0, "end")
         self.descripcion_entry.insert(0, a["descripcion"])
-        self.horas_sede_entry.delete(0, "end")
-        self.horas_sede_entry.insert(0, str(a.get("horas_sede") or ""))
         self.horas_externas_entry.delete(0, "end")
         self.horas_externas_entry.insert(0, str(a.get("horas_externas") or ""))
 
@@ -248,7 +250,7 @@ class ActividadesScreen(ctk.CTkScrollableFrame):
     def _salir_de_edicion(self):
         self._editando = None
         self.foto_path = None
-        for e in (self.descripcion_entry, self.horas_sede_entry, self.horas_externas_entry):
+        for e in (self.descripcion_entry, self.horas_externas_entry):
             e.delete(0, "end")
         self.guardar_boton.configure(text="Agregar actividad")
         self.cancelar_boton.pack_forget()
@@ -276,7 +278,9 @@ class ActividadesScreen(ctk.CTkScrollableFrame):
             "curso_id": curso["id"],
             "fecha": self.fecha_entry.get().strip(),
             "descripcion": self.descripcion_entry.get().strip(),
-            "horas_sede": self.horas_sede_entry.get().strip() or 0,
+            # Esta pantalla es solo para horas externas — "horas en sede" ya
+            # se cargan como clase, con su planeación.
+            "horas_sede": 0,
             "horas_externas": self.horas_externas_entry.get().strip() or 0,
         }
         editando = self._editando

@@ -129,6 +129,27 @@ def planeacion_para_subir_desde_base64(contexto: dict, foto_base64: str, foto_mi
             pass
 
 
+def informe_para_subir(contexto: dict) -> dict:
+    """Arma el .docx del informe mensual y lo devuelve listo para archivarlo
+    en Drive, igual que planeacion_para_subir."""
+    import base64
+
+    salida = _carpeta_temporal() / f"subir_informe_{uuid.uuid4().hex[:8]}.docx"
+    try:
+        docx_generator.generar_informe_mensual_docx(contexto, salida)
+        datos = salida.read_bytes()
+    finally:
+        try:
+            salida.unlink()
+        except OSError:
+            pass
+
+    return {
+        "base64": base64.b64encode(datos).decode("ascii"),
+        "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    }
+
+
 def previsualizar_informe(contexto: dict) -> tuple[Path, bool]:
     """Igual pero para el informe mensual, cuyo contexto ya viene armado
     desde el backend."""

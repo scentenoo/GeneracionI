@@ -100,6 +100,10 @@ function nombreDeDocumento_(nombreCurso, fecha) {
   return `Planeacion - ${nombreParaDrive_(nombreCurso)} - ${fechaISO_(fecha)}.docx`;
 }
 
+function nombreDeInforme_(nombreCurso, mes) {
+  return `Informe - ${nombreParaDrive_(nombreCurso)} - ${mes}.docx`;
+}
+
 function nombreParaDrive_(nombreCurso) {
   return String(nombreCurso || 'sin curso')
     .replace(/[\\/:*?"<>|]/g, ' ')

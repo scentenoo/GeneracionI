@@ -100,6 +100,43 @@ function guardar_informe_mensual(token, curso_id, mes, narrativa, gestionNarrati
   }
 }
 
+/**
+ * Archiva en Drive el .docx del informe ya entregado — el mismo que arma
+ * el cliente con generar_informe_mensual + docxtpl. Sin esto el informe
+ * solo vivía como datos sueltos en la fila; el revisor (y cualquiera con
+ * el link) necesita poder abrir el documento real, no que se regenere
+ * cada vez que alguien lo mira.
+ */
+function guardar_documento_informe(token, curso_id, mes, archivo) {
+  const sesion = requireSession_(token);
+
+  const curso = findRowById_(SHEET_NAMES.CURSOS, curso_id);
+  if (!curso) throw new Error('Curso no encontrado');
+  if (String(curso.docente_id) !== String(sesion.id) && !puedeSupervisar_(sesion)) {
+    throw new Error('No tienes permiso para modificar ese informe');
+  }
+  if (!archivo || !archivo.base64) throw new Error('Falta el documento');
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const fila = buscarInforme_(curso_id, mes);
+    if (!fila) throw new Error('Todavía no se entregó el informe de ese mes para este curso');
+
+    const id = reemplazarArchivo_(
+      ['Informes', curso.nombre, nombreCarpetaMes_(mes)],
+      fila.doc_drive_id,
+      archivo.base64,
+      archivo.mimeType || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      nombreDeInforme_(curso.nombre, mes)
+    );
+    updateRowById_(SHEET_NAMES.INFORMES, fila.id, { doc_drive_id: id });
+    return { ok: true, link: urlDeArchivo_(id) };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 /** Las respuestas ya guardadas, para reabrir el informe y seguir editándolo. */
 /**
  * Borra un informe ya entregado, para que el mes vuelva a figurar como
@@ -114,6 +151,11 @@ function guardar_informe_mensual(token, curso_id, mes, narrativa, gestionNarrati
 function eliminar_informe_mensual(token, curso_id, mes) {
   const sesion = requireSession_(token);
   requireAdministrador_(sesion);
+
+  readRowsWhere_(
+    SHEET_NAMES.INFORMES,
+    (i) => String(i.curso_id) === String(curso_id) && mesDeFecha_(i.mes) === mes
+  ).forEach((i) => { trasharSiExiste_(i.doc_drive_id); });
 
   const borrados = eliminarFilasDonde_(
     SHEET_NAMES.INFORMES,
@@ -265,23 +307,32 @@ function generar_informe_mensual(token, curso_id, mes, narrativa, gestionNarrati
   // de secretaría" aparece en esa tabla junto a las clases.
   const encuentrosDeClases = planeacionesDelMes.map((p, i) => {
     const foto = archivoABase64_(p.foto_clase_drive_id);
+    const presentes = (p.asistencia || []).filter((a) => a.presente).map((a) => a.nombre);
     return {
       _fecha: fechaISO_(p.fecha),
       nro: `Clase ${i + 1}`,
       foto_base64: foto ? foto.base64 : null,
       foto_mime: foto ? foto.mimeType : null,
+      // La plantilla real decía acá "Asistencia registrada en la
+      // planeación de esa fecha" — un texto fijo que mandaba a buscarla a
+      // otro lado. Ya la tenemos (es la misma asistencia de esa clase), así
+      // que se imprime directo.
+      asistencia: presentes.length ? presentes.join(', ') : 'Nadie marcado presente ese día',
     };
   });
 
   const encuentrosDeOtras = otrasDelMes
     .filter((a) => a.foto_drive_id)
-    .map((a) => {
+    .map((a, i) => {
       const foto = archivoABase64_(a.foto_drive_id);
       return {
         _fecha: fechaISO_(a.fecha),
-        nro: a.descripcion,
+        nro: `Hora externa ${i + 1}`,
         foto_base64: foto ? foto.base64 : null,
         foto_mime: foto ? foto.mimeType : null,
+        // No hay asistencia de estudiantes que poner acá (es una reunión,
+        // un claustro): en su lugar va qué fue esa actividad.
+        asistencia: a.descripcion || '',
       };
     });
 

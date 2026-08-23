@@ -115,6 +115,7 @@ def generar_informe_mensual_docx(contexto: dict, ruta_salida: str | Path) -> Pat
     ctx["encuentros"] = [
         {
             "nro": e["nro"],
+            "asistencia": e.get("asistencia", ""),
             "foto": _imagen_desde_base64(tpl, e.get("foto_base64"), _IMG_WIDTH_CHICA_MM),
         }
         for e in contexto.get("encuentros", [])

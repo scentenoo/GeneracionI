@@ -364,6 +364,23 @@ class InformeScreen(ctk.CTkScrollableFrame):
         self.error_label.configure(text="Entregando el informe...", text_color="gray")
         self.update_idletasks()
 
+        mes = self.mes_entry.get().strip()
+
+        def trabajo():
+            resultado = api_client.guardar_informe_mensual(
+                self.sesion["token"], curso["id"], mes, narrativa, gestion, incluir,
+            )
+            # Archiva el .docx en Drive con lo recién entregado. Si esto
+            # falla, la entrega ya quedó guardada: el documento es
+            # evidencia, no el dato (igual que al editar una planeación).
+            try:
+                contexto = api_client.generar_informe_mensual(self.sesion["token"], curso["id"], mes)
+                archivo = vista_previa.informe_para_subir(contexto)
+                api_client.guardar_documento_informe(self.sesion["token"], curso["id"], mes, archivo)
+            except Exception:  # noqa: BLE001 — la entrega ya se guardó
+                pass
+            return resultado
+
         def listo(resultado):
             self.guardar_boton.configure(text="Entregar informe del mes")
             verbo = "actualizado" if resultado.get("actualizado") else "entregado"
@@ -374,16 +391,7 @@ class InformeScreen(ctk.CTkScrollableFrame):
             self.guardar_boton.configure(state="normal", text="Entregar informe del mes")
             self.error_label.configure(text=str(exc), text_color="#c0392b")
 
-        en_segundo_plano(
-            self,
-            lambda: api_client.guardar_informe_mensual(
-                self.sesion["token"], curso["id"], self.mes_entry.get().strip(),
-                narrativa, gestion, incluir,
-            ),
-            listo,
-            fallo,
-            bloquea_cierre=True,
-        )
+        en_segundo_plano(self, trabajo, listo, fallo, bloquea_cierre=True)
 
     def _permitir(self, permitido: bool):
         """El informe del mes se arma con las planeaciones del mes: si

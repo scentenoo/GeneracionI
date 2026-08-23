@@ -42,6 +42,9 @@ function validarActividad_(sesion, datos) {
 function guardar_actividad(token, datos, fotos) {
   const sesion = requireSession_(token);
   const { curso, horasSede, horasExternas } = validarActividad_(sesion, datos);
+  // Cargar una actividad de un mes ya cerrado también le cambia la cuenta
+  // de cobro al equipo directivo, igual que con una clase.
+  requireMesAbierto_(sesion, curso.id, mesDeFecha_(datos.fecha));
 
   // La foto es la evidencia de que la actividad pasó, igual que en la
   // clase. Solo un directivo puede registrarla sin nada.
@@ -90,6 +93,7 @@ function editar_actividad(token, id, datos, fotos) {
   if (String(fila.usuario_id) !== String(sesion.id) && !puedeSupervisar_(sesion)) {
     throw new Error('Solo podés editar tus propias actividades');
   }
+  requireMesAbierto_(sesion, fila.curso_id, mesDeFecha_(fila.fecha));
 
   const { curso, horasSede, horasExternas } = validarActividad_(sesion, datos);
 
@@ -135,10 +139,11 @@ function obtener_actividades(token, curso_id, mes) {
     throw new Error('No tienes permiso para ver las actividades de ese curso');
   }
 
+  const cerrado = calculadorDeCierre_(sesion);
   return readRowsWhere_(
     SHEET_NAMES.ACTIVIDADES,
     (a) => String(a.curso_id) === String(curso_id) && (!mes || mesDeFecha_(a.fecha) === mes)
-  );
+  ).map((a) => Object.assign({}, a, { bloqueada: cerrado(a.curso_id, mesDeFecha_(a.fecha)) }));
 }
 
 /** Solo el dueño borra las suyas, igual que con las planeaciones. */
@@ -150,6 +155,7 @@ function eliminar_actividad(token, id) {
   if (String(fila.usuario_id) !== String(sesion.id)) {
     throw new Error('Solo podés eliminar tus propias actividades');
   }
+  requireMesAbierto_(sesion, fila.curso_id, mesDeFecha_(fila.fecha));
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);

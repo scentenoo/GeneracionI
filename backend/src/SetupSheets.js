@@ -80,6 +80,10 @@ const ESQUEMA_SHEETS_ = {
     'creado_en', 'actualizado_en',
     // Revisión: pendiente / aprobado / devuelto.
     'estado', 'revisado_por', 'revisado_en', 'motivo_devolucion',
+    // El .docx entregado, archivado en Drive (igual que doc_drive_id en
+    // Planeaciones) — para que el revisor lo pueda abrir y quede como
+    // evidencia, en vez de regenerarse cada vez que alguien lo mira.
+    'doc_drive_id',
   ],
   // Una ficha por persona. `curso_id` quedó de cuando el estudiante
   // colgaba de un solo curso; hoy manda Inscripciones (ver migrarAInscripciones).

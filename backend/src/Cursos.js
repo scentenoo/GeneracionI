@@ -160,7 +160,10 @@ function eliminar_curso_definitivo(token, curso_id) {
     }).forEach(function (a) { trasharSiExiste_(a.foto_drive_id); });
     readRowsWhere_(SHEET_NAMES.INFORMES, function (i) {
       return String(i.curso_id) === String(curso_id);
-    }).forEach(function (i) { borrarRevisiones_('informe', curso_id + '|' + mesDeFecha_(i.mes)); });
+    }).forEach(function (i) {
+      borrarRevisiones_('informe', curso_id + '|' + mesDeFecha_(i.mes));
+      trasharSiExiste_(i.doc_drive_id);
+    });
 
     [
       [SHEET_NAMES.PLANEACIONES, 'curso_id'],
