@@ -30,6 +30,7 @@ class HomeScreen(ctk.CTkScrollableFrame):
         on_usuarios: Callable[[], None],
         on_cambiar_password: Callable[[], None],
         on_version: Callable[[], None],
+        on_revisores: Callable[[], None],
     ):
         super().__init__(master)
 
@@ -69,9 +70,11 @@ class HomeScreen(ctk.CTkScrollableFrame):
 
         self._seccion("Mi cuenta")
         self._boton("Cambiar contraseña", on_cambiar_password)
-        # Publicar una versión bloquea a quien no la tenga, así que va
+        # Publicar una versión bloquea a quien no la tenga, y reasignar
+        # revisores cambia quién aprueba el trabajo de todos: las dos van
         # detrás del administrador único y no del rol directivo.
         if sesion.get("es_admin"):
+            self._boton("Revisores por color", on_revisores)
             self._boton("Versión de la app", on_version)
 
     def _seccion(self, titulo: str):

@@ -20,6 +20,7 @@ from ui.planeaciones_docente_screen import PlaneacionesDocenteScreen
 from ui.revisar_screen import RevisarScreen
 from ui.usuarios_screen import UsuariosScreen
 from ui.password_screen import PasswordScreen
+from ui.revisores_screen import RevisoresScreen
 from ui.version_screen import VersionScreen
 from ui import tareas
 from ui.tareas import cache, en_segundo_plano
@@ -239,6 +240,7 @@ class App(ctk.CTk):
             on_usuarios=self._mostrar_usuarios,
             on_cambiar_password=self._mostrar_password,
             on_version=self._mostrar_version,
+            on_revisores=self._mostrar_revisores,
         )
         self.pantalla_actual.pack(fill="both", expand=True)
 
@@ -345,6 +347,11 @@ class App(ctk.CTk):
     def _mostrar_usuarios(self):
         self._limpiar()
         self.pantalla_actual = UsuariosScreen(self, self.sesion, on_volver=self._mostrar_home)
+        self.pantalla_actual.pack(fill="both", expand=True)
+
+    def _mostrar_revisores(self):
+        self._limpiar()
+        self.pantalla_actual = RevisoresScreen(self, self.sesion, on_volver=self._mostrar_home)
         self.pantalla_actual.pack(fill="both", expand=True)
 
     def _mostrar_version(self):

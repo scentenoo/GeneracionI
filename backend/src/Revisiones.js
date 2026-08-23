@@ -20,6 +20,20 @@ const ESTADO_APROBADO = 'aprobado';
 const ESTADO_DEVUELTO = 'devuelto';
 
 /**
+ * Una fila sin estado cuenta como pendiente.
+ *
+ * Pasa con todo lo entregado ANTES de que existiera este flujo —las
+ * planeaciones de agosto quedaron con la columna vacía— y con cualquier
+ * fila que alguien agregue a mano en la Sheet, que en este programa pasa.
+ * Si se exige `estado === 'pendiente'` a secas, ese trabajo no le aparece a
+ * nadie para revisar y queda en el limbo sin que salte ningún aviso.
+ */
+function estaPendiente_(fila) {
+  const estado = String(fila.estado || '').trim();
+  return estado === '' || estado === ESTADO_PENDIENTE;
+}
+
+/**
  * Fija quién revisa cada color. Solo el administrador. Guarda los ids en
  * Config, así reasignar (si Mariangel o Lorena cambian) es cambiar esto y
  * no todos los cursos.
@@ -27,12 +41,72 @@ const ESTADO_DEVUELTO = 'devuelto';
 function fijar_revisores(token, revisor_verde_id, revisor_morado_id) {
   const sesion = requireSession_(token);
   requireAdministrador_(sesion);
-  if (revisor_verde_id) escribirConfig_('revisor_verde', String(revisor_verde_id));
-  if (revisor_morado_id) escribirConfig_('revisor_morado', String(revisor_morado_id));
+  // Cadena vacía y null NO son lo mismo: '' desasigna el color (nadie lo
+  // revisa salvo el administrador) y null/undefined lo deja como estaba,
+  // para poder cambiar un solo color sin tocar el otro.
+  if (revisor_verde_id !== undefined && revisor_verde_id !== null) {
+    escribirConfig_('revisor_verde', String(validarRevisor_(revisor_verde_id, 'verde')));
+  }
+  if (revisor_morado_id !== undefined && revisor_morado_id !== null) {
+    escribirConfig_('revisor_morado', String(validarRevisor_(revisor_morado_id, 'morado')));
+  }
   return {
     ok: true,
     revisor_verde: leerConfig_('revisor_verde'),
     revisor_morado: leerConfig_('revisor_morado'),
+  };
+}
+
+/**
+ * Un revisor tiene que existir y ocupar un cargo directivo. Sin este
+ * chequeo, asignar por error a un docente —o a un id que ya no existe—
+ * dejaba ese color sin quien lo revise, y en silencio: las planeaciones se
+ * acumulaban como pendientes y nadie recibía nada.
+ */
+function validarRevisor_(id, color) {
+  if (id === '') return '';  // desasignar es válido
+  const usuario = findRowById_(SHEET_NAMES.USUARIOS, id);
+  if (!usuario) throw new Error(`No existe el usuario que querés poner a revisar lo ${color}`);
+  if (usuario.rol !== ROLES.DIRECTIVO && usuario.rol !== ROLES.AMBOS) {
+    throw new Error(`${usuario.nombre} no es directivo, así que no puede revisar lo ${color}`);
+  }
+  return usuario.id;
+}
+
+/**
+ * Quién revisa cada color hoy, y qué cursos le tocan a cada uno.
+ *
+ * Devuelve los cursos y no solo cuántos son, porque la pregunta que se hace
+ * quien abre esa pantalla es "¿qué revisa cada quien?" — y porque los
+ * cursos SIN color son el caso que hay que ver con nombre y apellido: no
+ * los revisa nadie más que el administrador, y hasta que alguien los mire
+ * las planeaciones de ese docente se apilan en pendiente sin que salte
+ * ningún aviso.
+ */
+function obtener_revisores(token) {
+  const sesion = requireSession_(token);
+  requireAdministrador_(sesion);
+
+  const nombrePorId = {};
+  readAllRows_(SHEET_NAMES.USUARIOS).forEach((u) => { nombrePorId[String(u.id)] = u.nombre; });
+
+  const cursos = { verde: [], morado: [], sin_color: [] };
+  readAllRows_(SHEET_NAMES.CURSOS)
+    .filter((c) => c.activo !== false)
+    .forEach((c) => {
+      const color = String(c.color || '').trim().toLowerCase();
+      const grupo = color === 'verde' || color === 'morado' ? color : 'sin_color';
+      cursos[grupo].push({
+        id: c.id,
+        nombre: String(c.nombre),
+        docente: nombrePorId[String(c.docente_id)] || `id ${c.docente_id}`,
+      });
+    });
+
+  return {
+    revisor_verde: leerConfig_('revisor_verde'),
+    revisor_morado: leerConfig_('revisor_morado'),
+    cursos: cursos,
   };
 }
 
@@ -186,7 +260,7 @@ function pendientes_de_revision(token, mes) {
 
   const planeaciones = readRowsWhere_(
     SHEET_NAMES.PLANEACIONES,
-    (p) => idsCurso[String(p.curso_id)] && mesDeFecha_(p.fecha) === mes && p.estado === ESTADO_PENDIENTE
+    (p) => idsCurso[String(p.curso_id)] && mesDeFecha_(p.fecha) === mes && estaPendiente_(p)
   ).map((p) => ({
     id: p.id,
     curso: idsCurso[String(p.curso_id)].nombre,
@@ -198,7 +272,7 @@ function pendientes_de_revision(token, mes) {
 
   const informes = readRowsWhere_(
     SHEET_NAMES.INFORMES,
-    (i) => idsCurso[String(i.curso_id)] && mesDeFecha_(i.mes) === mes && i.estado === ESTADO_PENDIENTE
+    (i) => idsCurso[String(i.curso_id)] && mesDeFecha_(i.mes) === mes && estaPendiente_(i)
   ).map((i) => ({
     curso_id: i.curso_id,
     mes: mes,

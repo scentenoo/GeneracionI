@@ -29,6 +29,7 @@ const ACCIONES_PERMITIDAS_ = {
   mis_devoluciones,
   historial_revision,
   fijar_revisores,
+  obtener_revisores,
   importar_estudiantes,
   obtener_estudiantes,
   buscar_estudiantes,
