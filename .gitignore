@@ -27,6 +27,9 @@ Thumbs.db
 .vscode/
 .idea/
 
+# Claude Code (config local de la herramienta, no del proyecto)
+.claude/
+
 # Formatos reales del programa. NO se versionan: los informes traen cédula
 # y número de cuenta de cada docente, y la nómina los sueldos de todo el
 # equipo. Los chicos del curso trabajan en este repo, y git no olvida.
