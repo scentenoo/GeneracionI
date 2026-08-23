@@ -11,12 +11,36 @@
  * Los estudiantes y las planeaciones cuelgan del curso, no del docente.
  */
 
+/**
+ * Normaliza el color de revisión. Vacío es válido —un curso puede nacer sin
+ * revisor asignado— pero cualquier otra cosa que no sea verde o morado es
+ * un error: `revisorDeCurso_` busca la clave `revisor_<color>` en Config y
+ * un "Verde " con espacio, o un "azul", dejaría el curso sin quien lo mire.
+ */
+function colorDeCurso_(valor) {
+  const color = String(valor === undefined || valor === null ? '' : valor).trim().toLowerCase();
+  if (color === '') return '';
+  if (color !== 'verde' && color !== 'morado') {
+    throw new Error(`Color de curso inválido: "${valor}". Tiene que ser verde o morado.`);
+  }
+  return color;
+}
+
 function crear_curso(token, datos) {
   const sesion = requireSession_(token);
   requireRole_(sesion, [ROLES.DIRECTIVO, ROLES.AMBOS]);
 
   if (!datos.nombre || !datos.docente_id) {
     throw new Error('Faltan datos obligatorios (nombre, docente_id)');
+  }
+
+  // El color es obligatorio al crear —no al editar, porque los cursos que
+  // vienen de antes pueden no tenerlo—. Un curso nace con quien lo revisa
+  // ya definido, o no nace: sin color, sus planeaciones se apilan en
+  // pendiente y nadie se entera.
+  const color = colorDeCurso_(datos.color);
+  if (!color) {
+    throw new Error('Elegí el color del curso: es lo que define quién lo revisa (verde o morado)');
   }
 
   const docente = findRowById_(SHEET_NAMES.USUARIOS, datos.docente_id);
@@ -32,6 +56,9 @@ function crear_curso(token, datos) {
     edad_desde: datos.edad_desde || '',
     edad_hasta: datos.edad_hasta || '',
     activo: true,
+    // El color se elige desde el alta y no solo al editar: un curso sin
+    // color no lo revisa nadie más que el administrador, y en silencio.
+    color: color,
   });
 
   return { ok: true, id: fila.id };
@@ -73,6 +100,9 @@ function editar_curso(token, curso_id, cambios) {
   Object.keys(cambios).forEach((campo) => {
     if (CAMPOS_EDITABLES_CURSO_.includes(campo)) cambiosFiltrados[campo] = cambios[campo];
   });
+  if (cambiosFiltrados.color !== undefined) {
+    cambiosFiltrados.color = colorDeCurso_(cambiosFiltrados.color);
+  }
 
   const cambiosReales = updateRowById_(SHEET_NAMES.CURSOS, curso_id, cambiosFiltrados);
   return { ok: true, cambios: cambiosReales.length };
@@ -113,9 +143,21 @@ function eliminar_curso_definitivo(token, curso_id) {
     // curso|mes del informe), no por curso, así que hay que limpiarlo a
     // mano antes de borrar las filas — si no, queda suelto y como los ids
     // se reusan lo heredaría otro documento.
+    //
+    // Mismo motivo para las fotos y documentos: eliminarFilasDonde_ borra
+    // filas de la Sheet, no sabe nada de Drive. Sin este paso, el borrado
+    // en cascada de un curso deja huérfano en Drive todo lo que sus
+    // planeaciones y actividades habían subido.
     readRowsWhere_(SHEET_NAMES.PLANEACIONES, function (p) {
       return String(p.curso_id) === String(curso_id);
-    }).forEach(function (p) { borrarRevisiones_('planeacion', String(p.id)); });
+    }).forEach(function (p) {
+      borrarRevisiones_('planeacion', String(p.id));
+      trasharSiExiste_(p.foto_clase_drive_id);
+      trasharSiExiste_(p.doc_drive_id);
+    });
+    readRowsWhere_(SHEET_NAMES.ACTIVIDADES, function (a) {
+      return String(a.curso_id) === String(curso_id);
+    }).forEach(function (a) { trasharSiExiste_(a.foto_drive_id); });
     readRowsWhere_(SHEET_NAMES.INFORMES, function (i) {
       return String(i.curso_id) === String(curso_id);
     }).forEach(function (i) { borrarRevisiones_('informe', curso_id + '|' + mesDeFecha_(i.mes)); });

@@ -2,8 +2,13 @@
 
 La nómina tiene una fila por persona-y-curso, así que quien da dos cursos
 aparece dos veces y quien además coordina, tres. El script agrupa por
-persona, deduce el rol de las filas que tenga, y crea un curso por cada
-fila de docencia.
+persona y deduce el rol de las filas que tenga.
+
+Los cursos NO los crea: desde que cada curso tiene que nacer con su color
+de revisión (verde lo revisa Mariangel, morado Lorena), y la nómina no dice
+cuál es, el script los lista al final para crearlos desde la app. Elegir un
+color al azar sería peor que no crearlo: mandaría las planeaciones de ese
+docente al revisor equivocado.
 
 Por defecto NO escribe nada: se conecta, compara contra la Sheet y
 muestra lo que haría. Para aplicarlo de verdad hay que pasar --aplicar,
@@ -205,7 +210,8 @@ def imprimir_plan(plan: list[dict], comparado: bool):
                 print(f"      curso «{curso}»: NO lo creo, en la Sheet ya figura como")
                 print(f"                       «{existente['nombre']}» — revisá si es el mismo")
             else:
-                print(f"      curso «{curso}»: {'se crea' if comparado else '(sin comparar)'}")
+                pendiente = "hay que crearlo a mano (elegirle color)" if comparado else "(sin comparar)"
+                print(f"      curso «{curso}»: {pendiente}")
 
         for c in p["cargos"]:
             print(f"      cargo «{c}»: no se crea como curso")
@@ -261,6 +267,7 @@ def main():
     # dejaba trece usuarios creados con contraseñas que ya no sabía nadie,
     # ni ellos ni yo. Pasó.
     nuevos = 0
+    faltan_a_mano: list[tuple[str, str]] = []  # (docente, curso) que hay que crear en la app
     with CREDENCIALES.open("a", encoding="utf-8") as archivo:
         archivo.write(f"\n=== Corrida del {date.today().isoformat()} ===\n")
         archivo.write("Repartir a mano y borrar este archivo.\n")
@@ -298,8 +305,19 @@ def main():
                 elif motivo == "parecido":
                     print(f"      curso «{curso}» NO creado: ya figura como «{existente['nombre']}»")
                 else:
-                    api_client.crear_curso(token, {"docente_id": usuario["id"], "nombre": curso})
-                    print(f"      curso «{curso}» creado")
+                    # Desde que el color es obligatorio, el curso no se puede
+                    # crear desde acá: la nómina no dice si es verde o morado,
+                    # y elegir uno al azar es peor que no crearlo —manda las
+                    # planeaciones de ese docente al revisor equivocado—. Sigue
+                    # la regla de siempre de este script: ante la duda no crea.
+                    faltan_a_mano.append((item["nombre"], curso))
+                    print(f"      curso «{curso}» NO creado: hay que crearlo en la app y elegirle color")
+
+    if faltan_a_mano:
+        print(f"\n{len(faltan_a_mano)} cursos quedaron sin crear, porque hay que elegirles color:")
+        for docente, curso in faltan_a_mano:
+            print(f"  · {curso}  ({docente})")
+        print("Se crean desde «Cursos» en la app, eligiendo verde o morado.")
 
     if nuevos:
         print(f"\n{nuevos} contraseñas anotadas en {CREDENCIALES}")
@@ -308,7 +326,7 @@ def main():
     print("\nSe puede volver a correr las veces que haga falta: saltea lo que")
     print("ya existe, así que si se corta a la mitad se retoma corriéndolo otra vez.")
     print("\nFalta completar a mano, desde la app: cédula, cuenta bancaria,")
-    print("núcleo y rango de edades de cada curso. La nómina no los trae.")
+    print("núcleo, rango de edades y color de cada curso. La nómina no los trae.")
 
 
 if __name__ == "__main__":

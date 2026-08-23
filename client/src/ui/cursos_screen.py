@@ -6,9 +6,11 @@ El núcleo y el rango de edades viven en el curso y no en la persona,
 porque cambian de un curso a otro aunque sea el mismo docente, y ambos
 salen en el informe mensual —que también va por curso.
 
-La carga de la nómina crea los cursos solo con nombre y docente: el
-núcleo y las edades quedan vacíos y se completan acá, editando cada
-curso. Por eso la edición no es un lujo, es parte del alta.
+La carga de la nómina ya no crea cursos —no sabe de qué color va cada uno—
+así que los cursos nuevos nacen todos desde acá. El color es obligatorio al
+crear porque es lo que define quién lo revisa; el núcleo y las edades se
+pueden completar después, editando. Por eso la edición no es un lujo, es
+parte del alta.
 """
 
 from __future__ import annotations
@@ -21,6 +23,9 @@ import customtkinter as ctk
 import api_client
 from ui.cargando import Cargando
 from ui.tareas import cache, en_segundo_plano
+
+SIN_COLOR = "(sin asignar)"
+AMBAR = "#8A6114"
 
 
 class CursosScreen(ctk.CTkScrollableFrame):
@@ -52,6 +57,13 @@ class CursosScreen(ctk.CTkScrollableFrame):
         ctk.CTkLabel(fila_edades, text="años  (sale en la cuenta de cobro)", text_color="gray").pack(
             side="left", padx=6
         )
+
+        # El color va en el alta y no solo en «Editar»: un curso que nace sin
+        # color no lo revisa nadie más que el administrador, y sin avisar.
+        ctk.CTkLabel(self, text="Color (define quién lo revisa)", anchor="w").pack(fill="x", pady=(8, 0))
+        self.color_menu = ctk.CTkOptionMenu(self, values=[SIN_COLOR, "verde", "morado"])
+        self.color_menu.set(SIN_COLOR)
+        self.color_menu.pack(fill="x", pady=(2, 0))
 
         self.error_label = ctk.CTkLabel(self, text="", text_color="#c0392b", wraplength=450, justify="left")
         self.error_label.pack(fill="x", pady=(12, 4))
@@ -117,7 +129,12 @@ class CursosScreen(ctk.CTkScrollableFrame):
             def incompleto(c):
                 return not c.get("nucleo") or not (c.get("edad_desde") and c.get("edad_hasta"))
 
-            for curso in sorted(activos, key=lambda c: (not incompleto(c), str(c["nombre"]).lower())):
+            # Un curso sin color tampoco está terminado —no tiene quien lo
+            # revise— así que sube al mismo grupo de "hay que completar".
+            def pendiente(c):
+                return incompleto(c) or not str(c.get("color") or "").strip()
+
+            for curso in sorted(activos, key=lambda c: (not pendiente(c), str(c["nombre"]).lower())):
                 self._fila_curso(curso, incompleto(curso))
 
         def fallo(exc):
@@ -148,8 +165,14 @@ class CursosScreen(ctk.CTkScrollableFrame):
 
         if incompleto:
             ctk.CTkLabel(
-                info, text="Falta completar núcleo o edades", text_color="#8A6114", anchor="w",
+                info, text="Falta completar núcleo o edades", text_color=AMBAR, anchor="w",
                 font=ctk.CTkFont(size=11),
+            ).pack(fill="x")
+
+        if not str(curso.get("color") or "").strip():
+            ctk.CTkLabel(
+                info, text="Sin color — no lo revisa nadie más que el administrador",
+                text_color=AMBAR, anchor="w", font=ctk.CTkFont(size=11), wraplength=380, justify="left",
             ).pack(fill="x")
 
         botones = ctk.CTkFrame(fila, fg_color="transparent")
@@ -168,6 +191,11 @@ class CursosScreen(ctk.CTkScrollableFrame):
         if docente_id is None or not nombre:
             self.error_label.configure(text="Elegí un docente y escribí el nombre del curso.", text_color="#c0392b")
             return
+        if self.color_menu.get() == SIN_COLOR:
+            self.error_label.configure(
+                text="Elegí el color del curso: es lo que define quién lo revisa.", text_color="#c0392b"
+            )
+            return
 
         datos = {
             "docente_id": docente_id,
@@ -175,6 +203,7 @@ class CursosScreen(ctk.CTkScrollableFrame):
             "nucleo": self.nucleo_entry.get().strip(),
             "edad_desde": self.edad_desde_entry.get().strip(),
             "edad_hasta": self.edad_hasta_entry.get().strip(),
+            "color": "" if self.color_menu.get() == SIN_COLOR else self.color_menu.get(),
         }
 
         self.crear_boton.configure(state="disabled")
@@ -185,6 +214,7 @@ class CursosScreen(ctk.CTkScrollableFrame):
             cache.invalidar("cursos")
             for entry in (self.nombre_entry, self.nucleo_entry, self.edad_desde_entry, self.edad_hasta_entry):
                 entry.delete(0, "end")
+            self.color_menu.set(SIN_COLOR)
             self._cargar_lista()
             self.error_label.configure(text=f"Curso «{nombre}» creado ✓", text_color="#2fa84f")
 
@@ -280,9 +310,9 @@ class DialogoEditarCurso(ctk.CTkToplevel):
         ctk.CTkLabel(self, text="Color (define quién lo revisa)", anchor="w").pack(
             fill="x", padx=20, pady=(10, 0)
         )
-        self.color_menu = ctk.CTkOptionMenu(self, width=340, values=["(sin asignar)", "verde", "morado"])
+        self.color_menu = ctk.CTkOptionMenu(self, width=340, values=[SIN_COLOR, "verde", "morado"])
         self.color_menu.pack(padx=20)
-        self.color_menu.set(str(curso.get("color") or "(sin asignar)"))
+        self.color_menu.set(str(curso.get("color") or SIN_COLOR))
 
         self.error_label = ctk.CTkLabel(self, text="", text_color="#c0392b", wraplength=340)
         self.error_label.pack(pady=(10, 0))
@@ -318,7 +348,7 @@ class DialogoEditarCurso(ctk.CTkToplevel):
             "nucleo": self.nucleo_entry.get().strip(),
             "edad_desde": self.desde_entry.get().strip(),
             "edad_hasta": self.hasta_entry.get().strip(),
-            "color": "" if color == "(sin asignar)" else color,
+            "color": "" if color == SIN_COLOR else color,
         }
         self.guardar_boton.configure(state="disabled", text="Guardando...")
         self.on_guardar(self.curso["id"], cambios, self)
