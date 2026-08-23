@@ -1,6 +1,11 @@
 """Horas de gestión (planeación administrativa, rol directivo) — log de
 actividades administrativas del mes. Formato mucho más libre que la
-planeación docente: sin bloques, sin mínimo de palabras (spec sección 6).
+planeación docente: sin momentos, sin mínimo de palabras (spec sección 6).
+
+Lo que sí pide, desde el piloto, es la evidencia: cada actividad va con su
+foto y con el producto/entregable que dejó. El link a la carpeta sigue
+siendo opcional, porque la foto ya hace de soporte cuando no hay nada que
+enlazar.
 
 El mismo formulario sirve para cargar una nueva y para corregir una ya
 registrada: al tocar «Editar» en una fila, sus datos suben al formulario
@@ -9,17 +14,17 @@ y «Guardar» pasa a actualizar esa en vez de crear otra.
 
 from __future__ import annotations
 
-from tkinter import messagebox
+from tkinter import filedialog, messagebox
 from typing import Callable
 
 import customtkinter as ctk
 
 import api_client
-from services import date_utils
+from services import date_utils, image_utils
 from ui.cargando import Cargando
 from ui.tareas import en_segundo_plano
 
-ROJO, VERDE, GRIS = "#c0392b", "#2fa84f", "gray"
+ROJO, VERDE, GRIS, AMBAR = "#c0392b", "#2fa84f", "gray", "#8A6114"
 
 
 class HorasGestionScreen(ctk.CTkScrollableFrame):
@@ -27,6 +32,7 @@ class HorasGestionScreen(ctk.CTkScrollableFrame):
         super().__init__(master, label_text="Horas de gestión")
         self.sesion = sesion
         self._editando: dict | None = None  # la fila que se está corrigiendo, o None
+        self.foto_path: str | None = None  # foto elegida y todavía no subida
 
         ctk.CTkButton(self, text="← Volver", width=90, command=on_volver).pack(anchor="w", pady=(0, 10))
 
@@ -46,13 +52,25 @@ class HorasGestionScreen(ctk.CTkScrollableFrame):
         self.horas_entry = ctk.CTkEntry(self, width=80)
         self.horas_entry.pack(anchor="w", pady=(2, 0))
 
-        ctk.CTkLabel(self, text="Producto / entregable (opcional)").pack(anchor="w", pady=(8, 0))
-        self.entregable_entry = ctk.CTkEntry(self)
+        ctk.CTkLabel(self, text="Producto / entregable").pack(anchor="w", pady=(8, 0))
+        self.entregable_entry = ctk.CTkEntry(
+            self, placeholder_text="Qué quedó de la actividad: acta, listado, informe..."
+        )
         self.entregable_entry.pack(fill="x", pady=(2, 0))
 
         ctk.CTkLabel(self, text="Link a soporte / carpeta (opcional)").pack(anchor="w", pady=(8, 0))
         self.link_entry = ctk.CTkEntry(self)
         self.link_entry.pack(fill="x", pady=(2, 0))
+
+        ctk.CTkLabel(self, text="Foto de la actividad").pack(anchor="w", pady=(8, 0))
+        fila_foto = ctk.CTkFrame(self, fg_color="transparent")
+        fila_foto.pack(fill="x", pady=(2, 0))
+        ctk.CTkButton(fila_foto, text="Elegir foto...", width=110, command=self._elegir_foto).pack(
+            side="left"
+        )
+        self.foto_label = ctk.CTkLabel(fila_foto, text="", anchor="w")
+        self.foto_label.pack(side="left", padx=10)
+        self._actualizar_foto_label()
 
         self.error_label = ctk.CTkLabel(self, text="", text_color=ROJO, wraplength=450, justify="left")
         self.error_label.pack(fill="x", pady=(12, 4))
@@ -79,6 +97,27 @@ class HorasGestionScreen(ctk.CTkScrollableFrame):
         self.fecha_entry.insert(0, date_utils.hoy_iso())
         for e in (self.actividad_entry, self.horas_entry, self.entregable_entry, self.link_entry):
             e.delete(0, "end")
+        self.foto_path = None
+        self._actualizar_foto_label()
+
+    def _actualizar_foto_label(self):
+        """La foto es obligatoria salvo que se esté corrigiendo una fila que
+        ya tiene la suya: en ese caso, no elegir ninguna la conserva."""
+        if self.foto_path:
+            nombre = self.foto_path.replace("\\", "/").split("/")[-1]
+            self.foto_label.configure(text=nombre, text_color=VERDE)
+        elif self._editando and self._editando.get("foto_drive_id"):
+            self.foto_label.configure(text="conserva la foto que ya tenía", text_color=GRIS)
+        else:
+            self.foto_label.configure(text="obligatoria", text_color=ROJO)
+
+    def _elegir_foto(self):
+        ruta = filedialog.askopenfilename(
+            title="Elegí la foto de la actividad", filetypes=[("Imágenes", "*.jpg *.jpeg *.png")]
+        )
+        if ruta:
+            self.foto_path = ruta
+            self._actualizar_foto_label()
 
     def _cancelar_edicion(self):
         self._editando = None
@@ -108,6 +147,17 @@ class HorasGestionScreen(ctk.CTkScrollableFrame):
         if not self.actividad_entry.get().strip() or not self.horas_entry.get().strip():
             self.error_label.configure(text="Actividad y horas son obligatorias.", text_color=ROJO)
             return
+        if not self.entregable_entry.get().strip():
+            self.error_label.configure(
+                text="Falta el producto o entregable: es la prueba de la actividad.", text_color=ROJO
+            )
+            return
+
+        # Al editar, si la fila ya tenía foto no hace falta subir otra.
+        ya_tenia_foto = bool(self._editando and self._editando.get("foto_drive_id"))
+        if not self.foto_path and not ya_tenia_foto:
+            self.error_label.configure(text="Falta la foto de la actividad.", text_color=ROJO)
+            return
 
         datos = {
             "fecha": self.fecha_entry.get().strip(),
@@ -120,6 +170,7 @@ class HorasGestionScreen(ctk.CTkScrollableFrame):
         self.guardar_boton.configure(state="disabled")
         self.error_label.configure(text="Guardando...", text_color=GRIS)
         editando = self._editando
+        ruta_foto = self.foto_path
 
         def listo(_r):
             self.guardar_boton.configure(state="normal")
@@ -133,11 +184,16 @@ class HorasGestionScreen(ctk.CTkScrollableFrame):
             self.guardar_boton.configure(state="normal")
             self.error_label.configure(text=str(exc), text_color=ROJO)
 
-        if editando:
-            trabajo = lambda: api_client.editar_horas_gestion(self.sesion["token"], editando["id"], datos)
-        else:
-            trabajo = lambda: api_client.guardar_horas_gestion(self.sesion["token"], datos)
-        en_segundo_plano(self, trabajo, listo, fallo)
+        def trabajo():
+            # Comprimir la foto también tarda, así que va al hilo.
+            fotos = {"foto": image_utils.foto_a_payload(ruta_foto)} if ruta_foto else None
+            if editando:
+                return api_client.editar_horas_gestion(
+                    self.sesion["token"], editando["id"], datos, fotos
+                )
+            return api_client.guardar_horas_gestion(self.sesion["token"], datos, fotos)
+
+        en_segundo_plano(self, trabajo, listo, fallo, bloquea_cierre=True)
 
     def _eliminar(self, a: dict):
         if not messagebox.askyesno(
@@ -206,6 +262,12 @@ class HorasGestionScreen(ctk.CTkScrollableFrame):
             ctk.CTkLabel(
                 info, text=f"Entregable: {a['entregable']}", text_color=GRIS,
                 anchor="w", font=ctk.CTkFont(size=11),
+            ).pack(fill="x")
+        # Las filas de antes del piloto no tienen foto: se avisa para que se
+        # les pueda agregar una desde «Editar».
+        if not a.get("foto_drive_id"):
+            ctk.CTkLabel(
+                info, text="sin foto", text_color=AMBAR, anchor="w", font=ctk.CTkFont(size=11),
             ).pack(fill="x")
 
         acciones = ctk.CTkFrame(fila, fg_color="transparent")

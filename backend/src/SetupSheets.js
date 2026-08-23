@@ -88,9 +88,11 @@ const ESQUEMA_SHEETS_ = {
   // ejemplo. Antes había que escribirlo una vez por curso y, si se escribía
   // distinto, quedaba como dos personas.
   [SHEET_NAMES.INSCRIPCIONES]: ['id', 'estudiante_id', 'curso_id', 'creado_en'],
+  // La foto es la evidencia de la actividad y el entregable su producto:
+  // desde el piloto los dos son obligatorios (ver HorasGestion.js).
   [SHEET_NAMES.HORAS_GESTION]: [
     'id', 'directivo_id', 'fecha', 'actividad', 'horas_sede',
-    'entregable', 'link_soporte', 'creado_en',
+    'entregable', 'link_soporte', 'foto_drive_id', 'creado_en',
   ],
   // Un mes que el equipo directivo volvió a abrir para un curso puntual,
   // después de la fecha de corte.

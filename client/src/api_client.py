@@ -246,7 +246,9 @@ def obtener_estado_mes(token: str, curso_id: int, mes: str) -> dict:
 # --- Cursos -------------------------------------------------------------------
 
 def crear_curso(token: str, datos: dict) -> dict:
-    """datos: docente_id, nombre, nucleo, edad_desde, edad_hasta. Solo directivo."""
+    """datos: docente_id, nombre, nucleo, edad_desde, edad_hasta, color.
+    Solo directivo. `color` ("verde", "morado" o "") decide quién revisa el
+    curso; vacío significa que solo el administrador puede revisarlo."""
     return _call("crear_curso", token, datos)
 
 
@@ -289,13 +291,19 @@ def modificar_grupo(token: str, curso_id: int, cambios: dict) -> dict:
 
 # --- Horas de gestión (rol directivo) -----------------------------------------
 
-def guardar_horas_gestion(token: str, datos: dict) -> dict:
-    return _call("guardar_horas_gestion", token, datos)
+def guardar_horas_gestion(token: str, datos: dict, fotos: dict) -> dict:
+    """datos: fecha, actividad, horas_sede, entregable, link_soporte.
+    fotos: {"foto": {"base64": ..., "mimeType": "image/jpeg"}} — obligatoria,
+    igual que el entregable: son la evidencia de la actividad."""
+    return _call("guardar_horas_gestion", token, datos, fotos)
 
 
-def editar_horas_gestion(token: str, id_: int, cambios: dict) -> dict:
-    """Solo el dueño puede corregir su propia hora de gestión."""
-    return _call("editar_horas_gestion", token, id_, cambios)
+def editar_horas_gestion(token: str, id_: int, cambios: dict, fotos: dict | None = None) -> dict:
+    """Solo el dueño puede corregir su propia hora de gestión.
+
+    Sin foto nueva se conserva la que ya tenía; lo que no se puede es
+    dejarla sin ninguna."""
+    return _call("editar_horas_gestion", token, id_, cambios, fotos or {})
 
 
 def eliminar_horas_gestion(token: str, id_: int) -> dict:
@@ -435,8 +443,16 @@ def historial_revision(token: str, tipo: str, ref) -> list[dict]:
 
 
 def fijar_revisores(token: str, revisor_verde_id, revisor_morado_id) -> dict:
-    """Solo administrador. Fija quién revisa los cursos verdes y los morados."""
+    """Solo administrador. Fija quién revisa los cursos verdes y los morados.
+
+    Cadena vacía desasigna el color; None lo deja como estaba."""
     return _call("fijar_revisores", token, revisor_verde_id, revisor_morado_id)
+
+
+def obtener_revisores(token: str) -> dict:
+    """Solo administrador. Quién revisa cada color hoy, y cuántos cursos
+    activos hay de cada uno (incluidos los que quedaron sin color)."""
+    return _call("obtener_revisores", token)
 
 
 # --- Administración de usuarios (rol directivo) --------------------------------

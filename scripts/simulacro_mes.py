@@ -196,7 +196,7 @@ def main():
                  "horas_sede": "6", "entregable": "Acta"}
         try:
             cron("horas_gestion", lambda dd=datos, tk=ses["token"]:
-                 api_client.guardar_horas_gestion(tk, dd))
+                 api_client.guardar_horas_gestion(tk, dd, {"foto": foto_payload}))
         except api_client.ApiError as e:
             hallazgo("ALTA", f"{u['nombre']} no pudo cargar horas de gestión: {e}")
 
@@ -251,8 +251,23 @@ def main():
     if docentes:
         espera_error("Docente puro cargando horas de gestión",
                      lambda: api_client.guardar_horas_gestion(sesiones[docentes[0]["id"]]["token"],
-                         {"fecha": f"{MES_SIM}-10", "actividad": palabras(8), "horas_sede": "3"}),
+                         {"fecha": f"{MES_SIM}-10", "actividad": palabras(8), "horas_sede": "3",
+                          "entregable": "Acta"}, {"foto": foto_payload}),
                      debe_contener="rol")
+
+    # La evidencia de las horas de gestión es obligatoria desde el piloto:
+    # sin foto o sin entregable, esas horas no se pueden verificar.
+    if directivos and sesiones.get(directivos[0]["id"]):
+        tok_dir = sesiones[directivos[0]["id"]]["token"]
+        base_gestion = {"fecha": f"{MES_SIM}-11", "actividad": palabras(8), "horas_sede": "2"}
+        espera_error("Horas de gestión sin foto",
+                     lambda: api_client.guardar_horas_gestion(
+                         tok_dir, dict(base_gestion, entregable="Acta"), {}),
+                     debe_contener="foto")
+        espera_error("Horas de gestión sin entregable",
+                     lambda: api_client.guardar_horas_gestion(
+                         tok_dir, base_gestion, {"foto": foto_payload}),
+                     debe_contener="entregable")
 
     # --- SECCIÓN C: entrega de informes ---------------------------------
     print("\n--- C. Cada quien entrega su informe del mes ---")

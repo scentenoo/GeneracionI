@@ -138,7 +138,9 @@ function generar_informe_gestion(token, directivo_id, mes, gestionNarrativa) {
       nro_semana: String(Math.ceil(diaDeFecha_(h.fecha) / 7)),
       horas_sede: String(h.horas_sede),
       entregable: h.entregable || '',
-      link_soporte: h.link_soporte || '',
+      // Sin link a mano, el soporte que se enlaza es la foto de la
+      // actividad: siempre hay una, y así la columna nunca sale vacía.
+      link_soporte: h.link_soporte || urlDeArchivo_(h.foto_drive_id),
     })),
     total_horas_gestion: String(totalHoras),
 
