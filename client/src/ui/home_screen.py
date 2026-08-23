@@ -8,9 +8,16 @@ sin recorrer todo.
 
 from __future__ import annotations
 
+from tkinter import messagebox
 from typing import Callable
 
 import customtkinter as ctk
+
+import api_client
+from services.avisos import texto_devoluciones
+from ui.tareas import en_segundo_plano
+
+AMBAR = "#8A6114"
 
 
 class HomeScreen(ctk.CTkScrollableFrame):
@@ -19,13 +26,9 @@ class HomeScreen(ctk.CTkScrollableFrame):
         master,
         sesion: dict,
         on_planeaciones: Callable[[], None],
-        on_dashboard: Callable[[], None],
         on_informe: Callable[[], None],
-        on_informes_mes: Callable[[], None],
-        on_grupo: Callable[[], None],
         on_cursos: Callable[[], None],
         on_horas_gestion: Callable[[], None],
-        on_planeaciones_docente: Callable[[], None],
         on_revisar: Callable[[], None],
         on_usuarios: Callable[[], None],
         on_cambiar_password: Callable[[], None],
@@ -33,10 +36,24 @@ class HomeScreen(ctk.CTkScrollableFrame):
         on_revisores: Callable[[], None],
     ):
         super().__init__(master)
+        self.sesion = sesion
+        self._devoluciones: list[dict] = []
+
+        encabezado = ctk.CTkFrame(self, fg_color="transparent")
+        encabezado.pack(fill="x", padx=16, pady=(16, 0))
+        # Repite lo mismo que ya se avisa al entrar (ver App._avisos_al_entrar),
+        # pero acá queda a mano todo el tiempo: si el docente cerró el aviso
+        # sin leerlo bien, o vuelve horas después, no lo perdió.
+        self.campana_boton = ctk.CTkButton(
+            encabezado, text="🔔", width=36, height=32, fg_color="transparent",
+            border_width=1, state="disabled", command=self._mostrar_devoluciones,
+        )
+        self.campana_boton.pack(side="right")
+        self._cargar_devoluciones()
 
         ctk.CTkLabel(
             self, text=f"Hola, {sesion['nombre']}", font=ctk.CTkFont(size=22, weight="bold")
-        ).pack(pady=(24, 4))
+        ).pack(pady=(8, 4))
         ctk.CTkLabel(self, text=f"Rol: {sesion['rol']}", text_color="gray").pack(pady=(0, 8))
 
         es_docente = sesion["rol"] in ("docente", "ambos")
@@ -59,12 +76,8 @@ class HomeScreen(ctk.CTkScrollableFrame):
 
         if es_directivo:
             self._seccion("Dirección")
-            self._boton("Dashboard del mes", on_dashboard)
-            self._boton("Informes del mes", on_informes_mes)
             self._boton("Revisar planeaciones e informes", on_revisar)
             self._boton("Cursos", on_cursos)
-            self._boton("Estudiantes de un curso", on_grupo)
-            self._boton("Planeaciones de un docente", on_planeaciones_docente)
             self._boton("Horas de gestión", on_horas_gestion)
             self._boton("Usuarios", on_usuarios)
 
@@ -85,3 +98,25 @@ class HomeScreen(ctk.CTkScrollableFrame):
 
     def _boton(self, texto: str, comando: Callable[[], None]):
         ctk.CTkButton(self, text=texto, width=260, command=comando).pack(pady=4)
+
+    # --- campanita de devoluciones ---------------------------------------
+
+    def _cargar_devoluciones(self):
+        en_segundo_plano(
+            self,
+            lambda: api_client.mis_devoluciones(self.sesion["token"]),
+            self._al_cargar_devoluciones,
+            lambda _exc: None,  # la campanita es un extra: si falla, no molesta
+        )
+
+    def _al_cargar_devoluciones(self, devoluciones: list[dict]):
+        self._devoluciones = devoluciones or []
+        if not self._devoluciones:
+            return
+        self.campana_boton.configure(
+            text=f"🔔 {len(self._devoluciones)}", state="normal",
+            fg_color=AMBAR, hover_color="#6b4d10", text_color="white",
+        )
+
+    def _mostrar_devoluciones(self):
+        messagebox.showwarning("Te devolvieron esto", texto_devoluciones(self._devoluciones))

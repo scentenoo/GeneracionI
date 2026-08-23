@@ -243,10 +243,13 @@ function revisar_informe(token, curso_id, mes, aprobar, motivo) {
 // --- Listas -------------------------------------------------------------
 
 /**
- * Lo que le toca revisar al directivo este mes: planeaciones e informes
- * pendientes de los cursos de su color (el administrador ve todos).
+ * Todas las planeaciones e informes del mes de los cursos de su color (el
+ * administrador ve todos), con su estado — no solo lo pendiente: aprobar o
+ * devolver algo no lo hace desaparecer de acá, se ve con su estado nuevo.
+ * Los informes de gestión (directivos sin curso) no tienen revisión y no
+ * salen acá — ver directivos_sin_curso_del_mes para esos.
  */
-function pendientes_de_revision(token, mes) {
+function revision_del_mes(token, mes) {
   const sesion = requireSession_(token);
   requireRole_(sesion, [ROLES.DIRECTIVO, ROLES.AMBOS]);
 
@@ -260,7 +263,7 @@ function pendientes_de_revision(token, mes) {
 
   const planeaciones = readRowsWhere_(
     SHEET_NAMES.PLANEACIONES,
-    (p) => idsCurso[String(p.curso_id)] && mesDeFecha_(p.fecha) === mes && estaPendiente_(p)
+    (p) => idsCurso[String(p.curso_id)] && mesDeFecha_(p.fecha) === mes
   ).map((p) => ({
     id: p.id,
     curso: idsCurso[String(p.curso_id)].nombre,
@@ -268,16 +271,21 @@ function pendientes_de_revision(token, mes) {
     fecha: fechaISO_(p.fecha),
     objetivo: p.objetivo,
     doc_drive_id: p.doc_drive_id || '',
+    estado: p.estado || ESTADO_PENDIENTE,
+    motivo_devolucion: p.motivo_devolucion || '',
   }));
 
   const informes = readRowsWhere_(
     SHEET_NAMES.INFORMES,
-    (i) => idsCurso[String(i.curso_id)] && mesDeFecha_(i.mes) === mes && estaPendiente_(i)
+    (i) => idsCurso[String(i.curso_id)] && mesDeFecha_(i.mes) === mes
   ).map((i) => ({
     curso_id: i.curso_id,
     mes: mes,
     curso: idsCurso[String(i.curso_id)].nombre,
     docente: nombrePorId[String(i.docente_id)] || '',
+    doc_drive_id: i.doc_drive_id || '',
+    estado: i.estado || ESTADO_PENDIENTE,
+    motivo_devolucion: i.motivo_devolucion || '',
   }));
 
   return { planeaciones: planeaciones, informes: informes };

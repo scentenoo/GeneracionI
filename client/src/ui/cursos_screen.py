@@ -29,13 +29,15 @@ AMBAR = "#8A6114"
 
 
 class CursosScreen(ctk.CTkScrollableFrame):
-    def __init__(self, master, sesion: dict, on_volver: Callable[[], None]):
-        super().__init__(master, label_text="Cursos")
+    def __init__(self, master, sesion: dict, on_volver: Callable[[], None] | None = None):
+        # Sin `on_volver` va montada como pestaña de CursosHubScreen.
+        super().__init__(master, label_text="" if on_volver is None else "Cursos")
         self.sesion = sesion
         self._docentes_por_nombre: dict[str, int] = {}
         self._nombre_por_docente_id: dict[int, str] = {}
 
-        ctk.CTkButton(self, text="← Volver", width=90, command=on_volver).pack(anchor="w", pady=(0, 10))
+        if on_volver is not None:
+            ctk.CTkButton(self, text="← Volver", width=90, command=on_volver).pack(anchor="w", pady=(0, 10))
 
         ctk.CTkLabel(self, text="Nuevo curso", font=ctk.CTkFont(weight="bold")).pack(anchor="w")
 

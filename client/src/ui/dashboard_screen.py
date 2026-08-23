@@ -31,12 +31,14 @@ ROJO, AMBAR, VERDE, GRIS = "#c0392b", "#8A6114", "#2fa84f", "gray"
 
 
 class DashboardScreen(ctk.CTkScrollableFrame):
-    def __init__(self, master, sesion: dict, on_volver: Callable[[], None]):
-        super().__init__(master, label_text="Cómo va el mes")
+    def __init__(self, master, sesion: dict, on_volver: Callable[[], None] | None = None):
+        # Sin `on_volver` va montada como pestaña de RevisarHubScreen.
+        super().__init__(master, label_text="" if on_volver is None else "Cómo va el mes")
         self.sesion = sesion
         self.on_volver = on_volver
 
-        ctk.CTkButton(self, text="← Volver", width=90, command=on_volver).pack(anchor="w", pady=(0, 10))
+        if on_volver is not None:
+            ctk.CTkButton(self, text="← Volver", width=90, command=on_volver).pack(anchor="w", pady=(0, 10))
 
         fila_mes = ctk.CTkFrame(self, fg_color="transparent")
         fila_mes.pack(fill="x")

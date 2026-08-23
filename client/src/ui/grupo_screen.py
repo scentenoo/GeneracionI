@@ -17,14 +17,16 @@ from ui.tareas import cache, en_segundo_plano
 
 
 class GrupoScreen(ctk.CTkScrollableFrame):
-    def __init__(self, master, sesion: dict, on_volver: Callable[[], None]):
-        super().__init__(master, label_text="Estudiantes de un curso")
+    def __init__(self, master, sesion: dict, on_volver: Callable[[], None] | None = None):
+        # Sin `on_volver` va montada como pestaña de CursosHubScreen.
+        super().__init__(master, label_text="" if on_volver is None else "Estudiantes de un curso")
         self.sesion = sesion
         self.on_volver = on_volver
         self._cursos_por_etiqueta: dict[str, dict] = {}
         self._checkboxes: dict[int, tuple[ctk.CTkCheckBox, ctk.BooleanVar]] = {}
 
-        ctk.CTkButton(self, text="← Volver", width=90, command=on_volver).pack(anchor="w", pady=(0, 10))
+        if on_volver is not None:
+            ctk.CTkButton(self, text="← Volver", width=90, command=on_volver).pack(anchor="w", pady=(0, 10))
 
         ctk.CTkLabel(self, text="Curso").pack(anchor="w")
         self.curso_menu = ctk.CTkOptionMenu(self, values=["(cargando...)"], command=lambda _v: self._cargar())

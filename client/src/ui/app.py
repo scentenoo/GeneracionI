@@ -1,23 +1,21 @@
 from __future__ import annotations
 
+import tkinter as tk
 from tkinter import messagebox
 
 import customtkinter as ctk
 
+from config import TEMPLATES_DIR
 from ui.cargando import Cargando
 from ui.login_screen import LoginScreen
 from ui.home_screen import HomeScreen
 from ui.planeaciones_screen import PlaneacionesScreen
 from ui.planeacion_editor_screen import PlaneacionEditorScreen
-from ui.dashboard_screen import DashboardScreen
 from ui.informe_screen import InformeScreen
 from ui.informe_gestion_screen import InformeGestionScreen
-from ui.informes_mes_screen import InformesMesScreen
-from ui.grupo_screen import GrupoScreen
-from ui.cursos_screen import CursosScreen
+from ui.cursos_hub_screen import CursosHubScreen
 from ui.horas_gestion_screen import HorasGestionScreen
-from ui.planeaciones_docente_screen import PlaneacionesDocenteScreen
-from ui.revisar_screen import RevisarScreen
+from ui.revisar_hub_screen import RevisarHubScreen
 from ui.usuarios_screen import UsuariosScreen
 from ui.password_screen import PasswordScreen
 from ui.revisores_screen import RevisoresScreen
@@ -32,6 +30,7 @@ class App(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("Generación-I — Planeaciones")
+        self._poner_icono()
         # Los equipos de la sede son viejos, así que hay que contar con
         # pantallas de 1366x768: descontando barra de tareas y título quedan
         # unos 696 px de alto útiles, y 720 se salía por abajo.
@@ -49,6 +48,25 @@ class App(ctk.CTk):
         self.protocol("WM_DELETE_WINDOW", self._al_cerrar)
 
         self._mostrar_login()
+
+    def _poner_icono(self):
+        """El ícono de la ventana (esquina superior, Alt+Tab, barra de
+        tareas) — no confundir con el ícono del .exe en sí, que se embebe
+        aparte al compilar (ver GeneracionI-Planeaciones.spec).
+
+        `iconphoto` con la imagen maestra de 1024x1024 queda con el ícono
+        vacío y sin error — probado en este equipo: un PNG de 256x256 ya
+        alcanza para que el escritorio lo descarte en silencio, 128 sí
+        anda. Por eso acá se usan los chicos (128 a 16), no el maestro."""
+        carpeta = TEMPLATES_DIR / "assets"
+        try:
+            self._iconos = [
+                tk.PhotoImage(file=str(carpeta / f"logo_generacion_i_{tam}.png"))
+                for tam in (128, 64, 48, 32, 16)
+            ]
+            self.iconphoto(True, *self._iconos)
+        except Exception:  # noqa: BLE001 — sin ícono la app igual funciona
+            pass
 
     def _al_cerrar(self):
         # Cerrar en el medio de una subida mata el hilo antes de que Apps
@@ -176,27 +194,15 @@ class App(ctk.CTk):
         """Aviso al entrar: lo devuelto para corregir (con motivo) y, si está
         cerca, cuándo se cierra el mes. Si no hay nada que decir, no molesta."""
         from services import date_utils
+        from services.avisos import texto_devoluciones
 
         devoluciones = datos.get("devoluciones") or []
         cierre = datos.get("cierre") or {}
 
         partes = []
-        if devoluciones:
-            lineas = []
-            for d in devoluciones:
-                por = d.get("por") or "el revisor"
-                motivo = d.get("motivo") or "(sin motivo)"
-                if d.get("tipo") == "planeacion":
-                    cabeza = f"• Planeación de {d.get('curso') or 'tu curso'} ({d.get('fecha', '')})"
-                else:
-                    cabeza = f"• Informe del mes {d.get('mes', '')}"
-                lineas.append(f"{cabeza}\n   Devuelto por {por}: {motivo}")
-            plural = "cosas" if len(devoluciones) > 1 else "cosa"
-            partes.append(
-                f"Un revisor te devolvió {len(devoluciones)} {plural} para corregir y volver a "
-                "enviar:\n\n" + "\n\n".join(lineas) +
-                "\n\nCorregilas y guardá de nuevo: vuelven a quedar pendientes de revisión."
-            )
+        texto = texto_devoluciones(devoluciones)
+        if texto:
+            partes.append(texto)
 
         # El cierre solo se avisa si falta poco (y no pasó): recordárselo cada
         # día del mes sería ruido.
@@ -229,13 +235,9 @@ class App(ctk.CTk):
             self,
             self.sesion,
             on_planeaciones=self._mostrar_planeaciones,
-            on_dashboard=self._mostrar_dashboard,
             on_informe=self._mostrar_informe,
-            on_informes_mes=self._mostrar_informes_mes,
-            on_grupo=self._mostrar_grupo,
             on_cursos=self._mostrar_cursos,
             on_horas_gestion=self._mostrar_horas_gestion,
-            on_planeaciones_docente=self._mostrar_planeaciones_docente,
             on_revisar=self._mostrar_revisar,
             on_usuarios=self._mostrar_usuarios,
             on_cambiar_password=self._mostrar_password,
@@ -279,11 +281,6 @@ class App(ctk.CTk):
             fallo,
         )
 
-    def _mostrar_dashboard(self):
-        self._limpiar()
-        self.pantalla_actual = DashboardScreen(self, self.sesion, on_volver=self._mostrar_home)
-        self.pantalla_actual.pack(fill="both", expand=True)
-
     def _mostrar_informe(self):
         """El informe de un directivo SIN curso es otro documento (solo
         gestión), así que se decide qué pantalla mostrar según si tiene
@@ -309,19 +306,9 @@ class App(ctk.CTk):
             lambda _exc: listo([1]),
         )
 
-    def _mostrar_informes_mes(self):
-        self._limpiar()
-        self.pantalla_actual = InformesMesScreen(self, self.sesion, on_volver=self._mostrar_home)
-        self.pantalla_actual.pack(fill="both", expand=True)
-
-    def _mostrar_grupo(self):
-        self._limpiar()
-        self.pantalla_actual = GrupoScreen(self, self.sesion, on_volver=self._mostrar_home)
-        self.pantalla_actual.pack(fill="both", expand=True)
-
     def _mostrar_cursos(self):
         self._limpiar()
-        self.pantalla_actual = CursosScreen(self, self.sesion, on_volver=self._mostrar_home)
+        self.pantalla_actual = CursosHubScreen(self, self.sesion, on_volver=self._mostrar_home)
         self.pantalla_actual.pack(fill="both", expand=True)
 
     def _mostrar_horas_gestion(self):
@@ -329,19 +316,9 @@ class App(ctk.CTk):
         self.pantalla_actual = HorasGestionScreen(self, self.sesion, on_volver=self._mostrar_home)
         self.pantalla_actual.pack(fill="both", expand=True)
 
-    def _mostrar_planeaciones_docente(self):
-        self._limpiar()
-        self.pantalla_actual = PlaneacionesDocenteScreen(
-            self,
-            self.sesion,
-            on_volver=self._mostrar_home,
-            on_editar=lambda p: self._mostrar_editor_planeacion(p, self._mostrar_planeaciones_docente),
-        )
-        self.pantalla_actual.pack(fill="both", expand=True)
-
     def _mostrar_revisar(self):
         self._limpiar()
-        self.pantalla_actual = RevisarScreen(self, self.sesion, on_volver=self._mostrar_home)
+        self.pantalla_actual = RevisarHubScreen(self, self.sesion, on_volver=self._mostrar_home)
         self.pantalla_actual.pack(fill="both", expand=True)
 
     def _mostrar_usuarios(self):
