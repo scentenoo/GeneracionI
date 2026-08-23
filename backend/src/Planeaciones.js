@@ -178,6 +178,10 @@ function obtener_planeaciones(token, docente_id, curso_id, resumen) {
       grupo: p.grupo,
       objetivo: p.objetivo,
       horas: p.horas,
+      // El cliente lo usa para avisar antes de pisar una planeación ya
+      // guardada (mismo curso y fecha): si estaba aprobada, guardar de
+      // nuevo la vuelve a pendiente, y eso vale la pena que se sepa antes.
+      estado: p.estado || ESTADO_PENDIENTE,
       bloqueada: cerrado(p.curso_id, mesDeFecha_(p.fecha)),
     }));
   }
@@ -234,6 +238,27 @@ function editar_planeacion(token, id, cambios) {
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
+    // A diferencia de guardar_planeacion, acá no hay "actualizar en vez de
+    // duplicar": esto edita una fila puntual por id. Si el cambio de fecha
+    // hace que coincida con OTRA planeación del mismo curso, no hay forma
+    // de fusionarlas — se rechaza, para no terminar con dos filas de la
+    // misma fecha (el bug que justo evita guardar_planeacion).
+    if (cambios.fecha !== undefined) {
+      const diaNuevo = fechaISO_(cambios.fecha);
+      const colision = readRowsWhere_(
+        SHEET_NAMES.PLANEACIONES,
+        (p) => String(p.id) !== String(id) &&
+          String(p.curso_id) === String(fila.curso_id) &&
+          fechaISO_(p.fecha) === diaNuevo
+      )[0];
+      if (colision) {
+        throw new Error(
+          `Ya existe otra planeación de este curso para el ${fechaCorta_(diaNuevo)}. ` +
+          'No se puede tener dos clases el mismo día — elegí otra fecha.'
+        );
+      }
+    }
+
     const cambiosSerializados = Object.assign({}, cambios);
     ['temas_vistos', 'bloques', 'momentos', 'asistencia'].forEach((campo) => {
       if (cambiosSerializados[campo] !== undefined) {

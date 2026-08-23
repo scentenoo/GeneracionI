@@ -368,6 +368,40 @@ class PlaneacionScreen(ctk.CTkScrollableFrame):
             self.error_label.configure(text="Revisá los minutos de cada momento.", text_color="#8A6114")
             return
 
+        self.guardar_boton.configure(state="disabled", text="Comprobando...")
+        self.error_label.configure(text="Viendo si ya hay una planeación para esta fecha...", text_color="gray")
+
+        curso = self._curso_actual()
+        fecha = self.fecha_entry.get().strip()
+
+        def revisar():
+            return api_client.obtener_planeaciones(self.sesion["token"], curso_id=curso["id"], resumen=True)
+
+        def listo_revision(planeaciones):
+            existente = next((p for p in planeaciones if str(p["fecha"])[:10] == fecha), None)
+            if existente and not self._confirmar_sobrescribir(existente):
+                self.guardar_boton.configure(state="normal", text="Guardar planeación")
+                self.error_label.configure(text="", text_color="gray")
+                return
+            self._guardar_confirmado()
+
+        def fallo_revision(_exc):
+            # No poder chequear no tiene por qué frenar el guardado — el
+            # backend igual deduplica por curso+fecha. Es la advertencia la
+            # que se pierde, no la protección real.
+            self._guardar_confirmado()
+
+        en_segundo_plano(self, revisar, listo_revision, fallo_revision)
+
+    def _confirmar_sobrescribir(self, existente: dict) -> bool:
+        fecha_legible = date_utils.a_fecha_larga(existente["fecha"])
+        aviso = f"Ya existe una planeación de «{existente['grupo']}» para el {fecha_legible}."
+        if existente.get("estado") == "aprobado":
+            aviso += "\n\nEsa planeación ya estaba APROBADA. Si la reemplazás, vuelve a quedar pendiente de revisión."
+        aviso += "\n\nSi guardás, se reemplaza el contenido — no queda como una clase aparte.\n\n¿Continuar?"
+        return messagebox.askyesno("Ya existe una planeación para esta fecha", aviso, icon="warning", default="no")
+
+    def _guardar_confirmado(self):
         self.guardar_boton.configure(state="disabled", text="Guardando...")
         self.previsualizar_boton.configure(state="disabled")
         self.error_label.configure(text="Comprimiendo la foto y subiendo...", text_color="gray")
