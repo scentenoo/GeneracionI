@@ -29,11 +29,21 @@ function guardar_planeacion(token, datos, fotos) {
       (p) => String(p.curso_id) === String(curso.id) && fechaISO_(p.fecha) === dia
     )[0];
 
-    const fotoId = guardarArchivoBase64_(
-      ['Planeaciones', curso.nombre, nombreCarpetaMes_(datos.fecha), 'Fotos'],
-      fotos.foto_clase.base64,
-      fotos.foto_clase.mimeType || 'image/jpeg',
-      nombreDeFoto_('clase', curso.nombre, datos.fecha)
+    // La carpeta se resuelve una sola vez: antes de que hubiera hasta 3
+    // fotos por clase, guardarArchivoBase64_ la buscaba/creaba (4 niveles)
+    // por cada llamada; con varias fotos eso repetía la misma búsqueda
+    // varias veces por nada.
+    const fotosClase = normalizarFotosClase_(fotos);
+    const carpetaFotos = getOrCrearRutaCarpetas_(
+      ['Planeaciones', curso.nombre, nombreCarpetaMes_(datos.fecha), 'Fotos']
+    );
+    const fotoIds = fotosClase.map((foto, i) =>
+      guardarArchivoEnCarpeta_(
+        carpetaFotos,
+        foto.base64,
+        foto.mimeType || 'image/jpeg',
+        nombreDeFoto_(`clase_${i + 1}`, curso.nombre, datos.fecha)
+      )
     );
 
     const campos = {
@@ -51,7 +61,11 @@ function guardar_planeacion(token, datos, fotos) {
       momentos: JSON.stringify(datos.momentos || {}),
       observaciones: datos.observaciones || '',
       avances: datos.avances || '',
-      foto_clase_drive_id: fotoId,
+      // La primera queda también en foto_clase_drive_id -- de ahí la toma
+      // el informe mensual (una sola foto por clase) y así una planeación
+      // vieja, guardada antes de este campo, se sigue leyendo igual.
+      foto_clase_drive_id: fotoIds[0],
+      fotos_clase_drive_ids: JSON.stringify(fotoIds),
       // Snapshot: la asistencia queda tal cual estaba ese día, no referencia
       // viva al grupo actual (evita que cambios posteriores alteren planeaciones ya guardadas).
       asistencia: JSON.stringify(datos.asistencia || []),
@@ -59,14 +73,8 @@ function guardar_planeacion(token, datos, fotos) {
     };
 
     if (existente) {
-      // La foto vieja queda huérfana en Drive: se manda a la papelera.
-      if (existente.foto_clase_drive_id && existente.foto_clase_drive_id !== fotoId) {
-        try {
-          DriveApp.getFileById(existente.foto_clase_drive_id).setTrashed(true);
-        } catch (e) {
-          // Ya no existe o no es accesible: no frena la actualización.
-        }
-      }
+      // Las fotos viejas quedan huérfanas en Drive: se mandan a la papelera.
+      fotosClaseDriveIds_(existente).forEach(trasharSiExiste_);
       updateRowById_(SHEET_NAMES.PLANEACIONES, existente.id, campos);
       // Guardar de nuevo la deja pendiente de revisión otra vez.
       registrarEntrega_('planeacion', existente.id, SHEET_NAMES.PLANEACIONES, existente.id, sesion.usuario);
@@ -123,9 +131,26 @@ function guardar_documento_planeacion(token, planeacion_id, archivo) {
 }
 
 /**
- * La foto de clase de una planeación, en base64, para regenerar su .docx
- * al editarla (el documento se arma en el cliente y necesita la imagen).
- * Devuelve null si la planeación no tiene foto.
+ * Los ids de Drive de las fotos de una planeación, en orden. Lee
+ * `fotos_clase_drive_ids` (hasta 3, formato nuevo); si una fila vieja no lo
+ * tiene, cae a la única foto de `foto_clase_drive_id`.
+ */
+function fotosClaseDriveIds_(fila) {
+  if (fila.fotos_clase_drive_ids) {
+    try {
+      const ids = JSON.parse(fila.fotos_clase_drive_ids);
+      if (Array.isArray(ids) && ids.length) return ids.filter(Boolean);
+    } catch (e) {
+      // Fila corrupta o vacía: cae al campo viejo de abajo.
+    }
+  }
+  return fila.foto_clase_drive_id ? [fila.foto_clase_drive_id] : [];
+}
+
+/**
+ * Las fotos de clase de una planeación (hasta 3), en base64, para
+ * regenerar su .docx al editarla (el documento se arma en el cliente y
+ * necesita las imágenes). Lista vacía si la planeación no tiene fotos.
  */
 function obtener_foto_planeacion(token, id) {
   const sesion = requireSession_(token);
@@ -134,9 +159,10 @@ function obtener_foto_planeacion(token, id) {
   if (String(fila.docente_id) !== String(sesion.id) && !puedeSupervisar_(sesion)) {
     throw new Error('No tienes permiso para ver esa planeación');
   }
-  if (!fila.foto_clase_drive_id) return null;
-  const foto = archivoABase64_(fila.foto_clase_drive_id);
-  return foto ? { base64: foto.base64, mimeType: foto.mimeType } : null;
+  return fotosClaseDriveIds_(fila)
+    .map((driveId) => archivoABase64_(driveId))
+    .filter(Boolean)
+    .map((foto) => ({ base64: foto.base64, mimeType: foto.mimeType }));
 }
 
 /**
@@ -298,7 +324,7 @@ function eliminar_planeacion(token, id) {
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
-    trasharSiExiste_(fila.foto_clase_drive_id);
+    fotosClaseDriveIds_(fila).forEach(trasharSiExiste_);
     trasharSiExiste_(fila.doc_drive_id);
     getSheet_(SHEET_NAMES.PLANEACIONES).deleteRow(fila._row);
     // Los ids se reusan, así que el historial de esta planeación no puede

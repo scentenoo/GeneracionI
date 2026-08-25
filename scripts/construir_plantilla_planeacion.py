@@ -107,13 +107,15 @@ def main():
     fila_endfor = asis.add_row().cells
     fila_endfor[0].paragraphs[0].add_run("{%tr endfor %}")
 
-    # Foto
+    # Fotos (1 a 3): un solo run con el for/endfor adentro, para que
+    # docxtpl no lo vea partido entre runs distintos (eso rompería el tag,
+    # igual que con la tabla de asistencia de más arriba).
     doc.add_paragraph()
     p = doc.add_paragraph()
     p.add_run("Evidencia fotográfica de la clase").bold = True
     pf = doc.add_paragraph()
     pf.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    pf.add_run("{{ foto_clase }}")
+    pf.add_run("{% for foto in fotos_clase %}{{ foto }} {% endfor %}")
 
     SALIDA.parent.mkdir(parents=True, exist_ok=True)
     doc.save(str(SALIDA))

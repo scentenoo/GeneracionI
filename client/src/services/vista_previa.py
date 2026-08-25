@@ -67,12 +67,12 @@ def _a_pdf_si_se_puede(docx_path: Path) -> tuple[Path, bool]:
         return docx_path, False
 
 
-def previsualizar_planeacion(contexto: dict, foto_clase_path: str) -> tuple[Path, bool]:
+def previsualizar_planeacion(contexto: dict, fotos_clase_paths: list[str]) -> tuple[Path, bool]:
     """Arma la planeación desde el formulario y la abre. Devuelve
     (ruta abierta, es_pdf)."""
     limpiar_borradores()
     salida = _carpeta_temporal() / f"planeacion_{uuid.uuid4().hex[:8]}.docx"
-    docx_generator.generar_planeacion_docx(contexto, foto_clase_path, salida)
+    docx_generator.generar_planeacion_docx(contexto, fotos_clase_paths, salida)
 
     ruta, es_pdf = _a_pdf_si_se_puede(salida)
     if es_pdf:
@@ -85,7 +85,7 @@ def previsualizar_planeacion(contexto: dict, foto_clase_path: str) -> tuple[Path
     return ruta, es_pdf
 
 
-def planeacion_para_subir(contexto: dict, foto_clase_path: str) -> dict:
+def planeacion_para_subir(contexto: dict, fotos_clase_paths: list[str]) -> dict:
     """Arma el .docx de la planeación y lo devuelve listo para mandarlo.
 
     Es el archivo que el informe mensual enlaza en «LINK A PLANEACION»:
@@ -97,7 +97,7 @@ def planeacion_para_subir(contexto: dict, foto_clase_path: str) -> dict:
 
     salida = _carpeta_temporal() / f"subir_{uuid.uuid4().hex[:8]}.docx"
     try:
-        docx_generator.generar_planeacion_docx(contexto, foto_clase_path, salida)
+        docx_generator.generar_planeacion_docx(contexto, fotos_clase_paths, salida)
         datos = salida.read_bytes()
     finally:
         try:
@@ -111,22 +111,28 @@ def planeacion_para_subir(contexto: dict, foto_clase_path: str) -> dict:
     }
 
 
-def planeacion_para_subir_desde_base64(contexto: dict, foto_base64: str, foto_mime: str) -> dict:
-    """Como planeacion_para_subir pero con la foto en base64 (la que ya está
-    en Drive), para regenerar el .docx al editar una planeación. La foto se
-    escribe a un archivo temporal porque docxtpl necesita una ruta."""
+def planeacion_para_subir_desde_base64(contexto: dict, fotos: list[dict]) -> dict:
+    """Como planeacion_para_subir pero con las fotos en base64 (las que ya
+    están en Drive), para regenerar el .docx al editar una planeación. Cada
+    foto se escribe a un archivo temporal porque docxtpl necesita una ruta.
+
+    fotos: [{"base64": ..., "mimeType": ...}, ...] (1 a 3)."""
     import base64
 
-    ext = ".png" if "png" in (foto_mime or "") else ".jpg"
-    foto_tmp = _carpeta_temporal() / f"foto_{uuid.uuid4().hex[:8]}{ext}"
-    foto_tmp.write_bytes(base64.b64decode(foto_base64))
+    tmps = []
     try:
-        return planeacion_para_subir(contexto, str(foto_tmp))
+        for foto in fotos:
+            ext = ".png" if "png" in (foto.get("mimeType") or "") else ".jpg"
+            tmp = _carpeta_temporal() / f"foto_{uuid.uuid4().hex[:8]}{ext}"
+            tmp.write_bytes(base64.b64decode(foto["base64"]))
+            tmps.append(tmp)
+        return planeacion_para_subir(contexto, [str(t) for t in tmps])
     finally:
-        try:
-            foto_tmp.unlink()
-        except OSError:
-            pass
+        for tmp in tmps:
+            try:
+                tmp.unlink()
+            except OSError:
+                pass
 
 
 def informe_para_subir(contexto: dict) -> dict:

@@ -152,7 +152,7 @@ function eliminar_curso_definitivo(token, curso_id) {
       return String(p.curso_id) === String(curso_id);
     }).forEach(function (p) {
       borrarRevisiones_('planeacion', String(p.id));
-      trasharSiExiste_(p.foto_clase_drive_id);
+      fotosClaseDriveIds_(p).forEach(trasharSiExiste_);
       trasharSiExiste_(p.doc_drive_id);
     });
     readRowsWhere_(SHEET_NAMES.ACTIVIDADES, function (a) {

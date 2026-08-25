@@ -3,6 +3,8 @@
 const MIN_PALABRAS_DETALLE = 20;
 const MIN_LARGO_PASSWORD = 6;
 const CLASES_ESPERADAS_POR_MES = 4;
+const MIN_FOTOS_CLASE = 1;
+const MAX_FOTOS_CLASE = 3;
 
 /** Cada clase tiene que sumar al menos 2 horas repartidas entre sus momentos. */
 const MINUTOS_MINIMOS_CLASE = 120;
@@ -89,7 +91,25 @@ function validarPlaneacion_(datos, fotos, esDirectivo) {
     throw new Error('No podés guardar una clase sin ningún estudiante presente');
   }
 
-  if (!fotos || !fotos.foto_clase) {
-    throw new Error('Falta la foto de la clase');
+  const cantidadFotos = normalizarFotosClase_(fotos).length;
+  if (cantidadFotos < MIN_FOTOS_CLASE) {
+    throw new Error('Falta al menos una foto de la clase');
   }
+  if (cantidadFotos > MAX_FOTOS_CLASE) {
+    throw new Error(`Como máximo ${MAX_FOTOS_CLASE} fotos por clase`);
+  }
+}
+
+/**
+ * Las fotos de una clase viajan como `fotos.fotos_clase` (lista de 1 a 3,
+ * clientes desde esta versión) o como `fotos.foto_clase` (una sola, formato
+ * viejo — lo siguen mandando las copias de la app que todavía no se
+ * actualizaron). Acá se normaliza a una lista siempre, para que el resto
+ * del backend no tenga que conocer los dos formatos.
+ */
+function normalizarFotosClase_(fotos) {
+  if (!fotos) return [];
+  if (Array.isArray(fotos.fotos_clase)) return fotos.fotos_clase.filter(Boolean);
+  if (fotos.foto_clase) return [fotos.foto_clase];
+  return [];
 }

@@ -27,6 +27,10 @@ INFORME_GESTION_TEMPLATE = TEMPLATES_DIR / "informe_gestion.docx"
 _IMG_WIDTH_GRANDE_MM = 90
 _IMG_WIDTH_CHICA_MM = 55
 
+# Ancho de cada foto de clase según cuántas haya (1 a 3), para que entren
+# en una sola fila del documento sin pasarse del margen de la página.
+_ANCHO_FOTO_CLASE_MM = {1: _IMG_WIDTH_GRANDE_MM, 2: 75, 3: 55}
+
 # Cómo se lee cada acción del historial en la hoja final del documento.
 _ACCIONES = {
     "entregado": "Entregado",
@@ -90,13 +94,17 @@ def _imagen_desde_base64(tpl: DocxTemplate, base64_str: str | None, ancho_mm: in
     return InlineImage(tpl, io.BytesIO(data), width=Mm(ancho_mm))
 
 
-def generar_planeacion_docx(contexto: dict, foto_clase_path: str, ruta_salida: str | Path) -> Path:
+def generar_planeacion_docx(
+    contexto: dict, fotos_clase_paths: list[str], ruta_salida: str | Path
+) -> Path:
     """contexto: fecha, grupo, objetivo, temas_vistos[], los tres momentos
     (momento_*_min/texto), observaciones, avances, asistencia[].
-    foto_clase_path: ruta local a la foto ya comprimida (ver image_utils.py)."""
+    fotos_clase_paths: 1 a 3 rutas locales a fotos ya comprimidas (ver
+    image_utils.py)."""
     tpl = DocxTemplate(str(PLANEACION_TEMPLATE))
     ctx = dict(contexto)
-    ctx["foto_clase"] = InlineImage(tpl, foto_clase_path, width=Mm(_IMG_WIDTH_GRANDE_MM))
+    ancho = _ANCHO_FOTO_CLASE_MM.get(len(fotos_clase_paths), _IMG_WIDTH_CHICA_MM)
+    ctx["fotos_clase"] = [InlineImage(tpl, p, width=Mm(ancho)) for p in fotos_clase_paths]
     tpl.render(ctx)
 
     ruta_salida = Path(ruta_salida)

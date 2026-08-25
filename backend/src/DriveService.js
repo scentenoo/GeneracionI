@@ -12,6 +12,16 @@
 
 function guardarArchivoBase64_(rutaCarpetas, base64Data, mimeType, nombreArchivo) {
   const folder = getOrCrearRutaCarpetas_(rutaCarpetas);
+  return guardarArchivoEnCarpeta_(folder, base64Data, mimeType, nombreArchivo);
+}
+
+/**
+ * Igual que guardarArchivoBase64_ pero con la carpeta ya resuelta —para
+ * cuando se suben varios archivos seguidos al mismo lugar (hasta 3 fotos de
+ * una clase) y no tiene sentido rehacer la búsqueda de carpetas por cada
+ * uno.
+ */
+function guardarArchivoEnCarpeta_(folder, base64Data, mimeType, nombreArchivo) {
   const bytes = Utilities.base64Decode(base64Data);
   const blob = Utilities.newBlob(bytes, mimeType, nombreArchivo);
   const file = folder.createFile(blob);

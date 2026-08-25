@@ -14,7 +14,12 @@ import requests
 
 from config import BACKEND_URL
 
-_TIMEOUT_SECONDS = 30
+
+# Con hasta 3 fotos por clase, guardar_planeacion puede tardar bastante:
+# medido contra el backend real, 1 foto ronda 13-14s y 3 fotos 25-30s (cada
+# foto es una subida y un cambio de permisos aparte en Drive). 30s dejaba
+# muy poco margen justo para el caso de 3 fotos con una conexión mediocre.
+_TIMEOUT_SECONDS = 60
 
 # Apps Script, bajo carga o justo después de un deploy, a veces contesta una
 # vez con algo transitorio: un 500, un timeout, o —por sus redirects a
@@ -195,7 +200,8 @@ def cambiar_password(token: str, password_actual: str, password_nueva: str) -> d
 
 def guardar_planeacion(token: str, datos: dict, fotos: dict) -> dict:
     """datos: fecha, grupo, objetivo, temas_vistos[], bloques[], asistencia[].
-    fotos: {"foto_clase": {"base64": ..., "mimeType": "image/jpeg"}}"""
+    fotos: {"fotos_clase": [{"base64": ..., "mimeType": "image/jpeg"}, ...]}
+    (1 a 3 fotos)."""
     return _call("guardar_planeacion", token, datos, fotos)
 
 
@@ -223,9 +229,9 @@ def obtener_planeacion(token: str, id_: int) -> dict:
     return _call("obtener_planeacion", token, id_)
 
 
-def obtener_foto_planeacion(token: str, id_: int) -> dict | None:
-    """La foto de clase de una planeación, en base64, para regenerar su
-    .docx al editarla. None si no tiene foto."""
+def obtener_foto_planeacion(token: str, id_: int) -> list[dict]:
+    """Las fotos de clase de una planeación (1 a 3), en base64, para
+    regenerar su .docx al editarla. Lista vacía si no tiene fotos."""
     return _call("obtener_foto_planeacion", token, id_)
 
 

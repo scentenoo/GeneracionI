@@ -199,15 +199,13 @@ class PlaneacionEditorScreen(ctk.CTkScrollableFrame):
             # final. Si algo falla acá, la edición ya quedó guardada: el
             # documento es evidencia, no el dato.
             try:
-                foto = api_client.obtener_foto_planeacion(self.sesion["token"], planeacion_id)
-                if foto:
+                fotos = api_client.obtener_foto_planeacion(self.sesion["token"], planeacion_id)
+                if fotos:
                     historial = api_client.historial_revision(
                         self.sesion["token"], "planeacion", str(planeacion_id)
                     )
                     contexto = self._contexto_documento(historial)
-                    archivo = vista_previa.planeacion_para_subir_desde_base64(
-                        contexto, foto["base64"], foto.get("mimeType", "")
-                    )
+                    archivo = vista_previa.planeacion_para_subir_desde_base64(contexto, fotos)
                     api_client.guardar_documento_planeacion(self.sesion["token"], planeacion_id, archivo)
             except Exception:  # noqa: BLE001 — la edición ya se guardó
                 pass

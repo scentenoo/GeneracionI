@@ -28,6 +28,8 @@ from ui.widgets import CampoConContador, MIN_PALABRAS
 
 MINUTOS_MINIMOS = 120
 MINUTOS_ESPERADOS = 120
+MIN_FOTOS_CLASE = 1
+MAX_FOTOS_CLASE = 3
 
 # (clave, etiqueta, mínimo de palabras, minutos sugeridos)
 MOMENTOS = [
@@ -43,7 +45,7 @@ class PlaneacionScreen(ctk.CTkScrollableFrame):
         super().__init__(master, label_text="" if on_volver is None else "Nueva planeación de clase")
         self.sesion = sesion
         self.on_volver = on_volver
-        self.foto_path: str | None = None
+        self.foto_paths: list[str] = []
         self._cursos_por_nombre: dict[str, dict] = {}
         # Por momento: {clave: {"minutos": Entry, "texto": CampoConContador}}
         self.momentos: dict[str, dict] = {}
@@ -171,23 +173,55 @@ class PlaneacionScreen(ctk.CTkScrollableFrame):
         self.avances.pack(fill="x", pady=4)
 
     def _construir_foto(self):
-        ctk.CTkLabel(self, text="Foto de la clase", anchor="w", font=ctk.CTkFont(weight="bold")).pack(
-            fill="x", pady=(16, 4)
+        ctk.CTkLabel(
+            self, text="Fotos de la clase (mínimo 1, máximo 3)",
+            anchor="w", font=ctk.CTkFont(weight="bold"),
+        ).pack(fill="x", pady=(16, 4))
+        self.fotos_contenedor = ctk.CTkFrame(self, fg_color="transparent")
+        self.fotos_contenedor.pack(fill="x")
+        self.agregar_foto_boton = ctk.CTkButton(
+            self, text="+ Agregar foto...", width=140, command=self._agregar_foto
         )
-        fila = ctk.CTkFrame(self, fg_color="transparent")
-        fila.pack(fill="x")
-        ctk.CTkButton(fila, text="Elegir foto...", command=self._elegir_foto).pack(side="left")
-        self.foto_label = ctk.CTkLabel(fila, text="Ninguna foto seleccionada", text_color="gray")
-        self.foto_label.pack(side="left", padx=10)
+        self.agregar_foto_boton.pack(anchor="w", pady=(4, 0))
+        self._refrescar_fotos_ui()
 
-    def _elegir_foto(self):
+    def _agregar_foto(self):
+        if len(self.foto_paths) >= MAX_FOTOS_CLASE:
+            return
         ruta = filedialog.askopenfilename(
-            title="Elegí la foto de la clase",
+            title="Elegí una foto de la clase",
             filetypes=[("Imágenes", "*.jpg *.jpeg *.png")],
         )
         if ruta:
-            self.foto_path = ruta
-            self.foto_label.configure(text=ruta.split("/")[-1].split("\\")[-1], text_color="white")
+            self.foto_paths.append(ruta)
+            self._refrescar_fotos_ui()
+
+    def _quitar_foto(self, indice: int):
+        del self.foto_paths[indice]
+        self._refrescar_fotos_ui()
+
+    def _refrescar_fotos_ui(self):
+        for w in self.fotos_contenedor.winfo_children():
+            w.destroy()
+
+        if not self.foto_paths:
+            ctk.CTkLabel(
+                self.fotos_contenedor, text="Ninguna foto seleccionada", text_color="gray"
+            ).pack(anchor="w")
+
+        for indice, ruta in enumerate(self.foto_paths):
+            fila = ctk.CTkFrame(self.fotos_contenedor, fg_color="transparent")
+            fila.pack(fill="x", pady=2)
+            nombre = ruta.replace("\\", "/").split("/")[-1]
+            ctk.CTkLabel(fila, text=nombre).pack(side="left")
+            ctk.CTkButton(
+                fila, text="x", width=28, fg_color="#c0392b", hover_color="#922b21",
+                command=lambda i=indice: self._quitar_foto(i),
+            ).pack(side="left", padx=(8, 0))
+
+        self.agregar_foto_boton.configure(
+            state="normal" if len(self.foto_paths) < MAX_FOTOS_CLASE else "disabled"
+        )
 
     def _construir_asistencia(self):
         ctk.CTkLabel(self, text="Asistencia", anchor="w", font=ctk.CTkFont(weight="bold")).pack(
@@ -309,7 +343,7 @@ class PlaneacionScreen(ctk.CTkScrollableFrame):
         self.error_label.configure(text="Armando el documento...", text_color="gray")
 
         def trabajo():
-            return vista_previa.previsualizar_planeacion(self._contexto_documento(), self.foto_path)
+            return vista_previa.previsualizar_planeacion(self._contexto_documento(), self.foto_paths)
 
         def listo(resultado):
             _ruta, es_pdf = resultado
@@ -350,8 +384,8 @@ class PlaneacionScreen(ctk.CTkScrollableFrame):
             return f"Las observaciones de clase necesitan mínimo {MIN_PALABRAS} palabras"
         if not self.avances.es_valido():
             return f"Los avances necesitan mínimo {MIN_PALABRAS} palabras"
-        if not self.foto_path:
-            return "Falta la foto de la clase"
+        if not self.foto_paths:
+            return "Falta al menos una foto de la clase"
 
         presentes = sum(1 for v in self.asistencia_vars.values() if v.get())
         es_directivo = self.sesion["rol"] in ("directivo", "ambos")
@@ -421,10 +455,10 @@ class PlaneacionScreen(ctk.CTkScrollableFrame):
         contexto = self._contexto_documento()
 
         def trabajo():
-            fotos = {"foto_clase": image_utils.foto_a_payload(self.foto_path)}
+            fotos = {"fotos_clase": [image_utils.foto_a_payload(p) for p in self.foto_paths]}
             resultado = api_client.guardar_planeacion(self.sesion["token"], datos, fotos)
             try:
-                archivo = vista_previa.planeacion_para_subir(contexto, self.foto_path)
+                archivo = vista_previa.planeacion_para_subir(contexto, self.foto_paths)
                 api_client.guardar_documento_planeacion(self.sesion["token"], resultado["id"], archivo)
             except Exception:  # noqa: BLE001
                 traceback.print_exc(file=sys.stderr)
@@ -467,7 +501,7 @@ class PlaneacionScreen(ctk.CTkScrollableFrame):
         self.avances.set("")
         self._actualizar_minutos()
 
-        self.foto_path = None
-        self.foto_label.configure(text="Ninguna foto seleccionada", text_color="gray")
+        self.foto_paths = []
+        self._refrescar_fotos_ui()
         self.guardar_boton.configure(state="disabled")
         self._cargar_asistencia()

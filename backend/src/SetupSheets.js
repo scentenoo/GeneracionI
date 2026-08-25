@@ -55,6 +55,11 @@ const ESQUEMA_SHEETS_ = {
     'id', 'docente_id', 'curso_id', 'fecha', 'grupo', 'objetivo', 'temas_vistos',
     'bloques', 'foto_clase_drive_id', 'asistencia', 'horas', 'creado_en',
     'doc_drive_id',
+    // Hasta 3 fotos por clase (JSON con los ids de Drive, en orden).
+    // `foto_clase_drive_id` sigue guardando la primera nada más, para que
+    // el informe mensual (que muestra una sola foto por clase) y las
+    // planeaciones viejas de antes de este campo no necesiten cambiar.
+    'fotos_clase_drive_ids',
     // Formato Diario Pedagógico: los tres momentos (JSON) y las dos
     // columnas de toda la clase. `bloques` queda por compatibilidad.
     'momentos', 'observaciones', 'avances',
