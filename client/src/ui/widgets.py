@@ -51,10 +51,15 @@ class CampoConInstruccion(ctk.CTkFrame):
     """Campo de texto con la pregunta arriba y la instrucción como marca de
     agua adentro: el texto gris de guía desaparece al escribir y vuelve si el
     campo queda vacío. Así el docente ve qué se espera sin que la instrucción
-    se confunda con su respuesta."""
+    se confunda con su respuesta.
 
-    def __init__(self, master, etiqueta: str, instruccion: str = "", alto: int = 70):
+    Con `minimo` muestra además el contador en vivo de CampoConContador,
+    para las preguntas del informe mensual que también piden un mínimo de
+    palabras."""
+
+    def __init__(self, master, etiqueta: str, instruccion: str = "", alto: int = 70, minimo: int = 0):
         super().__init__(master, fg_color="transparent")
+        self.minimo = minimo
         ctk.CTkLabel(self, text=etiqueta, anchor="w", justify="left", wraplength=560).pack(
             fill="x", pady=(10, 0)
         )
@@ -65,7 +70,21 @@ class CampoConInstruccion(ctk.CTkFrame):
         self._placeholder = False
         self.textbox.bind("<FocusIn>", self._al_entrar)
         self.textbox.bind("<FocusOut>", self._al_salir)
+        self.textbox.bind("<KeyRelease>", lambda _e: self._actualizar_contador())
+
+        if self.minimo:
+            self.contador_label = ctk.CTkLabel(self, text="", anchor="e", font=ctk.CTkFont(size=11))
+            self.contador_label.pack(fill="x")
+
         self._poner_placeholder()
+        self._actualizar_contador()
+
+    def _actualizar_contador(self):
+        if not self.minimo:
+            return
+        n = contar_palabras(self.get())
+        color = "#2fa84f" if n >= self.minimo else "#c0392b"
+        self.contador_label.configure(text=f"{n} palabras (mínimo {self.minimo})", text_color=color)
 
     def _poner_placeholder(self):
         if self.instruccion:
@@ -83,6 +102,7 @@ class CampoConInstruccion(ctk.CTkFrame):
     def _al_salir(self, _e=None):
         if not self.textbox.get("1.0", "end").strip():
             self._poner_placeholder()
+            self._actualizar_contador()
 
     def get(self) -> str:
         return "" if self._placeholder else self.textbox.get("1.0", "end").strip()
@@ -95,3 +115,4 @@ class CampoConInstruccion(ctk.CTkFrame):
             self._placeholder = False
         else:
             self._poner_placeholder()
+        self._actualizar_contador()

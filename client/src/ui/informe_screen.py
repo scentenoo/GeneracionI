@@ -93,8 +93,8 @@ class InformeScreen(ctk.CTkScrollableFrame):
         )
         self.faltantes_label.pack(fill="x", pady=(4, 0))
 
-    def _campo(self, etiqueta: str, instruccion: str = "") -> CampoConInstruccion:
-        campo = CampoConInstruccion(self, etiqueta, instruccion)
+    def _campo(self, etiqueta: str, instruccion: str = "", minimo: int = MIN_PALABRAS) -> CampoConInstruccion:
+        campo = CampoConInstruccion(self, etiqueta, instruccion, minimo=minimo)
         campo.pack(fill="x")
         return campo
 
@@ -107,30 +107,36 @@ class InformeScreen(ctk.CTkScrollableFrame):
         self.objetivo_box = self._campo(
             "2.1. ¿Cuáles eran los objetivos o metas planteadas para el mes y en qué medida se cumplieron?",
             "Texto amplio: describa con amplitud los objetivos del mes, no un texto por salir del paso.",
+            minimo=MIN_PALABRAS_NARRATIVA,
         )
         self.logros_box = self._campo(
             "2.2. Principales logros y avances observados en los estudiantes durante el mes.",
             "Háganlos a conciencia, revisando el nivel del grupo y los avances; sirve de insumo para "
             "mostrar que el programa avanza.",
+            minimo=MIN_PALABRAS_NARRATIVA,
         )
         self.dificultades_box = self._campo(
             "2.3. Dificultades, inconvenientes o novedades presentadas.",
             "En lista.",
+            minimo=MIN_PALABRAS_NARRATIVA,
         )
         self.estrategias_box = self._campo(
             "2.4. Estrategias, ajustes metodológicos implementados durante el mes.",
             "Describa con amplitud las estrategias desarrolladas en las clases; preste especial atención "
             "a si tuvo que hacer adecuaciones con estudiantes con discapacidad o trastornos del desarrollo.",
+            minimo=MIN_PALABRAS_NARRATIVA,
         )
         self.situacion_box = self._campo(
             "2.5. Describa alguna situación excepcionalmente positiva que haya notado en algún estudiante o grupo.",
             "Escriba las cosas positivas dignas de resaltar y mostrar; lo que escriba acá se publica en la "
             "bitácora al final del año.",
+            minimo=MIN_PALABRAS_NARRATIVA,
         )
         self.ctei_box = self._campo(
             "2.6. ¿Cómo integró el componente CTeI (ciencia, tecnología e innovación) en el mes?",
             "Todos los cursos deben integrar la misionalidad científica de Generación-I; describa AMPLIAMENTE "
             "cómo se desarrolló.",
+            minimo=MIN_PALABRAS_NARRATIVA,
         )
 
     def _construir_avance_semanal(self):
