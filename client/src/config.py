@@ -2,10 +2,16 @@
 secreto que maneja el cliente es la URL del backend, que ya vive detrás de
 login() con su propio token (ver spec sección 2)."""
 
+import os
 import sys
 from pathlib import Path
 
-BACKEND_URL = "https://script.google.com/macros/s/AKfycbys9dPldfgtNcO8J51jsroJkC2Ic-_qn7jkVyp_G9w0UgEjaqGH4VsN_K7bteJMEOE-/exec"
+_URL_PRODUCCION = "https://script.google.com/macros/s/AKfycbys9dPldfgtNcO8J51jsroJkC2Ic-_qn7jkVyp_G9w0UgEjaqGH4VsN_K7bteJMEOE-/exec"
+
+# Para probar contra un deployment de Apps Script aparte (Sheet y carpeta de
+# Drive de prueba, sin tocar los datos reales) sin editar este archivo:
+#   set GENERACIONI_BACKEND_URL=https://script.google.com/macros/s/.../exec
+BACKEND_URL = os.environ.get("GENERACIONI_BACKEND_URL") or _URL_PRODUCCION
 
 # La versión de esta copia de la app. Al abrir se compara contra lo que
 # diga la Sheet (ver main.py): por debajo de la mínima obligatoria queda
@@ -14,7 +20,7 @@ BACKEND_URL = "https://script.google.com/macros/s/AKfycbys9dPldfgtNcO8J51jsroJkC
 # Este número sube RECIÉN cuando se va a repartir un instalador nuevo, no
 # cada vez que se cambia código. El orden es: subir esto, compilar, subir
 # el .exe a Drive, y recién ahí publicar desde «Versión de la app».
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.1.3"
 
 
 def comparar_versiones(a: str, b: str) -> int:
