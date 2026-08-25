@@ -1,6 +1,9 @@
 /** Reglas de validación de la sección 6 de la spec. */
 
 const MIN_PALABRAS_DETALLE = 20;
+// Las seis preguntas narrativas del informe mensual (2.1 a 2.6): piden más
+// desarrollo que un campo de detalle común.
+const MIN_PALABRAS_NARRATIVA_INFORME = 80;
 const MIN_LARGO_PASSWORD = 6;
 const CLASES_ESPERADAS_POR_MES = 4;
 const MIN_FOTOS_CLASE = 1;

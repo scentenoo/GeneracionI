@@ -61,7 +61,7 @@ function guardar_informe_mensual(token, curso_id, mes, narrativa, gestionNarrati
   }
 
   CAMPOS_NARRATIVA_.forEach((campo) => {
-    requireMinPalabras_(narrativa[campo], campo);
+    requireMinPalabras_(narrativa[campo], campo, MIN_PALABRAS_NARRATIVA_INFORME);
   });
 
   const fila = {

@@ -15,6 +15,10 @@ from ui.avance_semana_editor import AvanceSemanaEditor
 from ui.tareas import en_segundo_plano
 from ui.widgets import CampoConInstruccion, MIN_PALABRAS, contar_palabras
 
+# Las seis preguntas narrativas (2.1 a 2.6) piden más desarrollo que un
+# campo de detalle común — mismo mínimo que exige el backend (Informes.js).
+MIN_PALABRAS_NARRATIVA = 80
+
 
 class InformeScreen(ctk.CTkScrollableFrame):
     def __init__(self, master, sesion: dict, on_volver: Callable[[], None]):
@@ -261,26 +265,26 @@ class InformeScreen(ctk.CTkScrollableFrame):
             return "Falta el mes."
 
         campos = [
-            (self.objetivo_box, "Objetivos del mes"),
-            (self.logros_box, "Principales logros"),
-            (self.dificultades_box, "Dificultades"),
-            (self.estrategias_box, "Estrategias"),
-            (self.situacion_box, "Situación positiva"),
-            (self.ctei_box, "Componente CTeI"),
+            (self.objetivo_box, "Objetivos del mes", MIN_PALABRAS_NARRATIVA),
+            (self.logros_box, "Principales logros", MIN_PALABRAS_NARRATIVA),
+            (self.dificultades_box, "Dificultades", MIN_PALABRAS_NARRATIVA),
+            (self.estrategias_box, "Estrategias", MIN_PALABRAS_NARRATIVA),
+            (self.situacion_box, "Situación positiva", MIN_PALABRAS_NARRATIVA),
+            (self.ctei_box, "Componente CTeI", MIN_PALABRAS_NARRATIVA),
         ]
         if self.es_directivo:
             campos += [
-                (self.gestion_objetivos_box, "Gestión: objetivos"),
-                (self.gestion_logros_box, "Gestión: logros"),
-                (self.gestion_novedades_box, "Gestión: novedades"),
-                (self.gestion_estrategias_box, "Gestión: estrategias"),
-                (self.gestion_pendientes_box, "Gestión: pendientes"),
+                (self.gestion_objetivos_box, "Gestión: objetivos", MIN_PALABRAS),
+                (self.gestion_logros_box, "Gestión: logros", MIN_PALABRAS),
+                (self.gestion_novedades_box, "Gestión: novedades", MIN_PALABRAS),
+                (self.gestion_estrategias_box, "Gestión: estrategias", MIN_PALABRAS),
+                (self.gestion_pendientes_box, "Gestión: pendientes", MIN_PALABRAS),
             ]
 
-        for box, nombre in campos:
+        for box, nombre, minimo in campos:
             n = contar_palabras(self._texto(box))
-            if n < MIN_PALABRAS:
-                return f"«{nombre}» necesita mínimo {MIN_PALABRAS} palabras (tiene {n})."
+            if n < minimo:
+                return f"«{nombre}» necesita mínimo {minimo} palabras (tiene {n})."
         return None
 
     def _respuestas(self):
