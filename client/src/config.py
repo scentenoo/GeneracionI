@@ -20,7 +20,7 @@ BACKEND_URL = os.environ.get("GENERACIONI_BACKEND_URL") or _URL_PRODUCCION
 # Este número sube RECIÉN cuando se va a repartir un instalador nuevo, no
 # cada vez que se cambia código. El orden es: subir esto, compilar, subir
 # el .exe a Drive, y recién ahí publicar desde «Versión de la app».
-APP_VERSION = "1.1.3"
+APP_VERSION = "1.1.4"
 
 
 def comparar_versiones(a: str, b: str) -> int:
