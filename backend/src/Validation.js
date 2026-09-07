@@ -5,7 +5,13 @@ const MIN_PALABRAS_DETALLE = 20;
 // desarrollo que un campo de detalle común.
 const MIN_PALABRAS_NARRATIVA_INFORME = 80;
 const MIN_LARGO_PASSWORD = 6;
+// Lo normal es dar 4 clases al mes (una por semana); ESPERADAS es ese
+// número, el que se muestra ("3 de 4"). MINIMAS es lo que de verdad
+// bloquea entregar el informe — con 3 ya alcanza, para no dejar a nadie
+// sin poder entregar por una sola clase de menos (un feriado, un permiso),
+// aunque igual conviene que la persona revise si le falta cargar una.
 const CLASES_ESPERADAS_POR_MES = 4;
+const CLASES_MINIMAS_POR_MES = 3;
 const MIN_FOTOS_CLASE = 1;
 const MAX_FOTOS_CLASE = 3;
 

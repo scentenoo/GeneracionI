@@ -16,15 +16,20 @@
  * la regla en nada.
  */
 
-/** Lo común a crear y editar. `fotoPrevia` es la que ya tenía la fila, si la hay. */
-function validarHorasGestion_(datos, fotos, fotoPrevia) {
+/**
+ * Lo común a crear y editar. La foto es obligatoria solo al CREAR
+ * (`esNueva`): exigírsela también al editar dejaría sin poder corregir ni
+ * una fecha mal escrita a las actividades de antes del piloto, que se
+ * cargaron sin foto porque todavía no se pedía.
+ */
+function validarHorasGestion_(datos, fotos, esNueva) {
   if (!datos.fecha) throw new Error('Falta la fecha');
   if (!datos.actividad) throw new Error('Falta describir la actividad/tarea');
   if (!datos.horas_sede) throw new Error('Falta el número de horas');
   if (!String(datos.entregable || '').trim()) {
     throw new Error('Falta el producto o entregable: es la prueba de la actividad');
   }
-  if (!(fotos && fotos.foto) && !fotoPrevia) {
+  if (esNueva && !(fotos && fotos.foto)) {
     throw new Error('Falta la foto de la actividad');
   }
 }
@@ -32,7 +37,7 @@ function validarHorasGestion_(datos, fotos, fotoPrevia) {
 function guardar_horas_gestion(token, datos, fotos) {
   const sesion = requireSession_(token);
   requireRole_(sesion, [ROLES.DIRECTIVO, ROLES.AMBOS]);
-  validarHorasGestion_(datos, fotos, null);
+  validarHorasGestion_(datos, fotos, true);
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
@@ -96,8 +101,9 @@ function editar_horas_gestion(token, id, cambios, fotos) {
 
   // Se valida la fila como va a quedar, no solo lo que llegó: editar manda
   // el formulario entero, pero si algún día mandara un cambio parcial, los
-  // campos que no vienen tienen que seguir contando como llenos.
-  validarHorasGestion_(Object.assign({}, fila, cambios), fotos, fila.foto_drive_id);
+  // campos que no vienen tienen que seguir contando como llenos. La foto
+  // nunca es obligatoria acá (ver validarHorasGestion_).
+  validarHorasGestion_(Object.assign({}, fila, cambios), fotos, false);
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);

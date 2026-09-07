@@ -144,13 +144,22 @@ function registrarRevision_(tipo, ref, accion, motivo, autor) {
 function registrarEntrega_(tipo, ref, sheetName, filaId, autor) {
   const previo = findRowById_(sheetName, filaId);
   const eraDevuelto = previo && previo.estado === ESTADO_DEVUELTO;
+  const yaTeniaHistorial = historialDe_(tipo, ref).length > 0;
   updateRowById_(sheetName, filaId, {
     estado: ESTADO_PENDIENTE,
     revisado_por: '',
     revisado_en: '',
     motivo_devolucion: '',
   });
-  registrarRevision_(tipo, ref, eraDevuelto ? 'reenviado' : 'entregado', '', autor);
+  let accion;
+  if (eraDevuelto) {
+    accion = 'reenviado';
+  } else if (yaTeniaHistorial) {
+    accion = 'actualizado';
+  } else {
+    accion = 'entregado';
+  }
+  registrarRevision_(tipo, ref, accion, '', autor);
 }
 
 /**

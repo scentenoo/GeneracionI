@@ -64,6 +64,22 @@ function guardar_informe_mensual(token, curso_id, mes, narrativa, gestionNarrati
     requireMinPalabras_(narrativa[campo], campo, MIN_PALABRAS_NARRATIVA_INFORME);
   });
 
+  // La evaluación de avance por semana (sección 3) tampoco puede quedar en
+  // blanco: una fila por cada clase del mes, con su observación — la misma
+  // cuenta y numeración que arma armarAvanceSemanal_ para el documento
+  // final, así que lo que se valida acá es lo que de verdad va a aparecer.
+  const avanceSemanal = narrativa.avance_semanal || [];
+  if (avanceSemanal.length < estado.registradas) {
+    throw new Error(
+      `Falta completar la evaluación de avance por semana: hay ${estado.registradas} clases y solo se cargaron ${avanceSemanal.length}`
+    );
+  }
+  avanceSemanal.forEach((r, i) => {
+    if (!String((r || {}).observaciones || '').trim()) {
+      throw new Error(`Falta la observación de la semana ${(r || {}).semana || i + 1} en la evaluación de avance por semana`);
+    }
+  });
+
   const fila = {
     curso_id: curso_id,
     docente_id: curso.docente_id,
@@ -435,35 +451,36 @@ function contarInformesPrevios_(curso_id, mes) {
 }
 
 /**
- * Agrupa las planeaciones del mes por semana y arma la columna "unidad
- * trabajada" de la sección 3 juntando los temas vistos de esa semana.
- * `respuestas` trae el nivel y las observaciones que escribió el docente,
- * emparejadas por número de semana.
+ * Arma la columna "unidad trabajada" de la sección 3 con una fila por
+ * clase, en el mismo orden y con la misma numeración que ve el docente en
+ * pantalla (ver obtener_avance_sugerido): el lugar que ocupa esa clase en
+ * el mes, no Math.ceil(día / 7). Antes se agrupaba por día/7 acá pero por
+ * orden en obtener_avance_sugerido — dos numeraciones distintas para la
+ * misma sección, así que la respuesta que el docente escribía para su
+ * "Semana 2" en pantalla no encontraba con qué emparejarse acá y el
+ * informe final le mostraba esa semana en blanco aunque sí la hubiera
+ * llenado. `respuestas` trae el nivel y las observaciones que escribió el
+ * docente, emparejadas por ese mismo número.
  */
 function armarAvanceSemanal_(planeaciones, respuestas) {
-  const porSemana = {};
-  planeaciones.forEach((p) => {
-    const semana = Math.ceil(diaDeFecha_(p.fecha) / 7);
-    if (!porSemana[semana]) porSemana[semana] = [];
-    porSemana[semana] = porSemana[semana].concat(p.temas_vistos || []);
-  });
+  const ordenadas = planeaciones
+    .slice()
+    .sort((a, b) => (fechaISO_(a.fecha) < fechaISO_(b.fecha) ? -1 : 1));
 
   const respuestaDeSemana = {};
   (respuestas || []).forEach((r) => {
     respuestaDeSemana[String(r.semana)] = r;
   });
 
-  return Object.keys(porSemana)
-    .map(Number)
-    .sort((a, b) => a - b)
-    .map((semana) => {
-      const r = respuestaDeSemana[String(semana)] || {};
-      return {
-        semana: `Semana ${semana}\n${porSemana[semana].join('\n')}`,
-        nivel: r.nivel || '',
-        observaciones: r.observaciones || '',
-      };
-    });
+  return ordenadas.map((p, i) => {
+    const semana = i + 1;
+    const r = respuestaDeSemana[String(semana)] || {};
+    return {
+      semana: `Semana ${semana}\n${(p.temas_vistos || []).join('\n')}`,
+      nivel: r.nivel || '',
+      observaciones: r.observaciones || '',
+    };
+  });
 }
 
 /**

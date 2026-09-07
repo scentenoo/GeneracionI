@@ -54,16 +54,31 @@ function inscribir_(estudiante_id, curso_id, inscripciones) {
   return true;
 }
 
+/**
+ * Excel en Windows con configuración regional en español exporta el CSV
+ * separado por ; y no por , —la coma es el separador decimal en ese
+ * idioma, así que el de columnas pasa a ser el punto y coma—. Sin esto,
+ * un CSV real (con esa configuración, que es la de acá) no encontraba la
+ * columna "nombre" aunque estuviera, porque toda la fila quedaba como un
+ * solo campo sin partir.
+ */
+function filasCsvConNombre_(csv) {
+  for (const separador of [',', ';']) {
+    const filas = Utilities.parseCsv(csv, separador);
+    const encabezado = (filas[0] || []).map((h) => h.trim().toLowerCase());
+    const idxNombre = encabezado.indexOf('nombre');
+    if (idxNombre !== -1) return { filas: filas, idxNombre: idxNombre };
+  }
+  throw new Error('El CSV necesita una columna "nombre"');
+}
+
 function importar_estudiantes(token, curso_id, csv) {
   const sesion = requireSession_(token);
   requireRole_(sesion, [ROLES.DIRECTIVO, ROLES.AMBOS]);
 
   if (!findRowById_(SHEET_NAMES.CURSOS, curso_id)) throw new Error('Curso no encontrado');
 
-  const filas = Utilities.parseCsv(csv);
-  const encabezado = filas[0].map((h) => h.trim().toLowerCase());
-  const idxNombre = encabezado.indexOf('nombre');
-  if (idxNombre === -1) throw new Error('El CSV necesita una columna "nombre"');
+  const { filas, idxNombre } = filasCsvConNombre_(csv);
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);

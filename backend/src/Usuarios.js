@@ -379,7 +379,9 @@ function obtener_dashboard_directivo(token, mes) {
       mes: mes,
       registradas: registradas,
       esperadas: CLASES_ESPERADAS_POR_MES,
-      faltantes: Math.max(0, CLASES_ESPERADAS_POR_MES - registradas),
+      // Ver el comentario en Planeaciones.js#obtener_estado_mes: lo que
+      // bloquea es el mínimo (3), no lo esperado (4).
+      faltantes: Math.max(0, CLASES_MINIMAS_POR_MES - registradas),
       informe_entregado: !!informe,
       informe_actualizado_en: informe ? informe.actualizado_en : '',
     };

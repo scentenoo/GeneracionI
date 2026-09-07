@@ -248,8 +248,14 @@ function parsePlaneacionRow_(p) {
 /**
  * Edita el docente dueño (CRUD sobre lo suyo) o un directivo sobre la de
  * cualquiera — pero el directivo nunca elimina, ver eliminar_planeacion.
+ *
+ * `fotos` es opcional: sin fotos nuevas, las que ya tenía la planeación
+ * quedan tal cual (no se re-suben ni se tocan). Cuando sí vienen, se
+ * reemplaza el set completo (1 a 3) igual que en guardar_planeacion —
+ * más simple que mezclar "conservar esta, reemplazar esa otra", y evita
+ * arrastrar ids de Drive que ya no corresponden a ninguna foto real.
  */
-function editar_planeacion(token, id, cambios) {
+function editar_planeacion(token, id, cambios, fotos) {
   const sesion = requireSession_(token);
 
   const fila = findRowById_(SHEET_NAMES.PLANEACIONES, id);
@@ -295,6 +301,35 @@ function editar_planeacion(token, id, cambios) {
     // desfasadas de los minutos nuevos.
     if (cambios.momentos !== undefined) {
       cambiosSerializados.horas = sumarMinutosMomentos_(cambios.momentos) / 60;
+    }
+
+    // fotos.fotos_clase presente (aunque sea []) es "el docente tocó las
+    // fotos, esto es lo que quiere que quede"; fotos ausente/undefined es
+    // "no las tocó, dejalas como están" — así se puede distinguir "mandó
+    // una lista vacía por error" de "ni pasó por esta parte del formulario".
+    if (fotos && Array.isArray(fotos.fotos_clase)) {
+      const fotosClase = normalizarFotosClase_(fotos);
+      if (fotosClase.length < MIN_FOTOS_CLASE) {
+        throw new Error('Falta al menos una foto de la clase');
+      }
+      if (fotosClase.length > MAX_FOTOS_CLASE) {
+        throw new Error(`Como máximo ${MAX_FOTOS_CLASE} fotos por clase`);
+      }
+      const fechaCarpeta = cambios.fecha !== undefined ? cambios.fecha : fila.fecha;
+      const carpetaFotos = getOrCrearRutaCarpetas_(
+        ['Planeaciones', fila.grupo, nombreCarpetaMes_(fechaCarpeta), 'Fotos']
+      );
+      const fotoIds = fotosClase.map((foto, i) =>
+        guardarArchivoEnCarpeta_(
+          carpetaFotos,
+          foto.base64,
+          foto.mimeType || 'image/jpeg',
+          nombreDeFoto_(`clase_${i + 1}`, fila.grupo, fechaCarpeta)
+        )
+      );
+      fotosClaseDriveIds_(fila).forEach(trasharSiExiste_);
+      cambiosSerializados.foto_clase_drive_id = fotoIds[0];
+      cambiosSerializados.fotos_clase_drive_ids = JSON.stringify(fotoIds);
     }
 
     const cambiosReales = updateRowById_(SHEET_NAMES.PLANEACIONES, id, cambiosSerializados);
@@ -368,7 +403,11 @@ function obtener_estado_mes(token, curso_id, mes) {
     mes: mes,
     registradas: planeaciones.length,
     esperadas: CLASES_ESPERADAS_POR_MES,
-    faltantes: Math.max(0, CLASES_ESPERADAS_POR_MES - planeaciones.length),
+    // `faltantes` es lo que de verdad bloquea (mínimo 3): con 4 esperadas
+    // pero 3 cargadas, esto da 0 — se puede entregar, aunque `registradas`
+    // < `esperadas` le queda visible a quien mire para que revise si le
+    // falta alguna.
+    faltantes: Math.max(0, CLASES_MINIMAS_POR_MES - planeaciones.length),
     informe_entregado: !!informe,
     informe_actualizado_en: informe ? informe.actualizado_en : '',
   };
