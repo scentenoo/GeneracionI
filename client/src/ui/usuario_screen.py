@@ -8,6 +8,7 @@ from typing import Callable
 import customtkinter as ctk
 
 import api_client
+from ui import tema
 from ui.tareas import cache, en_segundo_plano
 from ui.usuario_form_fields import (
     construir_campos_perfil,
@@ -37,17 +38,17 @@ class UsuarioScreen(ctk.CTkScrollableFrame):
         self.rol_menu.pack(anchor="w", pady=(2, 0))
 
         ctk.CTkLabel(self, text="Datos para el informe mensual (opcionales, se pueden completar después)",
-                     text_color="gray").pack(anchor="w", pady=(16, 4))
+                     text_color=tema.GRIS).pack(anchor="w", pady=(16, 4))
         self.campos_perfil = construir_campos_perfil(self)
 
         ctk.CTkLabel(
             self,
             text="Los cursos se asignan aparte, en la pantalla de Cursos.",
-            text_color="gray",
-            font=ctk.CTkFont(size=11),
+            text_color=tema.GRIS,
+            font=tema.fuente(11),
         ).pack(anchor="w", pady=(10, 0))
 
-        self.error_label = ctk.CTkLabel(self, text="", text_color="#c0392b", wraplength=450, justify="left")
+        self.error_label = ctk.CTkLabel(self, text="", text_color=tema.ROJO, wraplength=450, justify="left")
         self.error_label.pack(fill="x", pady=(16, 4))
         self.crear_boton = ctk.CTkButton(self, text="Crear usuario", command=self._crear)
         self.crear_boton.pack(pady=10)
@@ -73,7 +74,7 @@ class UsuarioScreen(ctk.CTkScrollableFrame):
 
         # En segundo plano para no congelar la ventana en los equipos lentos.
         self.crear_boton.configure(state="disabled")
-        self.error_label.configure(text="Creando...", text_color="gray")
+        self.error_label.configure(text="Creando...", text_color=tema.GRIS)
 
         def listo(resultado):
             self.crear_boton.configure(state="normal")
@@ -84,12 +85,12 @@ class UsuarioScreen(ctk.CTkScrollableFrame):
             self.password_entry.delete(0, "end")
             limpiar_campos_perfil(self.campos_perfil)
             self.error_label.configure(
-                text=f"{nombre_creado} creado (id {resultado['id']}) ✓", text_color="#2fa84f"
+                text=f"{nombre_creado} creado (id {resultado['id']}) ✓", text_color=tema.VERDE
             )
 
         def fallo(exc):
             self.crear_boton.configure(state="normal")
-            self.error_label.configure(text=str(exc), text_color="#c0392b")
+            self.error_label.configure(text=str(exc), text_color=tema.ROJO)
 
         en_segundo_plano(
             self,

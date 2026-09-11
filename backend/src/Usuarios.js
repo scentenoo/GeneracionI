@@ -173,7 +173,7 @@ function convertirme_administrador(token) {
   requireRole_(sesion, [ROLES.DIRECTIVO, ROLES.AMBOS]);
 
   if (hayAdministrador_()) {
-    throw new Error('Ya hay un administrador asignado — pedile que te transfiera el cargo');
+    throw new Error('Ya hay un administrador asignado — pídale que le transfiera el cargo');
   }
 
   updateRowById_(SHEET_NAMES.USUARIOS, sesion.id, { es_admin: true });
@@ -214,7 +214,7 @@ function eliminar_usuario(token, usuario_id) {
   const sesion = requireSession_(token);
 
   if (String(usuario_id) === String(sesion.id)) {
-    throw new Error('No podés eliminarte a vos mismo — transferí el cargo de administrador primero si hace falta');
+    throw new Error('No puede eliminarse a usted mismo — transfiera el cargo de administrador primero si hace falta');
   }
 
   const fila = findRowById_(SHEET_NAMES.USUARIOS, usuario_id);
@@ -224,7 +224,7 @@ function eliminar_usuario(token, usuario_id) {
   // único que puede repartir el cargo, y sin él la app se queda sin quien
   // administre. Para sacarlo hay que transferir el cargo primero.
   if (esFilaAdministrador_(fila)) {
-    throw new Error('No se puede eliminar al administrador. Transferile primero el cargo a otra persona.');
+    throw new Error('No se puede eliminar al administrador. Transfiérale primero el cargo a otra persona.');
   }
 
   if (!esAdministrador_(sesion.id)) {

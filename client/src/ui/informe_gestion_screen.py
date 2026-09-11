@@ -43,8 +43,8 @@ class InformeGestionScreen(ctk.CTkScrollableFrame):
 
         ctk.CTkLabel(
             self,
-            text="El informe se arma con las horas de gestión que cargaste este mes.\n"
-                 "Cargalas en «Horas de gestión» si todavía no lo hiciste.",
+            text="El informe se arma con las horas de gestión que cargó este mes.\n"
+                 "Cárguelas en «Horas de gestión» si todavía no lo hizo.",
             text_color=GRIS, font=ctk.CTkFont(size=11), justify="left", anchor="w",
         ).pack(fill="x", pady=(0, 8))
 
@@ -68,7 +68,7 @@ class InformeGestionScreen(ctk.CTkScrollableFrame):
         )
         self.guardar_boton.pack(pady=(0, 10))
         ctk.CTkLabel(
-            self, text="Revisá la vista previa para poder entregar.",
+            self, text="Revise la vista previa para poder entregar.",
             text_color=GRIS, font=ctk.CTkFont(size=11),
         ).pack()
 
@@ -119,7 +119,7 @@ class InformeGestionScreen(ctk.CTkScrollableFrame):
             self.guardar_boton.configure(state="normal")
             formato = "PDF" if es_pdf else "documento de Word"
             self.error_label.configure(
-                text=f"Abrí el {formato} para revisarlo. Si está bien, dale a entregar.", text_color=VERDE
+                text=f"Abra el {formato} para revisarlo. Si está bien, dele a entregar.", text_color=VERDE
             )
 
         def fallo(exc):
@@ -161,7 +161,7 @@ class InformeGestionScreen(ctk.CTkScrollableFrame):
                 self.entregado_label.configure(text="Todavía no entregado este mes.", text_color=GRIS)
                 return
             self.entregado_label.configure(
-                text="Ya entregado — podés corregirlo y volver a entregar.", text_color=VERDE
+                text="Ya entregado — puede corregirlo y volver a entregar.", text_color=VERDE
             )
             for clave, box in self.boxes.items():
                 box.delete("1.0", "end")

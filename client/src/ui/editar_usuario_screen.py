@@ -16,6 +16,7 @@ from typing import Callable
 import customtkinter as ctk
 
 import api_client
+from ui import tema
 from ui.tareas import cache, en_segundo_plano
 from services import image_utils
 from ui.usuario_form_fields import construir_campos_perfil, leer_campos_perfil
@@ -47,21 +48,21 @@ class EditarUsuarioScreen(ctk.CTkScrollableFrame):
         fila_firma = ctk.CTkFrame(self, fg_color="transparent")
         fila_firma.pack(fill="x", pady=(16, 4))
         ctk.CTkButton(fila_firma, text="Subir firma...", command=self._subir_firma).pack(side="left")
-        self.firma_label = ctk.CTkLabel(fila_firma, text="", text_color="gray")
+        self.firma_label = ctk.CTkLabel(fila_firma, text="", text_color=tema.GRIS)
         self.firma_label.pack(side="left", padx=10)
 
-        self.error_label = ctk.CTkLabel(self, text="", text_color="#c0392b", wraplength=450, justify="left")
+        self.error_label = ctk.CTkLabel(self, text="", text_color=tema.ROJO, wraplength=450, justify="left")
         self.error_label.pack(fill="x", pady=(16, 4))
         ctk.CTkButton(self, text="Guardar cambios", command=self._guardar).pack(pady=10)
 
-        ctk.CTkLabel(self, text="Administrador", font=ctk.CTkFont(weight="bold")).pack(anchor="w", pady=(20, 4))
-        self.admin_label = ctk.CTkLabel(self, text="", text_color="gray")
+        ctk.CTkLabel(self, text="Administrador", font=tema.fuente(peso="bold")).pack(anchor="w", pady=(20, 4))
+        self.admin_label = ctk.CTkLabel(self, text="", text_color=tema.GRIS)
         self.admin_label.pack(anchor="w")
         self.admin_boton = ctk.CTkButton(self, text="", command=self._accion_admin)
         self.admin_boton.pack(anchor="w", pady=(6, 0))
 
         self.eliminar_boton = ctk.CTkButton(
-            self, text="Eliminar este usuario", fg_color="#c0392b", hover_color="#922b21",
+            self, text="Eliminar este usuario", fg_color=tema.ROJO, hover_color=tema.ROJO_HOVER,
             command=self._eliminar,
         )
         self.eliminar_boton.pack(anchor="w", pady=(20, 10))
@@ -91,7 +92,7 @@ class EditarUsuarioScreen(ctk.CTkScrollableFrame):
             self,
             lambda: cache.usuarios(self.sesion["token"]),
             listo,
-            lambda exc: self.error_label.configure(text=str(exc), text_color="#c0392b"),
+            lambda exc: self.error_label.configure(text=str(exc), text_color=tema.ROJO),
         )
 
     def seleccionar(self, nombre: str):
@@ -173,10 +174,10 @@ class EditarUsuarioScreen(ctk.CTkScrollableFrame):
             else:
                 api_client.transferir_administrador(self.sesion["token"], usuario["id"])
         except api_client.ApiError as exc:
-            self.error_label.configure(text=str(exc), text_color="#c0392b")
+            self.error_label.configure(text=str(exc), text_color=tema.ROJO)
             return
 
-        self.error_label.configure(text="Listo ✓", text_color="#2fa84f")
+        self.error_label.configure(text="Listo ✓", text_color=tema.VERDE)
         self._cargar_usuarios()
 
     def _eliminar(self):
@@ -185,7 +186,7 @@ class EditarUsuarioScreen(ctk.CTkScrollableFrame):
             return
 
         if not messagebox.askyesno(
-            "Eliminar usuario", f"¿Seguro que querés eliminar a {usuario['nombre']} ({usuario['usuario']})?"
+            "Eliminar usuario", f"¿Seguro que quiere eliminar a {usuario['nombre']} ({usuario['usuario']})?"
         ):
             return
 
@@ -193,10 +194,10 @@ class EditarUsuarioScreen(ctk.CTkScrollableFrame):
             api_client.eliminar_usuario(self.sesion["token"], usuario["id"])
             cache.invalidar("usuarios")
         except api_client.ApiError as exc:
-            self.error_label.configure(text=str(exc), text_color="#c0392b")
+            self.error_label.configure(text=str(exc), text_color=tema.ROJO)
             return
 
-        self.error_label.configure(text="Usuario eliminado.", text_color="#2fa84f")
+        self.error_label.configure(text="Usuario eliminado.", text_color=tema.VERDE)
         self._cargar_usuarios()
 
     def _subir_firma(self):
@@ -205,7 +206,7 @@ class EditarUsuarioScreen(ctk.CTkScrollableFrame):
             return
 
         ruta = filedialog.askopenfilename(
-            title="Elegí la imagen de la firma", filetypes=[("Imágenes", "*.jpg *.jpeg *.png")]
+            title="Elija la imagen de la firma", filetypes=[("Imágenes", "*.jpg *.jpeg *.png")]
         )
         if not ruta:
             return
@@ -213,10 +214,10 @@ class EditarUsuarioScreen(ctk.CTkScrollableFrame):
         try:
             api_client.subir_firma(self.sesion["token"], usuario["id"], image_utils.foto_a_payload(ruta))
         except api_client.ApiError as exc:
-            self.error_label.configure(text=str(exc), text_color="#c0392b")
+            self.error_label.configure(text=str(exc), text_color=tema.ROJO)
             return
 
-        self.firma_label.configure(text="Firma actualizada ✓", text_color="#2fa84f")
+        self.firma_label.configure(text="Firma actualizada ✓", text_color=tema.VERDE)
 
     def _guardar(self):
         usuario = self._usuario_actual()
@@ -234,8 +235,8 @@ class EditarUsuarioScreen(ctk.CTkScrollableFrame):
             resultado = api_client.editar_usuario(self.sesion["token"], usuario["id"], cambios)
             cache.invalidar("usuarios")
         except api_client.ApiError as exc:
-            self.error_label.configure(text=str(exc), text_color="#c0392b")
+            self.error_label.configure(text=str(exc), text_color=tema.ROJO)
             return
 
-        self.error_label.configure(text=f"Guardado ({resultado['cambios']} campos actualizados) ✓", text_color="#2fa84f")
+        self.error_label.configure(text=f"Guardado ({resultado['cambios']} campos actualizados) ✓", text_color=tema.VERDE)
         self._cargar_usuarios()

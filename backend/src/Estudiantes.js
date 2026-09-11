@@ -114,7 +114,7 @@ function obtener_estudiantes(token, curso_id) {
   if (!curso) throw new Error('Curso no encontrado');
 
   if (String(curso.docente_id) !== String(sesion.id) && !puedeSupervisar_(sesion)) {
-    throw new Error('No tienes permiso para ver los estudiantes de ese curso');
+    throw new Error('No tiene permiso para ver los estudiantes de ese curso');
   }
 
   const inscripciones = readAllRows_(SHEET_NAMES.INSCRIPCIONES);

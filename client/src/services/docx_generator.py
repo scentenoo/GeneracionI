@@ -16,6 +16,8 @@ from pathlib import Path
 from docxtpl import DocxTemplate, InlineImage
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
 from docx.shared import Mm, Pt, RGBColor
 
 from config import TEMPLATES_DIR
@@ -34,21 +36,39 @@ _ANCHO_FOTO_CLASE_MM = {1: _IMG_WIDTH_GRANDE_MM, 2: 75, 3: 55}
 # Cómo se lee cada acción del historial en la hoja final del documento.
 _ACCIONES = {
     "entregado": "Entregado",
+    "actualizado": "Actualizado",
     "reenviado": "Reenviado corregido",
     "devuelto": "Devuelto para corregir",
     "aprobado": "Aprobado",
 }
 
 
+def _agregar_bordes_tabla(tabla) -> None:
+    """Bordes finos en toda la tabla, puestos a mano en el XML en vez de con
+    `tabla.style = "Table Grid"` — ese nombre de estilo solo existe si la
+    plantilla .docx ya lo usó alguna vez (Word los agrega recién al primer
+    uso); informe_mensual.docx no lo tenía y eso tiraba
+    KeyError: no style with name 'Table Grid' justo al final, después de
+    armar todo el resto del documento."""
+    tblPr = tabla._tbl.tblPr
+    bordes = OxmlElement("w:tblBorders")
+    for lado in ("top", "left", "bottom", "right", "insideH", "insideV"):
+        el = OxmlElement(f"w:{lado}")
+        el.set(qn("w:val"), "single")
+        el.set(qn("w:sz"), "4")
+        el.set(qn("w:space"), "0")
+        el.set(qn("w:color"), "999999")
+        bordes.append(el)
+    tblPr.append(bordes)
+
+
 def _anexar_historial(ruta_salida: Path, historial: list | None) -> None:
-    """Agrega al final del documento la hoja de revisión —quién lo entregó,
-    quién lo devolvió y por qué, quién lo aprobó y cuándo—, como la hoja de
-    auditoría del programa. Solo se agrega a un archivo que fue devuelto
-    alguna vez; en uno aprobado de una no tiene nada que contar.
-    """
+    """Agrega al final del documento la hoja de auditoría —quién lo
+    entregó, quién lo devolvió y por qué, quién lo aprobó y cuándo—, pedida
+    por dirección para que quede en TODOS los documentos (no solo los que
+    se devolvieron alguna vez): un registro completo de principio a fin,
+    aunque se haya aprobado a la primera."""
     if not historial:
-        return
-    if not any(e.get("accion") == "devuelto" for e in historial):
         return
 
     doc = Document(str(ruta_salida))
@@ -67,7 +87,7 @@ def _anexar_historial(ruta_salida: Path, historial: list | None) -> None:
     r.font.color.rgb = RGBColor(0x60, 0x60, 0x60)
 
     tabla = doc.add_table(rows=1, cols=4)
-    tabla.style = "Table Grid"
+    _agregar_bordes_tabla(tabla)
     encabezados = ["Fecha", "Acción", "Responsable", "Motivo"]
     for celda, texto in zip(tabla.rows[0].cells, encabezados):
         p = celda.paragraphs[0]

@@ -14,6 +14,7 @@ dist/
 # Node / clasp
 node_modules/
 .clasp.json
+backend/entornos.json
 *.log
 
 # graphify (se regenera con `graphify .`)

@@ -18,8 +18,10 @@ import customtkinter as ctk
 
 import api_client
 from services import date_utils, image_utils
+from ui import tema
 from ui.cargando import Cargando
 from ui.tareas import cache, en_segundo_plano
+from ui.widgets import chip, miniatura_ctk
 
 
 class ActividadesScreen(ctk.CTkScrollableFrame):
@@ -38,7 +40,7 @@ class ActividadesScreen(ctk.CTkScrollableFrame):
         ctk.CTkLabel(
             self,
             text="Reuniones, claustros, informes: lo que se factura y no es una clase.",
-            text_color="gray",
+            text_color=tema.GRIS,
             wraplength=450,
             justify="left",
         ).pack(fill="x", pady=(0, 10))
@@ -67,11 +69,13 @@ class ActividadesScreen(ctk.CTkScrollableFrame):
         fila_foto = ctk.CTkFrame(self, fg_color="transparent")
         fila_foto.pack(fill="x", pady=(10, 0))
         ctk.CTkButton(fila_foto, text="Elegir foto...", width=110, command=self._elegir_foto).pack(side="left")
-        self.foto_label = ctk.CTkLabel(fila_foto, text="", text_color="gray", anchor="w")
+        self.foto_miniatura = ctk.CTkLabel(fila_foto, image=None, text="")
+        self.foto_miniatura.pack(side="left", padx=(10, 0))
+        self.foto_label = ctk.CTkLabel(fila_foto, text="", text_color=tema.GRIS, anchor="w")
         self.foto_label.pack(side="left", padx=10)
         self._actualizar_foto_label()
 
-        self.error_label = ctk.CTkLabel(self, text="", text_color="#c0392b", wraplength=450, justify="left")
+        self.error_label = ctk.CTkLabel(self, text="", text_color=tema.ROJO, wraplength=450, justify="left")
         self.error_label.pack(fill="x", pady=(12, 4))
 
         acciones = ctk.CTkFrame(self, fg_color="transparent")
@@ -79,10 +83,10 @@ class ActividadesScreen(ctk.CTkScrollableFrame):
         self.guardar_boton = ctk.CTkButton(acciones, text="Agregar actividad", command=self._guardar)
         self.guardar_boton.pack(side="left")
         self.cancelar_boton = ctk.CTkButton(
-            acciones, text="Cancelar edición", width=130, fg_color="gray", command=self._salir_de_edicion
+            acciones, text="Cancelar edición", width=130, fg_color=tema.GRIS, command=self._salir_de_edicion
         )
 
-        self.total_label = ctk.CTkLabel(self, text="", font=ctk.CTkFont(weight="bold"), anchor="w")
+        self.total_label = ctk.CTkLabel(self, text="", font=tema.fuente(peso="bold"), anchor="w")
         self.total_label.pack(fill="x", pady=(8, 4))
 
         self.lista_contenedor = ctk.CTkFrame(self, fg_color="transparent")
@@ -100,8 +104,8 @@ class ActividadesScreen(ctk.CTkScrollableFrame):
             self._cursos_por_nombre = {c["nombre"]: c for c in cursos}
             nombres = list(self._cursos_por_nombre)
             if not nombres:
-                self.curso_menu.configure(values=["(no tenés cursos)"])
-                self.curso_menu.set("(no tenés cursos)")
+                self.curso_menu.configure(values=["(no tiene cursos)"])
+                self.curso_menu.set("(no tiene cursos)")
                 return
             self.curso_menu.configure(values=nombres)
             self.curso_menu.set(nombres[0])
@@ -111,7 +115,7 @@ class ActividadesScreen(ctk.CTkScrollableFrame):
             self,
             lambda: cache.mis_cursos(self.sesion["token"]),
             listo,
-            lambda exc: self.error_label.configure(text=str(exc), text_color="#c0392b"),
+            lambda exc: self.error_label.configure(text=str(exc), text_color=tema.ROJO),
         )
 
     def _curso_actual(self) -> dict | None:
@@ -129,7 +133,7 @@ class ActividadesScreen(ctk.CTkScrollableFrame):
             return
 
         mes = self._mes()
-        self.total_label.configure(text="", text_color="gray")
+        self.total_label.configure(text="", text_color=tema.GRIS)
         Cargando(self.lista_contenedor, texto=f"Cargando las de {mes}...").pack(pady=16)
 
         def listo(actividades):
@@ -140,12 +144,12 @@ class ActividadesScreen(ctk.CTkScrollableFrame):
                 for a in actividades
             )
             self.total_label.configure(
-                text=f"{mes}: {len(actividades)} actividades, {total:g} horas", text_color="white"
+                text=f"{mes}: {len(actividades)} actividades, {total:g} horas", text_color=tema.TEXTO_OSCURO
             )
 
             if not actividades:
                 ctk.CTkLabel(
-                    self.lista_contenedor, text="Ninguna registrada este mes.", text_color="gray"
+                    self.lista_contenedor, text="Ninguna registrada este mes.", text_color=tema.GRIS
                 ).pack(anchor="w")
                 return
 
@@ -156,7 +160,7 @@ class ActividadesScreen(ctk.CTkScrollableFrame):
         def fallo(exc):
             for w in self.lista_contenedor.winfo_children():
                 w.destroy()
-            self.total_label.configure(text=str(exc), text_color="#c0392b")
+            self.total_label.configure(text=str(exc), text_color=tema.ROJO)
 
         en_segundo_plano(
             self,
@@ -166,7 +170,10 @@ class ActividadesScreen(ctk.CTkScrollableFrame):
         )
 
     def _fila(self, a: dict):
-        fila = ctk.CTkFrame(self.lista_contenedor, border_width=1, corner_radius=8)
+        fila = ctk.CTkFrame(
+            self.lista_contenedor, fg_color=tema.FONDO_TARJETA, corner_radius=10,
+            border_width=1, border_color=tema.BORDE_TARJETA,
+        )
         fila.pack(fill="x", pady=3)
 
         info = ctk.CTkFrame(fila, fg_color="transparent")
@@ -184,27 +191,32 @@ class ActividadesScreen(ctk.CTkScrollableFrame):
             horas.append(f"{float(a['horas_externas']):g} h externas")
 
         ctk.CTkLabel(
-            info, text=a["descripcion"], font=ctk.CTkFont(weight="bold"), anchor="w", wraplength=330,
+            info, text=a["descripcion"], font=tema.fuente(peso="bold"), anchor="w", wraplength=330,
             justify="left",
         ).pack(fill="x")
         ctk.CTkLabel(
-            info, text=f"{fecha}  ·  {'  ·  '.join(horas)}", text_color="gray", anchor="w"
+            info, text=f"{fecha}  ·  {'  ·  '.join(horas)}", text_color=tema.GRIS, anchor="w"
         ).pack(fill="x")
 
         if not a.get("foto_drive_id"):
-            ctk.CTkLabel(info, text="sin foto", text_color="#8A6114", anchor="w").pack(fill="x")
+            etiquetas = ctk.CTkFrame(info, fg_color="transparent")
+            etiquetas.pack(fill="x", pady=(4, 0))
+            chip(etiquetas, "sin foto", tema.AMBAR)
 
         if a.get("bloqueada"):
+            fila_bloqueada = ctk.CTkFrame(info, fg_color="transparent")
+            fila_bloqueada.pack(fill="x", pady=(4, 0))
+            chip(fila_bloqueada, "mes cerrado", tema.GRIS)
             ctk.CTkLabel(
-                info, text="Mes cerrado — pedile al equipo directivo que lo reabra",
-                text_color="gray", anchor="w", font=ctk.CTkFont(size=11),
-            ).pack(fill="x", pady=(4, 0))
+                fila_bloqueada, text="pídale al equipo directivo que lo reabra",
+                text_color=tema.GRIS, anchor="w", font=tema.fuente(11),
+            ).pack(side="left")
             return
 
         botones = ctk.CTkFrame(fila, fg_color="transparent")
         botones.pack(side="right", padx=10)
         ctk.CTkButton(
-            botones, text="Quitar", width=80, fg_color="#c0392b", hover_color="#922b21",
+            botones, text="Quitar", width=80, fg_color=tema.ROJO, hover_color=tema.ROJO_HOVER,
             command=lambda: self._eliminar(a["id"], str(a.get("descripcion", ""))),
         ).pack(pady=2)
         ctk.CTkButton(botones, text="Editar", width=80, command=lambda: self._editar(a)).pack(pady=2)
@@ -213,18 +225,23 @@ class ActividadesScreen(ctk.CTkScrollableFrame):
 
     def _actualizar_foto_label(self):
         if self.foto_path:
+            self._miniatura_actual = miniatura_ctk(self.foto_path)
+            self.foto_miniatura.configure(image=self._miniatura_actual)
             nombre = self.foto_path.replace("\\", "/").split("/")[-1]
-            self.foto_label.configure(text=nombre, text_color="#2fa84f")
-        elif self._editando and self._editando.get("foto_drive_id"):
-            self.foto_label.configure(text="conserva la foto que ya tenía", text_color="gray")
+            self.foto_label.configure(text=nombre, text_color=tema.VERDE)
+            return
+        self._miniatura_actual = None
+        self.foto_miniatura.configure(image=None)
+        if self._editando and self._editando.get("foto_drive_id"):
+            self.foto_label.configure(text="conserva la foto que ya tenía", text_color=tema.GRIS)
         elif self.es_directivo:
-            self.foto_label.configure(text="opcional para directivos", text_color="gray")
+            self.foto_label.configure(text="opcional para directivos", text_color=tema.GRIS)
         else:
-            self.foto_label.configure(text="obligatoria", text_color="#c0392b")
+            self.foto_label.configure(text="obligatoria", text_color=tema.ROJO)
 
     def _elegir_foto(self):
         ruta = filedialog.askopenfilename(
-            title="Elegí la foto de la actividad", filetypes=[("Imágenes", "*.jpg *.jpeg *.png")]
+            title="Elija la foto de la actividad", filetypes=[("Imágenes", "*.jpg *.jpeg *.png")]
         )
         if ruta:
             self.foto_path = ruta
@@ -245,7 +262,7 @@ class ActividadesScreen(ctk.CTkScrollableFrame):
         self.guardar_boton.configure(text="Guardar cambios")
         self.cancelar_boton.pack(side="left", padx=(8, 0))
         self._actualizar_foto_label()
-        self.error_label.configure(text=f"Editando: {a['descripcion']}", text_color="gray")
+        self.error_label.configure(text=f"Editando: {a['descripcion']}", text_color=tema.GRIS)
 
     def _salir_de_edicion(self):
         self._editando = None
@@ -262,16 +279,16 @@ class ActividadesScreen(ctk.CTkScrollableFrame):
     def _guardar(self):
         curso = self._curso_actual()
         if not curso:
-            self.error_label.configure(text="Elegí un curso.", text_color="#c0392b")
+            self.error_label.configure(text="Elija un curso.", text_color=tema.ROJO)
             return
         if not self.descripcion_entry.get().strip():
-            self.error_label.configure(text="Escribí qué actividad fue.", text_color="#c0392b")
+            self.error_label.configure(text="Escriba qué actividad fue.", text_color=tema.ROJO)
             return
 
         # Al editar, si ya tenía foto no hace falta subir una nueva.
         ya_tenia_foto = bool(self._editando and self._editando.get("foto_drive_id"))
         if not self.foto_path and not ya_tenia_foto and not self.es_directivo:
-            self.error_label.configure(text="Falta la foto de la actividad.", text_color="#c0392b")
+            self.error_label.configure(text="Falta la foto de la actividad.", text_color=tema.ROJO)
             return
 
         datos = {
@@ -287,7 +304,7 @@ class ActividadesScreen(ctk.CTkScrollableFrame):
         ruta_foto = self.foto_path
 
         self.guardar_boton.configure(state="disabled", text="Guardando...")
-        self.error_label.configure(text="Guardando...", text_color="gray")
+        self.error_label.configure(text="Guardando...", text_color=tema.GRIS)
 
         def trabajo():
             # Comprimir la foto también tarda, así que va al hilo.
@@ -304,14 +321,14 @@ class ActividadesScreen(ctk.CTkScrollableFrame):
             self._cargar_lista()
             self.error_label.configure(
                 text="Cambios guardados ✓" if editando else "Actividad agregada ✓",
-                text_color="#2fa84f",
+                text_color=tema.VERDE,
             )
 
         def fallo(exc):
             self.guardar_boton.configure(
                 state="normal", text="Guardar cambios" if editando else "Agregar actividad"
             )
-            self.error_label.configure(text=str(exc), text_color="#c0392b")
+            self.error_label.configure(text=str(exc), text_color=tema.ROJO)
 
         en_segundo_plano(self, trabajo, listo, fallo, bloquea_cierre=True)
 
@@ -335,6 +352,6 @@ class ActividadesScreen(ctk.CTkScrollableFrame):
             self,
             lambda: api_client.eliminar_actividad(self.sesion["token"], actividad_id),
             lambda _r: self._cargar_lista(),
-            lambda exc: self.error_label.configure(text=str(exc), text_color="#c0392b"),
+            lambda exc: self.error_label.configure(text=str(exc), text_color=tema.ROJO),
             bloquea_cierre=True,
         )

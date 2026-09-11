@@ -48,7 +48,7 @@ function guardar_informe_mensual(token, curso_id, mes, narrativa, gestionNarrati
   const curso = findRowById_(SHEET_NAMES.CURSOS, curso_id);
   if (!curso) throw new Error('Curso no encontrado');
   if (String(curso.docente_id) !== String(sesion.id) && !puedeSupervisar_(sesion)) {
-    throw new Error('No tienes permiso para entregar el informe de ese curso');
+    throw new Error('No tiene permiso para entregar el informe de ese curso');
   }
 
   requireMesAbierto_(sesion, curso_id, mes);
@@ -129,7 +129,7 @@ function guardar_documento_informe(token, curso_id, mes, archivo) {
   const curso = findRowById_(SHEET_NAMES.CURSOS, curso_id);
   if (!curso) throw new Error('Curso no encontrado');
   if (String(curso.docente_id) !== String(sesion.id) && !puedeSupervisar_(sesion)) {
-    throw new Error('No tienes permiso para modificar ese informe');
+    throw new Error('No tiene permiso para modificar ese informe');
   }
   if (!archivo || !archivo.base64) throw new Error('Falta el documento');
 
@@ -188,7 +188,7 @@ function obtener_informe_mensual(token, curso_id, mes) {
   const curso = findRowById_(SHEET_NAMES.CURSOS, curso_id);
   if (!curso) throw new Error('Curso no encontrado');
   if (String(curso.docente_id) !== String(sesion.id) && !puedeSupervisar_(sesion)) {
-    throw new Error('No tienes permiso para ver ese informe');
+    throw new Error('No tiene permiso para ver ese informe');
   }
 
   const fila = buscarInforme_(curso_id, mes);
@@ -260,7 +260,7 @@ function generar_informe_mensual(token, curso_id, mes, narrativa, gestionNarrati
 
   const targetId = curso.docente_id;
   if (String(targetId) !== String(sesion.id) && !puedeSupervisar_(sesion)) {
-    throw new Error('No tienes permiso para generar el informe de otro docente');
+    throw new Error('No tiene permiso para generar el informe de otro docente');
   }
 
   const usuario = findRowById_(SHEET_NAMES.USUARIOS, targetId);
@@ -494,7 +494,7 @@ function obtener_avance_sugerido(token, curso_id, mes) {
   const curso = findRowById_(SHEET_NAMES.CURSOS, curso_id);
   if (!curso) throw new Error('Curso no encontrado');
   if (String(curso.docente_id) !== String(sesion.id) && !puedeSupervisar_(sesion)) {
-    throw new Error('No tienes permiso para ver ese curso');
+    throw new Error('No tiene permiso para ver ese curso');
   }
 
   const planeaciones = readRowsWhere_(

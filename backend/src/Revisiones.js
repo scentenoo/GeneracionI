@@ -66,7 +66,7 @@ function fijar_revisores(token, revisor_verde_id, revisor_morado_id) {
 function validarRevisor_(id, color) {
   if (id === '') return '';  // desasignar es válido
   const usuario = findRowById_(SHEET_NAMES.USUARIOS, id);
-  if (!usuario) throw new Error(`No existe el usuario que querés poner a revisar lo ${color}`);
+  if (!usuario) throw new Error(`No existe el usuario que quiere poner a revisar lo ${color}`);
   if (usuario.rol !== ROLES.DIRECTIVO && usuario.rol !== ROLES.AMBOS) {
     throw new Error(`${usuario.nombre} no es directivo, así que no puede revisar lo ${color}`);
   }
@@ -204,10 +204,10 @@ function revisar_planeacion(token, id, aprobar, motivo) {
   if (!fila) throw new Error('No se encontró la planeación');
   const curso = findRowById_(SHEET_NAMES.CURSOS, fila.curso_id);
   if (!puedeRevisarCurso_(sesion, curso)) {
-    throw new Error('No te toca revisar ese curso');
+    throw new Error('No le corresponde revisar ese curso');
   }
   if (!aprobar && !String(motivo || '').trim()) {
-    throw new Error('Escribí el motivo de la devolución para que el docente sepa qué corregir');
+    throw new Error('Escriba el motivo de la devolución para que el docente sepa qué corregir');
   }
 
   updateRowById_(SHEET_NAMES.PLANEACIONES, id, {
@@ -232,10 +232,10 @@ function revisar_informe(token, curso_id, mes, aprobar, motivo) {
     requireAdministrador_(sesion);
   } else {
     const curso = findRowById_(SHEET_NAMES.CURSOS, curso_id);
-    if (!puedeRevisarCurso_(sesion, curso)) throw new Error('No te toca revisar ese curso');
+    if (!puedeRevisarCurso_(sesion, curso)) throw new Error('No le corresponde revisar ese curso');
   }
   if (!aprobar && !String(motivo || '').trim()) {
-    throw new Error('Escribí el motivo de la devolución para que el docente sepa qué corregir');
+    throw new Error('Escriba el motivo de la devolución para que el docente sepa qué corregir');
   }
 
   updateRowById_(SHEET_NAMES.INFORMES, informe.id, {

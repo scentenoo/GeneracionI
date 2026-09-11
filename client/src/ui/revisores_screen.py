@@ -128,7 +128,7 @@ class RevisoresScreen(ctk.CTkScrollableFrame):
         if sueltos:
             plural = "Ese curso no lo revisa" if len(sueltos) == 1 else "Esos cursos no los revisa"
             self.resumen_label.configure(
-                text=f"{plural} nadie más que vos (el administrador). Ponéles color "
+                text=f"{plural} nadie más que usted (el administrador). Póngales color "
                      "en «Cursos» para que le toquen a alguien.",
                 text_color=AMBAR,
             )

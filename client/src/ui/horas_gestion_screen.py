@@ -23,6 +23,7 @@ import api_client
 from services import date_utils, image_utils
 from ui.cargando import Cargando
 from ui.tareas import en_segundo_plano
+from ui.widgets import miniatura_ctk
 
 ROJO, VERDE, GRIS, AMBAR = "#c0392b", "#2fa84f", "gray", "#8A6114"
 
@@ -68,6 +69,8 @@ class HorasGestionScreen(ctk.CTkScrollableFrame):
         ctk.CTkButton(fila_foto, text="Elegir foto...", width=110, command=self._elegir_foto).pack(
             side="left"
         )
+        self.foto_miniatura = ctk.CTkLabel(fila_foto, image=None, text="")
+        self.foto_miniatura.pack(side="left", padx=(10, 0))
         self.foto_label = ctk.CTkLabel(fila_foto, text="", anchor="w")
         self.foto_label.pack(side="left", padx=10)
         self._actualizar_foto_label()
@@ -104,16 +107,23 @@ class HorasGestionScreen(ctk.CTkScrollableFrame):
         """La foto es obligatoria salvo que se esté corrigiendo una fila que
         ya tiene la suya: en ese caso, no elegir ninguna la conserva."""
         if self.foto_path:
+            self._miniatura_actual = miniatura_ctk(self.foto_path)
+            self.foto_miniatura.configure(image=self._miniatura_actual)
             nombre = self.foto_path.replace("\\", "/").split("/")[-1]
             self.foto_label.configure(text=nombre, text_color=VERDE)
-        elif self._editando and self._editando.get("foto_drive_id"):
+            return
+        self._miniatura_actual = None
+        self.foto_miniatura.configure(image=None)
+        if self._editando and self._editando.get("foto_drive_id"):
             self.foto_label.configure(text="conserva la foto que ya tenía", text_color=GRIS)
+        elif self._editando:
+            self.foto_label.configure(text="sin foto (de antes del piloto, no hace falta agregarla)", text_color=GRIS)
         else:
             self.foto_label.configure(text="obligatoria", text_color=ROJO)
 
     def _elegir_foto(self):
         ruta = filedialog.askopenfilename(
-            title="Elegí la foto de la actividad", filetypes=[("Imágenes", "*.jpg *.jpeg *.png")]
+            title="Elija la foto de la actividad", filetypes=[("Imágenes", "*.jpg *.jpeg *.png")]
         )
         if ruta:
             self.foto_path = ruta
@@ -153,9 +163,10 @@ class HorasGestionScreen(ctk.CTkScrollableFrame):
             )
             return
 
-        # Al editar, si la fila ya tenía foto no hace falta subir otra.
-        ya_tenia_foto = bool(self._editando and self._editando.get("foto_drive_id"))
-        if not self.foto_path and not ya_tenia_foto:
+        # La foto es obligatoria solo al crear. Al editar se conserva la que
+        # ya tenía (incluso si esa fila es de antes del piloto y nunca tuvo
+        # una) — exigirla ahí bloquearía corregir hasta la fecha.
+        if not self._editando and not self.foto_path:
             self.error_label.configure(text="Falta la foto de la actividad.", text_color=ROJO)
             return
 

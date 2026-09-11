@@ -48,6 +48,8 @@ const ACCIONES_PERMITIDAS_ = {
   editar_curso,
   desactivar_curso,
   eliminar_curso_definitivo,
+  obtener_estado_nucleo,
+  obtener_resumen_docente,
   generar_informe_mensual,
   guardar_informe_mensual,
   guardar_documento_informe,

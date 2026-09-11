@@ -1,0 +1,10 @@
+{
+  "test": {
+    "nombre": "PRUEBAS — copia de la Sheet y Drive, sin datos reales",
+    "scriptId": "PEGAR_AQUÍ_EL_SCRIPT_ID_DEL_PROYECTO_DE_PRUEBAS"
+  },
+  "prod": {
+    "nombre": "⚠️ PRODUCCIÓN — Sheet y Drive reales, los usan los profes a diario",
+    "scriptId": "PEGAR_AQUÍ_EL_SCRIPT_ID_DEL_PROYECTO_REAL"
+  }
+}

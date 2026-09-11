@@ -5,9 +5,12 @@
   "description": "Backend Apps Script para la app de planeaciones de Generación-i",
   "scripts": {
     "login": "clasp login",
-    "push": "clasp push",
-    "pull": "clasp pull",
-    "open": "clasp open-script"
+    "prueba:push": "node entorno.js test push",
+    "prueba:pull": "node entorno.js test pull",
+    "prueba:abrir": "node entorno.js test open",
+    "real:push": "node entorno.js prod push",
+    "real:pull": "node entorno.js prod pull",
+    "real:abrir": "node entorno.js prod open"
   },
   "devDependencies": {
     "@google/clasp": "^3.0.0"

@@ -76,7 +76,7 @@ function validarPlaneacion_(datos, fotos, esDirectivo) {
   requireMinPalabras_(datos.objetivo, 'Objetivo');
 
   const temas = (datos.temas_vistos || []).filter((t) => String(t).trim());
-  if (temas.length === 0) throw new Error('Agregá al menos un tema visto');
+  if (temas.length === 0) throw new Error('Agregue al menos un tema visto');
 
   const momentos = datos.momentos || {};
   MOMENTOS_PLANEACION.forEach((clave) => {
@@ -97,7 +97,7 @@ function validarPlaneacion_(datos, fotos, esDirectivo) {
 
   const presentes = (datos.asistencia || []).filter((a) => a.presente).length;
   if (presentes === 0 && !esDirectivo) {
-    throw new Error('No podés guardar una clase sin ningún estudiante presente');
+    throw new Error('No puede guardar una clase sin ningún estudiante presente');
   }
 
   const cantidadFotos = normalizarFotosClase_(fotos).length;

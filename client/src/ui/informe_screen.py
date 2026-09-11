@@ -4,6 +4,7 @@ el .docx con docxtpl. Ver services/docx_generator.py."""
 
 from __future__ import annotations
 
+from tkinter import messagebox
 from typing import Callable
 
 import customtkinter as ctk
@@ -12,8 +13,8 @@ import api_client
 from ui.tareas import cache
 from services import date_utils, vista_previa
 from ui.avance_semana_editor import AvanceSemanaEditor
-from ui.tareas import en_segundo_plano
-from ui.widgets import CampoConInstruccion, MIN_PALABRAS, contar_palabras
+from ui.tareas import en_segundo_plano, en_segundo_plano_con_progreso
+from ui.widgets import BarraDeSubida, CampoConInstruccion, MIN_PALABRAS, contar_palabras
 
 # Las seis preguntas narrativas (2.1 a 2.6) piden más desarrollo que un
 # campo de detalle común — mismo mínimo que exige el backend (Informes.js).
@@ -35,6 +36,7 @@ class InformeScreen(ctk.CTkScrollableFrame):
         self.es_directivo = sesion["rol"] in ("directivo", "ambos")
         self.puede_supervisar = self.es_directivo or bool(sesion.get("es_admin"))
         self.avances: list[AvanceSemanaEditor] = []
+        self._estado_mes: dict | None = None  # ver _cargar_entregado
 
         ctk.CTkButton(self, text="← Volver", width=90, command=on_volver).pack(anchor="w", pady=(0, 10))
 
@@ -145,7 +147,7 @@ class InformeScreen(ctk.CTkScrollableFrame):
         )
         ctk.CTkLabel(
             self,
-            text="Las semanas y sus temas salen de tus planeaciones del mes.",
+            text="Las semanas y sus temas salen de sus planeaciones del mes.",
             text_color="gray",
             font=ctk.CTkFont(size=11),
         ).pack(anchor="w")
@@ -166,7 +168,7 @@ class InformeScreen(ctk.CTkScrollableFrame):
 
         curso = self._curso_seleccionado()
         if not curso:
-            self.error_label.configure(text="Elegí un curso primero.", text_color="#c0392b")
+            self.error_label.configure(text="Elija un curso primero.", text_color="#c0392b")
             return
 
         self.error_label.configure(text="Cargando semanas...", text_color="gray")
@@ -196,7 +198,7 @@ class InformeScreen(ctk.CTkScrollableFrame):
             self.avances.append(editor)
 
     def _construir_gestion(self):
-        ctk.CTkLabel(self, text="Gestión institucional (tu parte como directivo)", font=ctk.CTkFont(weight="bold")).pack(
+        ctk.CTkLabel(self, text="Gestión institucional (su parte como directivo)", font=ctk.CTkFont(weight="bold")).pack(
             anchor="w", pady=(16, 0)
         )
         # Si tenés varios cursos, las horas de gestión van en UNO solo de los
@@ -209,7 +211,7 @@ class InformeScreen(ctk.CTkScrollableFrame):
         ).pack(anchor="w", pady=(6, 0))
         ctk.CTkLabel(
             self,
-            text="Si tenés varios cursos, marcalo en uno solo del mes.",
+            text="Si tiene varios cursos, márquelo en uno solo del mes.",
             text_color="gray",
             font=ctk.CTkFont(size=11),
         ).pack(anchor="w")
@@ -236,10 +238,12 @@ class InformeScreen(ctk.CTkScrollableFrame):
 
         ctk.CTkLabel(
             self,
-            text="Revisá la vista previa para poder entregar.",
+            text="Revise la vista previa para poder entregar.",
             text_color="gray",
             font=ctk.CTkFont(size=11),
         ).pack()
+        self.barra_subida = BarraDeSubida(self)
+        self.barra_subida.pack(fill="x", pady=(4, 0))
 
         # Descargar el informe de OTROS docentes ya no vive acá: se mudó a
         # «Informes del mes», en Dirección, que además baja todos en un ZIP.
@@ -247,8 +251,8 @@ class InformeScreen(ctk.CTkScrollableFrame):
         if self.puede_supervisar:
             ctk.CTkLabel(
                 self,
-                text="Para bajar informes ya entregados (los tuyos o los de otros),\n"
-                     "usá «Informes del mes» en el menú.",
+                text="Para bajar informes ya entregados (los suyos o los de otros),\n"
+                     "use «Informes del mes» en el menú.",
                 text_color="gray",
                 font=ctk.CTkFont(size=11),
                 justify="center",
@@ -266,7 +270,7 @@ class InformeScreen(ctk.CTkScrollableFrame):
 
     def _validar(self) -> str | None:
         if not self._curso_seleccionado():
-            return "Elegí un curso."
+            return "Elija un curso."
         if not self.mes_entry.get().strip():
             return "Falta el mes."
 
@@ -291,6 +295,12 @@ class InformeScreen(ctk.CTkScrollableFrame):
             n = contar_palabras(self._texto(box))
             if n < minimo:
                 return f"«{nombre}» necesita mínimo {minimo} palabras (tiene {n})."
+
+        if not self.avances:
+            return 'Cargá la "Evaluación de avance por tema" (botón "Cargar semanas del mes") antes de entregar.'
+        for a in self.avances:
+            if not a.a_dict()["observaciones"]:
+                return f"Falta la observación de la semana {a.semana} en la evaluación de avance por tema."
         return None
 
     def _respuestas(self):
@@ -351,7 +361,7 @@ class InformeScreen(ctk.CTkScrollableFrame):
             self.guardar_boton.configure(state="normal")
             formato = "PDF" if es_pdf else "documento de Word"
             self.error_label.configure(
-                text=f"Abrí el {formato} para revisarlo. Si está bien, dale a guardar.",
+                text=f"Abra el {formato} para revisarlo. Si está bien, dele a guardar.",
                 text_color="#2fa84f",
             )
 
@@ -368,6 +378,9 @@ class InformeScreen(ctk.CTkScrollableFrame):
         if not curso:
             return
 
+        if not self._confirmar_pocas_clases():
+            return
+
         narrativa, gestion, incluir = self._respuestas()
 
         self.guardar_boton.configure(state="disabled", text="Entregando...")
@@ -376,7 +389,7 @@ class InformeScreen(ctk.CTkScrollableFrame):
 
         mes = self.mes_entry.get().strip()
 
-        def trabajo():
+        def trabajo(reportar):
             resultado = api_client.guardar_informe_mensual(
                 self.sesion["token"], curso["id"], mes, narrativa, gestion, incluir,
             )
@@ -386,22 +399,55 @@ class InformeScreen(ctk.CTkScrollableFrame):
             try:
                 contexto = api_client.generar_informe_mensual(self.sesion["token"], curso["id"], mes)
                 archivo = vista_previa.informe_para_subir(contexto)
-                api_client.guardar_documento_informe(self.sesion["token"], curso["id"], mes, archivo)
+                api_client.guardar_documento_informe(
+                    self.sesion["token"], curso["id"], mes, archivo,
+                    on_progress=lambda enviado, total: reportar((enviado, total)),
+                )
             except Exception:  # noqa: BLE001 — la entrega ya se guardó
                 pass
             return resultado
 
+        empezo_subida = {"si": False}
+
+        def progreso(valor):
+            enviado, total = valor
+            if not empezo_subida["si"]:
+                empezo_subida["si"] = True
+                self.barra_subida.iniciar("Subiendo el documento")
+            self.barra_subida.actualizar(enviado, total, "Subiendo el documento")
+
         def listo(resultado):
+            self.barra_subida.detener()
             self.guardar_boton.configure(text="Entregar informe del mes")
             verbo = "actualizado" if resultado.get("actualizado") else "entregado"
             self.error_label.configure(text=f"Informe {verbo} ✓", text_color="#2fa84f")
             self._cargar_entregado()
 
         def fallo(exc):
+            self.barra_subida.detener()
             self.guardar_boton.configure(state="normal", text="Entregar informe del mes")
             self.error_label.configure(text=str(exc), text_color="#c0392b")
 
-        en_segundo_plano(self, trabajo, listo, fallo, bloquea_cierre=True)
+        en_segundo_plano_con_progreso(self, trabajo, progreso, listo, fallo, bloquea_cierre=True)
+
+    def _confirmar_pocas_clases(self) -> bool:
+        """Con el mínimo (3) ya se puede entregar, pero si no llegó a lo
+        normal (4) se confirma antes — puede ser justo (un feriado, un
+        permiso) o puede que falte cargar una clase sin querer."""
+        estado = self._estado_mes
+        if not estado:
+            return True
+        registradas, esperadas = estado.get("registradas", 0), estado.get("esperadas", 0)
+        if registradas >= esperadas:
+            return True
+        return messagebox.askyesno(
+            "Menos clases de lo normal",
+            f"Este mes cargó {registradas} de las {esperadas} clases esperadas para este curso.\n\n"
+            "¿Confirma que está bien entregar el informe así, o prefiere ir a cargar la que falta "
+            "antes de entregar?",
+            icon="warning",
+            default="no",
+        )
 
     def _permitir(self, permitido: bool):
         """El informe del mes se arma con las planeaciones del mes: si
@@ -428,13 +474,26 @@ class InformeScreen(ctk.CTkScrollableFrame):
         def estado_listo(estado):
             if isinstance(estado, Exception):
                 return
+            self._estado_mes = estado
             faltan = estado.get("faltantes", 0)
+            registradas = estado.get("registradas", 0)
+            esperadas = estado.get("esperadas", 0)
             if faltan > 0:
                 self.faltantes_label.configure(
-                    text=f"Te faltan {faltan} de {estado['esperadas']} planeaciones de {mes} "
-                         f"para este curso.\nCargalas desde «Nueva planeación de clase» y "
-                         "volvé acá: el informe del mes se arma con ellas.",
+                    text=f"Le faltan {faltan} de {esperadas} planeaciones de {mes} "
+                         f"para este curso.\nCárguelas desde «Nueva planeación de clase» y "
+                         "vuelva acá: el informe del mes se arma con ellas.",
                     text_color="#c0392b",
+                )
+            elif registradas < esperadas:
+                # Ya alcanza el mínimo para entregar, pero es menos de lo
+                # normal — se avisa acá y se vuelve a confirmar al entregar,
+                # en vez de bloquear: puede ser justo (un feriado, un
+                # permiso) o puede que se haya olvidado cargar una.
+                self.faltantes_label.configure(
+                    text=f"Tiene {registradas} de {esperadas} planeaciones de {mes} — lo normal son "
+                         f"{esperadas}. Puede entregar así, pero revise si le falta cargar alguna antes.",
+                    text_color="#8A6114",
                 )
             else:
                 self.faltantes_label.configure(text="")
@@ -453,7 +512,7 @@ class InformeScreen(ctk.CTkScrollableFrame):
                 return
 
             self.entregado_label.configure(
-                text="Ya entregado — podés corregirlo y volver a entregar.", text_color="#2fa84f"
+                text="Ya entregado — puede corregirlo y volver a entregar.", text_color="#2fa84f"
             )
             for campo, clave in [
                 (self.objetivo_box, "objetivo_cumplimiento"),

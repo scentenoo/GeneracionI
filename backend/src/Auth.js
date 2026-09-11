@@ -82,7 +82,7 @@ function cambiarPassword(token, passwordActual, passwordNueva) {
 /** Lanza si el token no existe/expiró. Todas las funciones protegidas empiezan llamando esto. */
 function requireSession_(token) {
   const raw = CacheService.getScriptCache().get(`session:${token}`);
-  if (!raw) throw new Error('Sesión inválida o expirada, vuelve a iniciar sesión');
+  if (!raw) throw new Error('Sesión inválida o expirada, vuelva a iniciar sesión');
   return JSON.parse(raw);
 }
 

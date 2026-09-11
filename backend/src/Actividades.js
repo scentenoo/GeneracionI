@@ -31,9 +31,9 @@ function validarActividad_(sesion, datos) {
   // alguno: quien tiene varios elige en cuál la reporta, y así no se
   // cuenta dos veces.
   const curso = findRowById_(SHEET_NAMES.CURSOS, datos.curso_id);
-  if (!curso) throw new Error('Elegí en el informe de qué curso va esta actividad');
+  if (!curso) throw new Error('Elija en el informe de qué curso va esta actividad');
   if (String(curso.docente_id) !== String(sesion.id) && !puedeSupervisar_(sesion)) {
-    throw new Error('Ese curso no es tuyo');
+    throw new Error('Ese curso no es suyo');
   }
 
   return { curso: curso, horasSede: horasSede, horasExternas: horasExternas };
@@ -91,7 +91,7 @@ function editar_actividad(token, id, datos, fotos) {
   const fila = findRowById_(SHEET_NAMES.ACTIVIDADES, id);
   if (!fila) throw new Error(`No se encontró la actividad ${id}`);
   if (String(fila.usuario_id) !== String(sesion.id) && !puedeSupervisar_(sesion)) {
-    throw new Error('Solo podés editar tus propias actividades');
+    throw new Error('Solo puede editar sus propias actividades');
   }
   requireMesAbierto_(sesion, fila.curso_id, mesDeFecha_(fila.fecha));
 
@@ -136,7 +136,7 @@ function obtener_actividades(token, curso_id, mes) {
   const curso = findRowById_(SHEET_NAMES.CURSOS, curso_id);
   if (!curso) throw new Error('Curso no encontrado');
   if (String(curso.docente_id) !== String(sesion.id) && !puedeSupervisar_(sesion)) {
-    throw new Error('No tienes permiso para ver las actividades de ese curso');
+    throw new Error('No tiene permiso para ver las actividades de ese curso');
   }
 
   const cerrado = calculadorDeCierre_(sesion);
@@ -153,7 +153,7 @@ function eliminar_actividad(token, id) {
   const fila = findRowById_(SHEET_NAMES.ACTIVIDADES, id);
   if (!fila) throw new Error(`No se encontró la actividad ${id}`);
   if (String(fila.usuario_id) !== String(sesion.id)) {
-    throw new Error('Solo podés eliminar tus propias actividades');
+    throw new Error('Solo puede eliminar sus propias actividades');
   }
   requireMesAbierto_(sesion, fila.curso_id, mesDeFecha_(fila.fecha));
 

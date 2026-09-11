@@ -25,10 +25,12 @@ import customtkinter as ctk
 
 import api_client
 from services import date_utils, docx_generator, vista_previa
+from ui import tema
 from ui.cargando import Cargando
 from ui.tareas import en_segundo_plano, en_segundo_plano_con_progreso
+from ui.widgets import chip
 
-ROJO, VERDE, GRIS, AMBAR = "#c0392b", "#2fa84f", "gray", "#8A6114"
+ROJO, VERDE, GRIS, AMBAR = tema.ROJO, tema.VERDE, tema.GRIS, tema.AMBAR
 
 # Lo que falta por decidir va primero; lo devuelto (a mitad de corregirse)
 # en el medio; lo ya aprobado, al final — es lo que menos hace falta mirar.
@@ -79,7 +81,7 @@ class RevisarInformesScreen(ctk.CTkScrollableFrame):
         ctk.CTkButton(fila, text="Actualizar", width=100, command=self._cargar).pack(side="left")
 
         self.resumen_label = ctk.CTkLabel(
-            self, text="", font=ctk.CTkFont(size=15, weight="bold"), anchor="w"
+            self, text="", font=tema.fuente(15, "bold"), anchor="w"
         )
         self.resumen_label.pack(fill="x", pady=(14, 2))
         self.color_normal = self.resumen_label.cget("text_color")
@@ -158,14 +160,14 @@ class RevisarInformesScreen(ctk.CTkScrollableFrame):
                 key=lambda i: _PRIORIDAD_ESTADO.get(i.get("estado", "pendiente"), 0)
             )
             ctk.CTkLabel(
-                self.contenedor, text="Informes de curso", font=ctk.CTkFont(weight="bold")
+                self.contenedor, text="Informes de curso", font=tema.fuente(peso="bold")
             ).pack(anchor="w", pady=(6, 2))
             for i in self._informes_curso:
                 self._fila_informe_curso(i)
 
         if self._informes_gestion:
             ctk.CTkLabel(
-                self.contenedor, text="Informes de gestión", font=ctk.CTkFont(weight="bold")
+                self.contenedor, text="Informes de gestión", font=tema.fuente(peso="bold")
             ).pack(anchor="w", pady=(12, 2))
             for d in self._informes_gestion:
                 self._fila_informe_gestion(d)
@@ -181,18 +183,21 @@ class RevisarInformesScreen(ctk.CTkScrollableFrame):
     # --- informes de curso: revisar + descargar ---------------------------
 
     def _fila_informe_curso(self, i: dict):
-        marco = ctk.CTkFrame(self.contenedor, corner_radius=8, border_width=1)
+        marco = ctk.CTkFrame(
+            self.contenedor, fg_color=tema.FONDO_TARJETA, corner_radius=10,
+            border_width=1, border_color=tema.BORDE_TARJETA,
+        )
         marco.pack(fill="x", pady=3)
         cuerpo = ctk.CTkFrame(marco, fg_color="transparent")
         cuerpo.pack(side="left", fill="both", expand=True, padx=12, pady=8)
         ctk.CTkLabel(
-            cuerpo, text=f"Informe — {i['curso']}", font=ctk.CTkFont(weight="bold"), anchor="w",
+            cuerpo, text=f"Informe — {i['curso']}", font=tema.fuente(peso="bold"), anchor="w",
             justify="left", wraplength=380,
         ).pack(fill="x")
         ctk.CTkLabel(cuerpo, text=i.get("docente", ""), text_color=GRIS, anchor="w").pack(fill="x")
-        estado_label = ctk.CTkLabel(cuerpo, text="", anchor="w", font=ctk.CTkFont(size=12))
-        estado_label.pack(fill="x", pady=(2, 0))
-        self._pintar_estado(estado_label, i)
+        estado_fila = ctk.CTkFrame(cuerpo, fg_color="transparent")
+        estado_fila.pack(fill="x", pady=(4, 0))
+        self._pintar_estado(estado_fila, i)
 
         botones = ctk.CTkFrame(marco, fg_color="transparent")
         botones.pack(side="right", padx=10)
@@ -201,34 +206,42 @@ class RevisarInformesScreen(ctk.CTkScrollableFrame):
             command=lambda: self._abrir_informe(i, abrir_boton),
         )
         abrir_boton.pack(pady=2)
-        aprobar_boton = ctk.CTkButton(botones, text="Aprobar", width=90, fg_color=VERDE, hover_color="#248a3d")
+        aprobar_boton = ctk.CTkButton(
+            botones, text="Aprobar", width=90, fg_color=VERDE, hover_color=tema.VERDE_HOVER
+        )
         aprobar_boton.pack(pady=2)
-        devolver_boton = ctk.CTkButton(botones, text="Devolver", width=90, fg_color=AMBAR, hover_color="#6b4d10")
+        devolver_boton = ctk.CTkButton(
+            botones, text="Devolver", width=90, fg_color=AMBAR, hover_color=tema.AMBAR_HOVER
+        )
         devolver_boton.pack(pady=2)
         botones_revision = (aprobar_boton, devolver_boton)
-        aprobar_boton.configure(command=lambda: self._revisar(i, True, estado_label, botones_revision))
-        devolver_boton.configure(command=lambda: self._revisar(i, False, estado_label, botones_revision))
+        aprobar_boton.configure(command=lambda: self._revisar(i, True, estado_fila, botones_revision))
+        devolver_boton.configure(command=lambda: self._revisar(i, False, estado_fila, botones_revision))
         ctk.CTkButton(
             botones, text="Descargar", width=90,
             command=lambda e=i, m=self._mes_cargado: self._descargar_uno(e, m),
         ).pack(pady=2)
 
-    def _pintar_estado(self, estado_label: ctk.CTkLabel, i: dict):
+    def _pintar_estado(self, estado_fila: ctk.CTkFrame, i: dict):
+        for w in estado_fila.winfo_children():
+            w.destroy()
         estado = i.get("estado", "pendiente")
         motivo = i.get("motivo_devolucion", "")
         if estado == "aprobado":
-            estado_label.configure(text="Aprobado ✓", text_color=VERDE)
+            chip(estado_fila, "Aprobado ✓", VERDE)
         elif estado == "devuelto":
-            estado_label.configure(text=f"Devuelto: {motivo}" if motivo else "Devuelto", text_color=AMBAR)
+            chip(estado_fila, "Devuelto", AMBAR)
+            if motivo:
+                ctk.CTkLabel(estado_fila, text=motivo, text_color=GRIS, anchor="w").pack(side="left")
         else:
-            estado_label.configure(text="Pendiente de revisar", text_color=GRIS)
+            chip(estado_fila, "Pendiente de revisar", GRIS)
 
-    def _revisar(self, i: dict, aprobar: bool, estado_label: ctk.CTkLabel, botones: tuple):
+    def _revisar(self, i: dict, aprobar: bool, estado_fila: ctk.CTkFrame, botones: tuple):
         motivo = ""
         if not aprobar:
             dialogo = ctk.CTkInputDialog(
                 title="Devolver",
-                text="¿Por qué la devolvés? El docente va a ver este motivo:",
+                text="¿Por qué la devuelve? El docente va a ver este motivo:",
             )
             motivo = (dialogo.get_input() or "").strip()
             if not motivo:
@@ -236,7 +249,9 @@ class RevisarInformesScreen(ctk.CTkScrollableFrame):
 
         for b in botones:
             b.configure(state="disabled")
-        estado_label.configure(text="Guardando...", text_color=GRIS)
+        for w in estado_fila.winfo_children():
+            w.destroy()
+        ctk.CTkLabel(estado_fila, text="Guardando...", text_color=GRIS, anchor="w").pack(side="left")
 
         def listo(resultado):
             i["estado"] = resultado["estado"]
@@ -247,7 +262,7 @@ class RevisarInformesScreen(ctk.CTkScrollableFrame):
         def fallo(exc):
             for b in botones:
                 b.configure(state="normal")
-            self._pintar_estado(estado_label, i)  # vuelve a lo último guardado, no a lo que se intentó
+            self._pintar_estado(estado_fila, i)  # vuelve a lo último guardado, no a lo que se intentó
             self.resumen_label.configure(text=str(exc), text_color=ROJO)
 
         en_segundo_plano(
@@ -283,12 +298,15 @@ class RevisarInformesScreen(ctk.CTkScrollableFrame):
     # --- informes de gestión: solo descargar -------------------------------
 
     def _fila_informe_gestion(self, d: dict):
-        marco = ctk.CTkFrame(self.contenedor, corner_radius=8, border_width=1)
+        marco = ctk.CTkFrame(
+            self.contenedor, fg_color=tema.FONDO_TARJETA, corner_radius=10,
+            border_width=1, border_color=tema.BORDE_TARJETA,
+        )
         marco.pack(fill="x", pady=3)
         cuerpo = ctk.CTkFrame(marco, fg_color="transparent")
         cuerpo.pack(side="left", fill="both", expand=True, padx=12, pady=8)
         ctk.CTkLabel(
-            cuerpo, text=d["curso"], font=ctk.CTkFont(weight="bold"), anchor="w",
+            cuerpo, text=d["curso"], font=tema.fuente(peso="bold"), anchor="w",
             justify="left", wraplength=380,
         ).pack(fill="x")
 

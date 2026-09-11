@@ -12,6 +12,7 @@ from typing import Callable
 import customtkinter as ctk
 
 import api_client
+from ui import tema
 from ui.cargando import Cargando
 from ui.tareas import cache, en_segundo_plano
 
@@ -36,7 +37,7 @@ class GrupoScreen(ctk.CTkScrollableFrame):
         fila_import.pack(fill="x", pady=(10, 4))
         ctk.CTkButton(fila_import, text="Importar CSV...", command=self._importar_csv).pack(side="left")
         ctk.CTkLabel(
-            fila_import, text="  (columna 'nombre', una fila por estudiante)", text_color="gray"
+            fila_import, text="  (columna 'nombre', una fila por estudiante)", text_color=tema.GRIS
         ).pack(side="left")
 
         fila_agregar = ctk.CTkFrame(self, fg_color="transparent")
@@ -46,17 +47,17 @@ class GrupoScreen(ctk.CTkScrollableFrame):
         self.agregar_boton = ctk.CTkButton(fila_agregar, text="+ Agregar", width=90, command=self._agregar_uno)
         self.agregar_boton.pack(side="left", padx=6)
 
-        self.error_label = ctk.CTkLabel(self, text="", text_color="#c0392b", wraplength=450, justify="left")
+        self.error_label = ctk.CTkLabel(self, text="", text_color=tema.ROJO, wraplength=450, justify="left")
         self.error_label.pack(fill="x", pady=(10, 4))
 
-        ctk.CTkLabel(self, text="Estudiantes actuales", font=ctk.CTkFont(weight="bold")).pack(
+        ctk.CTkLabel(self, text="Estudiantes actuales", font=tema.fuente(peso="bold")).pack(
             anchor="w", pady=(16, 4)
         )
         self.lista_contenedor = ctk.CTkFrame(self, fg_color="transparent")
         self.lista_contenedor.pack(fill="both", expand=True)
 
         self.quitar_boton = ctk.CTkButton(
-            self, text="Quitar seleccionados", fg_color="#c0392b", hover_color="#922b21",
+            self, text="Quitar seleccionados", fg_color=tema.ROJO, hover_color=tema.ROJO_HOVER,
             command=self._quitar_seleccionados,
         )
         self.quitar_boton.pack(pady=10)
@@ -68,7 +69,7 @@ class GrupoScreen(ctk.CTkScrollableFrame):
     def _trabajando(self, texto: str):
         """Deja claro que la llamada está en curso, en vez de dejar fijo el
         mensaje de la operación anterior."""
-        self.error_label.configure(text=texto, text_color="gray")
+        self.error_label.configure(text=texto, text_color=tema.GRIS)
         self.update_idletasks()
 
     # --- carga ------------------------------------------------------------
@@ -98,7 +99,7 @@ class GrupoScreen(ctk.CTkScrollableFrame):
     def _mostrar_error(self, exc):
         for w in self.lista_contenedor.winfo_children():
             w.destroy()
-        self.error_label.configure(text=str(exc), text_color="#c0392b")
+        self.error_label.configure(text=str(exc), text_color=tema.ROJO)
 
     def _curso_actual(self) -> dict | None:
         return self._cursos_por_etiqueta.get(self.curso_menu.get())
@@ -121,7 +122,7 @@ class GrupoScreen(ctk.CTkScrollableFrame):
             self._checkboxes.clear()
             if not estudiantes:
                 ctk.CTkLabel(
-                    self.lista_contenedor, text="Todavía no hay estudiantes.", text_color="gray"
+                    self.lista_contenedor, text="Todavía no hay estudiantes.", text_color=tema.GRIS
                 ).pack(anchor="w")
                 return
             for est in estudiantes:
@@ -148,10 +149,10 @@ class GrupoScreen(ctk.CTkScrollableFrame):
     def _importar_csv(self):
         curso = self._curso_actual()
         if not curso:
-            self.error_label.configure(text="Elegí un curso primero.", text_color="#c0392b")
+            self.error_label.configure(text="Elija un curso primero.", text_color=tema.ROJO)
             return
 
-        ruta = filedialog.askopenfilename(title="Elegí el CSV de estudiantes", filetypes=[("CSV", "*.csv")])
+        ruta = filedialog.askopenfilename(title="Elija el CSV de estudiantes", filetypes=[("CSV", "*.csv")])
         if not ruta:
             return
 
@@ -168,7 +169,7 @@ class GrupoScreen(ctk.CTkScrollableFrame):
             texto = f"Se importaron {resultado['creados']} estudiantes."
             if reusados:
                 texto += f" Otros {reusados} ya existían en el programa y se inscribieron acá."
-            self.error_label.configure(text=texto, text_color="#2fa84f")
+            self.error_label.configure(text=texto, text_color=tema.VERDE)
 
         en_segundo_plano(
             self,
@@ -181,7 +182,7 @@ class GrupoScreen(ctk.CTkScrollableFrame):
         curso = self._curso_actual()
         nombre = self.nuevo_nombre_entry.get().strip()
         if not curso or not nombre:
-            self.error_label.configure(text="Elegí un curso y escribí un nombre.", text_color="#c0392b")
+            self.error_label.configure(text="Elija un curso y escriba un nombre.", text_color=tema.ROJO)
             return
 
         self.agregar_boton.configure(state="disabled")
@@ -191,7 +192,7 @@ class GrupoScreen(ctk.CTkScrollableFrame):
             self.agregar_boton.configure(state="normal")
             self.nuevo_nombre_entry.delete(0, "end")
             self._cargar()
-            self.error_label.configure(text=f"{nombre} agregado ✓", text_color="#2fa84f")
+            self.error_label.configure(text=f"{nombre} agregado ✓", text_color=tema.VERDE)
 
         def fallo(exc):
             self.agregar_boton.configure(state="normal")
@@ -210,7 +211,7 @@ class GrupoScreen(ctk.CTkScrollableFrame):
         curso = self._curso_actual()
         ids_a_quitar = [est_id for est_id, (_, var) in self._checkboxes.items() if var.get()]
         if not curso or not ids_a_quitar:
-            self.error_label.configure(text="Marcá al menos un estudiante para quitar.", text_color="#c0392b")
+            self.error_label.configure(text="Marque al menos un estudiante para quitar.", text_color=tema.ROJO)
             return
 
         # La asistencia ya guardada no se toca (es una copia del día), pero
@@ -232,7 +233,7 @@ class GrupoScreen(ctk.CTkScrollableFrame):
             self.quitar_boton.configure(state="normal")
             self._cargar()
             self.error_label.configure(
-                text=f"Se quitaron {len(ids_a_quitar)} estudiantes.", text_color="#2fa84f"
+                text=f"Se quitaron {len(ids_a_quitar)} estudiantes.", text_color=tema.VERDE
             )
 
         def fallo(exc):

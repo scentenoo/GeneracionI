@@ -21,13 +21,15 @@ from tkcalendar import DateEntry
 
 import api_client
 from services import date_utils
+from ui import tema
 from ui.cargando import Cargando
 from ui.tareas import en_segundo_plano
+from ui.widgets import chip
 
 # Rojo: ni siquiera puede entregar el informe, le faltan clases.
 # Ámbar: ya puede entregarlo y no lo hizo — es lo accionable hoy.
 # Verde: al día.
-ROJO, AMBAR, VERDE, GRIS = "#c0392b", "#8A6114", "#2fa84f", "gray"
+ROJO, AMBAR, VERDE, GRIS = tema.ROJO, tema.AMBAR, tema.VERDE, tema.GRIS
 
 
 class DashboardScreen(ctk.CTkScrollableFrame):
@@ -49,7 +51,7 @@ class DashboardScreen(ctk.CTkScrollableFrame):
         ctk.CTkButton(fila_mes, text="Actualizar", width=100, command=self._cargar).pack(side="left")
 
         self.resumen_label = ctk.CTkLabel(
-            self, text="", font=ctk.CTkFont(size=15, weight="bold"), anchor="w", justify="left"
+            self, text="", font=tema.fuente(15, "bold"), anchor="w", justify="left"
         )
         self.resumen_label.pack(fill="x", pady=(14, 2))
         # customtkinter no acepta text_color=None para "el del tema", así que
@@ -87,17 +89,17 @@ class DashboardScreen(ctk.CTkScrollableFrame):
         # dentro del frame. Muestra un calendario desplegable al hacer clic.
         self.cierre_cal = DateEntry(
             fila, width=12, date_pattern="yyyy-mm-dd", locale="es",
-            background="#2fa84f", foreground="white", borderwidth=2,
+            background=tema.VERDE, foreground=tema.BLANCO, borderwidth=2,
         )
         self.cierre_cal.pack(side="left", padx=6)
         ctk.CTkButton(fila, text="Guardar", width=80, command=self._guardar_corte).pack(side="right")
 
         self.corte_aviso = ctk.CTkLabel(
             marco,
-            text="Elegí en el calendario el día en que se cierra el mes que estás mirando. "
+            text="Elija en el calendario el día en que se cierra el mes que está mirando. "
                  "Pasada esa fecha los docentes no pueden cargar, editar ni borrar nada de ese "
                  "mes. Ustedes sí.",
-            text_color=GRIS, font=ctk.CTkFont(size=11),
+            text_color=GRIS, font=tema.fuente(11),
             anchor="w", justify="left", wraplength=600,
         )
         self.corte_aviso.pack(fill="x", padx=12, pady=(0, 10))
@@ -228,7 +230,10 @@ class DashboardScreen(ctk.CTkScrollableFrame):
     def _tarjeta(self, estado: dict):
         _, color, texto_informe = self._clasificar(estado)
 
-        marco = ctk.CTkFrame(self.tarjetas, corner_radius=8, border_width=1)
+        marco = ctk.CTkFrame(
+            self.tarjetas, fg_color=tema.FONDO_TARJETA, corner_radius=10,
+            border_width=1, border_color=tema.BORDE_TARJETA,
+        )
         marco.pack(fill="x", pady=4)
 
         # Franja de color a la izquierda: el estado se ve antes de leer.
@@ -240,7 +245,7 @@ class DashboardScreen(ctk.CTkScrollableFrame):
         cuerpo.pack(side="left", fill="both", expand=True, padx=12, pady=10)
 
         ctk.CTkLabel(
-            cuerpo, text=estado.get("curso", ""), font=ctk.CTkFont(size=14, weight="bold"),
+            cuerpo, text=estado.get("curso", ""), font=tema.fuente(14, "bold"),
             anchor="w", justify="left", wraplength=520,
         ).pack(fill="x")
         ctk.CTkLabel(cuerpo, text=estado.get("docente", ""), text_color=GRIS, anchor="w").pack(fill="x")
@@ -254,26 +259,20 @@ class DashboardScreen(ctk.CTkScrollableFrame):
             if faltan == 0
             else f"{estado['registradas']} de {estado['esperadas']} clases · faltan {faltan}"
         )
-        self._chip(estados_fila, texto_clases, VERDE if faltan == 0 else ROJO)
-        self._chip(estados_fila, texto_informe, color)
+        chip(estados_fila, texto_clases, VERDE if faltan == 0 else ROJO)
+        chip(estados_fila, texto_informe, color)
 
         # Reabrir un mes cerrado es lo que hace que el corte no sea una
         # pared: el docente pide, el directivo abre acá mismo.
         if estado.get("cerrado"):
-            self._chip(estados_fila, "mes cerrado", GRIS)
+            chip(estados_fila, "mes cerrado", GRIS)
             ctk.CTkButton(
                 estados_fila, text="Reabrir", width=80, fg_color="transparent", border_width=1,
                 command=lambda: self._alternar_cierre(estado, True),
             ).pack(side="left", padx=(6, 0))
         elif estado.get("reabierto"):
-            self._chip(estados_fila, "reabierto", AMBAR)
+            chip(estados_fila, "reabierto", AMBAR)
             ctk.CTkButton(
                 estados_fila, text="Cerrar", width=80, fg_color="transparent", border_width=1,
                 command=lambda: self._alternar_cierre(estado, False),
             ).pack(side="left", padx=(6, 0))
-
-    def _chip(self, padre, texto: str, color: str):
-        ctk.CTkLabel(
-            padre, text=f"  {texto}  ", text_color=color, font=ctk.CTkFont(size=12),
-            corner_radius=6, fg_color=("gray92", "gray20"),
-        ).pack(side="left", padx=(0, 6))

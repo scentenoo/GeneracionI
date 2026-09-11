@@ -72,7 +72,7 @@ function requireMesAbierto_(sesion, curso_id, mes) {
   if (!mesCerrado_(curso_id, mes)) return;
   throw new Error(
     `El mes ${mes} ya está cerrado (cerró el ${fechaCorta_(fechaDeCierre_(mes))}). ` +
-    'Pedile al equipo directivo que lo vuelva a abrir si necesitás cambiar algo.'
+    'Pídale al equipo directivo que lo vuelva a abrir si necesita cambiar algo.'
   );
 }
 

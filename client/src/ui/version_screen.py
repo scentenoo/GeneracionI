@@ -42,7 +42,7 @@ class VersionScreen(ctk.CTkScrollableFrame):
         self.link_entry.pack(fill="x", pady=(2, 4))
         ctk.CTkLabel(
             self,
-            text="Subí el .exe a Drive y pegá acá el link para compartir.",
+            text="Suba el .exe a Drive y pegue acá el link para compartir.",
             text_color="gray",
             font=ctk.CTkFont(size=11),
             anchor="w",
@@ -74,7 +74,7 @@ class VersionScreen(ctk.CTkScrollableFrame):
         if self.obligatoria_var.get():
             self.aviso.configure(
                 text="Obligatoria: quien tenga una versión anterior queda bloqueado\n"
-                     "hasta que instale esta. Usala solo para un arreglo que no puede esperar."
+                     "hasta que instale esta. Úsela solo para un arreglo que no puede esperar."
             )
         else:
             self.aviso.configure(
@@ -108,7 +108,7 @@ class VersionScreen(ctk.CTkScrollableFrame):
     def _publicar(self):
         version = self.version_entry.get().strip()
         if not version:
-            self.error_label.configure(text="Escribí el número de versión.", text_color="#c0392b")
+            self.error_label.configure(text="Escriba el número de versión.", text_color="#c0392b")
             return
 
         self.publicar_boton.configure(state="disabled", text="Publicando...")

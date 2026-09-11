@@ -5,7 +5,11 @@ from PyInstaller.utils.hooks import collect_all
 # El calendario de cierre (tkcalendar) usa babel para los nombres de meses
 # en español, y babel trae sus datos de locale en archivos que PyInstaller
 # no detecta solo. collect_all los junta (datos + submódulos ocultos).
-datas = [('../templates', 'templates')]
+#
+# El diccionario del corrector ortográfico (client/assets/diccionario) va
+# con la misma ruta relativa adentro del empaquetado que en el repo, para
+# que config.py lo encuentre igual compilado que en desarrollo.
+datas = [('../templates', 'templates'), ('assets/diccionario', 'client/assets/diccionario')]
 binaries = []
 hiddenimports = ['babel.numbers']
 for _paquete in ('tkcalendar', 'babel'):

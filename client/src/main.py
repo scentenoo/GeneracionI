@@ -5,6 +5,7 @@ import customtkinter as ctk
 
 import api_client
 from config import APP_VERSION, comparar_versiones
+from services import ortografia
 from ui import ctk_parches
 from ui.app import App
 from ui.tareas import en_segundo_plano
@@ -14,6 +15,11 @@ def main():
     ctk_parches.aplicar()
     ctk.set_appearance_mode("system")
     ctk.set_default_color_theme("green")
+
+    # El diccionario del corrector ortográfico tarda un momento en cargar
+    # (~60 mil palabras); arrancarlo ya, mientras se ve el login, hace que
+    # esté listo para cuando el docente llegue al primer campo largo.
+    ortografia.cargar_en_segundo_plano()
 
     app = App()
 
@@ -31,9 +37,9 @@ def main():
                 f"obligatorio actualizar a la {vigente}."
             )
             mensaje += (
-                "\n\nDescarga el instalador nuevo y vuelve a abrir la app."
+                "\n\nDescargue el instalador nuevo y vuelva a abrir la app."
                 if link
-                else "\n\nPedile a Samir el instalador nuevo."
+                else "\n\nPídale a Samir el instalador nuevo."
             )
             app.bloquear(mensaje, titulo="Hay que actualizar la app", link=link or None)
             return
@@ -41,7 +47,7 @@ def main():
         if comparar_versiones(APP_VERSION, vigente) < 0:
             aviso = (
                 f"Hay una versión nueva (la {vigente}).\n"
-                "Podés seguir usando esta, pero conviene actualizar."
+                "Puede seguir usando esta, pero conviene actualizar."
             )
             app.version_verificada(aviso=aviso, link=link or None)
             return

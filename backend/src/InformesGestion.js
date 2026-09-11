@@ -75,7 +75,7 @@ function obtener_informe_gestion(token, directivo_id, mes) {
   const sesion = requireSession_(token);
   const targetId = directivo_id || sesion.id;
   if (String(targetId) !== String(sesion.id) && !puedeSupervisar_(sesion)) {
-    throw new Error('No tienes permiso para ver ese informe');
+    throw new Error('No tiene permiso para ver ese informe');
   }
 
   const fila = buscarInforme_(claveGestion_(targetId), mes);
@@ -96,7 +96,7 @@ function generar_informe_gestion(token, directivo_id, mes, gestionNarrativa) {
   const sesion = requireSession_(token);
   const targetId = directivo_id || sesion.id;
   if (String(targetId) !== String(sesion.id) && !puedeSupervisar_(sesion)) {
-    throw new Error('No tienes permiso para generar ese informe');
+    throw new Error('No tiene permiso para generar ese informe');
   }
 
   const usuario = findRowById_(SHEET_NAMES.USUARIOS, targetId);

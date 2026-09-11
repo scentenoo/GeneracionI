@@ -8,7 +8,9 @@ necesitan saber que por debajo hay un POST a Apps Script.
 
 from __future__ import annotations
 
+import json
 import time
+from typing import Callable
 
 import requests
 
@@ -74,28 +76,68 @@ class _RespuestaTransitoria(Exception):
         self.publica = publica  # la excepción que se mostraría si no reintentamos
 
 
-def _una_llamada(action: str, params):
+_TAMANO_TROZO_PROGRESO = 16384
+
+
+def _generador_con_progreso(datos: bytes, on_progress: Callable[[int, int], None]):
+    """Parte `datos` en trozos y avisa cuánto lleva enviado después de cada
+    uno — con esto `requests` sube el cuerpo de a poco en vez de todo junto,
+    y quien llama puede pintar una barra de progreso real (bytes enviados,
+    no una animación que solo simula que algo pasa)."""
+    total = len(datos)
+    enviado = 0
+    if total == 0:
+        on_progress(0, 0)
+        return
+    for inicio in range(0, total, _TAMANO_TROZO_PROGRESO):
+        trozo = datos[inicio : inicio + _TAMANO_TROZO_PROGRESO]
+        enviado += len(trozo)
+        on_progress(enviado, total)
+        yield trozo
+
+
+def _una_llamada(action: str, params, on_progress: Callable[[int, int], None] | None = None):
     """Un intento. Levanta _RespuestaTransitoria para lo reintenable y las
-    excepciones públicas (ApiError/SesionExpirada) para lo definitivo."""
+    excepciones públicas (ApiError/SesionExpirada) para lo definitivo.
+
+    `on_progress(enviado, total)` es opcional: cuando se pasa, el cuerpo se
+    manda en trozos (en vez de todo de una) para poder avisar cuánto se
+    lleva subido. Se usa en los guardados con fotos, donde el cuerpo puede
+    pesar varios megabytes y una conexión lenta tarda de verdad."""
+    cuerpo = json.dumps({"action": action, "params": list(params)}).encode("utf-8")
     try:
-        resp = requests.post(
-            BACKEND_URL,
-            json={"action": action, "params": list(params)},
-            timeout=_TIMEOUT_SECONDS,
-        )
+        if on_progress is not None:
+            # OJO: sin Content-Length acá a propósito. Puesto a mano junto
+            # con un cuerpo por trozos, Google lo rechaza con un 400 (la
+            # combinación queda ambigua para su proxy) — comprobado a mano
+            # contra el backend real. Sin ese header, requests manda el
+            # cuerpo por trozos (chunked) solo, y funciona bien.
+            resp = requests.post(
+                BACKEND_URL,
+                data=_generador_con_progreso(cuerpo, on_progress),
+                headers={"Content-Type": "application/json"},
+                timeout=_TIMEOUT_SECONDS,
+            )
+        else:
+            resp = requests.post(
+                BACKEND_URL,
+                data=cuerpo,
+                headers={"Content-Type": "application/json"},
+                timeout=_TIMEOUT_SECONDS,
+            )
     except requests.ConnectionError as exc:  # incluye fallos de DNS
         raise _RespuestaTransitoria(SinConexion(
             "No hay conexión a internet.\n\n"
-            "Revisá que estés conectado a la red y volvé a intentar."
+            "Revise que esté conectado a la red y vuelva a intentar."
         )) from exc
     except requests.Timeout as exc:
         raise _RespuestaTransitoria(SinConexion(
             "El servidor está tardando demasiado en responder.\n\n"
-            "Puede ser la conexión. Intentá de nuevo en un momento."
+            "Puede ser la conexión. Intente de nuevo en un momento."
         )) from exc
     except requests.RequestException as exc:
         raise _RespuestaTransitoria(SinConexion(
-            "No se pudo conectar con el servidor.\n\nIntentá de nuevo en un momento."
+            "No se pudo conectar con el servidor.\n\nIntente de nuevo en un momento."
         )) from exc
 
     if resp.status_code in (401, 403):
@@ -104,11 +146,11 @@ def _una_llamada(action: str, params):
         # que lo importante es que sepa a quién avisarle. No es transitorio.
         raise ApiError(
             "El servidor rechazó la conexión.\n\n"
-            "Es un problema de configuración, no tuyo: avisale a Samir."
+            "Es un problema de configuración, no suyo: avísele a Samir."
         )
     if resp.status_code >= 500:
         raise _RespuestaTransitoria(SinConexion(
-            "El servidor tuvo un problema.\n\nIntentá de nuevo en un momento."
+            "El servidor tuvo un problema.\n\nIntente de nuevo en un momento."
         ))
     if resp.status_code != 200:
         raise ApiError(f"El servidor respondió algo inesperado (código {resp.status_code}).")
@@ -135,17 +177,21 @@ def _una_llamada(action: str, params):
     return body.get("data")
 
 
-def _call(action: str, *params):
+def _call(action: str, *params, on_progress: Callable[[int, int], None] | None = None):
     """Puerta única al backend. Un fallo transitorio (red, 500, respuesta
     ilegible) se reintenta con una pausa breve —pero solo en acciones de
     solo lectura, para no duplicar una escritura que quizás sí se guardó.
     Las excepciones que llegan a la interfaz nunca traen el detalle técnico
-    ni la URL del backend."""
+    ni la URL del backend.
+
+    `on_progress`: ver _una_llamada. No tiene sentido combinarlo con
+    reintento (una acción de escritura nunca se reintenta igual), así que
+    solo importa para las llamadas de una sola pasada."""
     reintentable = action in _SOLO_LECTURA
     intentos = _REINTENTOS + 1 if reintentable else 1
     for i in range(intentos):
         try:
-            return _una_llamada(action, params)
+            return _una_llamada(action, params, on_progress)
         except _RespuestaTransitoria as t:
             if i + 1 >= intentos:
                 raise t.publica from None
@@ -198,19 +244,24 @@ def cambiar_password(token: str, password_actual: str, password_nueva: str) -> d
 
 # --- Planeaciones -------------------------------------------------------------
 
-def guardar_planeacion(token: str, datos: dict, fotos: dict) -> dict:
+def guardar_planeacion(
+    token: str, datos: dict, fotos: dict, on_progress: Callable[[int, int], None] | None = None
+) -> dict:
     """datos: fecha, grupo, objetivo, temas_vistos[], bloques[], asistencia[].
     fotos: {"fotos_clase": [{"base64": ..., "mimeType": "image/jpeg"}, ...]}
-    (1 a 3 fotos)."""
-    return _call("guardar_planeacion", token, datos, fotos)
+    (1 a 3 fotos). on_progress(enviado, total) opcional, para una barra de
+    subida real — ver _una_llamada."""
+    return _call("guardar_planeacion", token, datos, fotos, on_progress=on_progress)
 
 
-def guardar_documento_planeacion(token: str, planeacion_id: int, archivo: dict) -> dict:
+def guardar_documento_planeacion(
+    token: str, planeacion_id: int, archivo: dict, on_progress: Callable[[int, int], None] | None = None
+) -> dict:
     """Sube a Drive el .docx de la planeación, que es lo que el informe
     mensual enlaza en la columna «LINK A PLANEACION».
 
     archivo: {"base64": ..., "mimeType": ...}"""
-    return _call("guardar_documento_planeacion", token, planeacion_id, archivo)
+    return _call("guardar_documento_planeacion", token, planeacion_id, archivo, on_progress=on_progress)
 
 
 def obtener_planeaciones(
@@ -235,8 +286,14 @@ def obtener_foto_planeacion(token: str, id_: int) -> list[dict]:
     return _call("obtener_foto_planeacion", token, id_)
 
 
-def editar_planeacion(token: str, id_: int, cambios: dict) -> dict:
-    return _call("editar_planeacion", token, id_, cambios)
+def editar_planeacion(
+    token: str, id_: int, cambios: dict, fotos: dict | None = None,
+    on_progress: Callable[[int, int], None] | None = None,
+) -> dict:
+    """fotos, si se manda, reemplaza el set completo de fotos (1 a 3):
+    {"fotos_clase": [{"base64": ..., "mimeType": ...}, ...]}. Sin este
+    argumento, las fotos que ya tenía la planeación quedan como están."""
+    return _call("editar_planeacion", token, id_, cambios, fotos, on_progress=on_progress)
 
 
 def eliminar_planeacion(token: str, id_: int) -> dict:
@@ -279,6 +336,20 @@ def desactivar_curso(token: str, curso_id: int) -> dict:
     return _call("desactivar_curso", token, curso_id)
 
 
+def obtener_estado_nucleo(token: str, mes: str) -> dict:
+    """Una fila por curso del propio núcleo (el suyo y los de sus
+    compañeros): cuántas planeaciones lleva cada uno y si entregó el
+    informe. Vacío si el usuario no tiene cursos propios."""
+    return _call("obtener_estado_nucleo", token, mes)
+
+
+def obtener_resumen_docente(token: str, mes: str) -> dict:
+    """Los números del dashboard: planeaciones registradas/pendientes,
+    horas ejecutadas, cursos activos e informes pendientes del mes,
+    sobre los cursos propios."""
+    return _call("obtener_resumen_docente", token, mes)
+
+
 # --- Estudiantes / grupo ------------------------------------------------------
 
 def importar_estudiantes(token: str, curso_id: int, csv_texto: str) -> dict:
@@ -297,19 +368,24 @@ def modificar_grupo(token: str, curso_id: int, cambios: dict) -> dict:
 
 # --- Horas de gestión (rol directivo) -----------------------------------------
 
-def guardar_horas_gestion(token: str, datos: dict, fotos: dict) -> dict:
+def guardar_horas_gestion(
+    token: str, datos: dict, fotos: dict, on_progress: Callable[[int, int], None] | None = None
+) -> dict:
     """datos: fecha, actividad, horas_sede, entregable, link_soporte.
     fotos: {"foto": {"base64": ..., "mimeType": "image/jpeg"}} — obligatoria,
     igual que el entregable: son la evidencia de la actividad."""
-    return _call("guardar_horas_gestion", token, datos, fotos)
+    return _call("guardar_horas_gestion", token, datos, fotos, on_progress=on_progress)
 
 
-def editar_horas_gestion(token: str, id_: int, cambios: dict, fotos: dict | None = None) -> dict:
+def editar_horas_gestion(
+    token: str, id_: int, cambios: dict, fotos: dict | None = None,
+    on_progress: Callable[[int, int], None] | None = None,
+) -> dict:
     """Solo el dueño puede corregir su propia hora de gestión.
 
     Sin foto nueva se conserva la que ya tenía; lo que no se puede es
     dejarla sin ninguna."""
-    return _call("editar_horas_gestion", token, id_, cambios, fotos or {})
+    return _call("editar_horas_gestion", token, id_, cambios, fotos or {}, on_progress=on_progress)
 
 
 def eliminar_horas_gestion(token: str, id_: int) -> dict:
@@ -323,19 +399,23 @@ def obtener_horas_gestion(token: str, directivo_id: int | None = None) -> list[d
 
 # --- Actividades que no son clases ---------------------------------------------
 
-def guardar_actividad(token: str, datos: dict, fotos: dict | None = None) -> dict:
+def guardar_actividad(
+    token: str, datos: dict, fotos: dict | None = None,
+    on_progress: Callable[[int, int], None] | None = None,
+) -> dict:
     """Reuniones, claustros, informes: lo que se factura y no es una clase.
     datos: curso_id, fecha, descripcion, horas_sede, horas_externas.
     fotos: {"foto": {"base64": ..., "mimeType": ...}} — obligatoria salvo
     para directivos."""
-    return _call("guardar_actividad", token, datos, fotos or {})
+    return _call("guardar_actividad", token, datos, fotos or {}, on_progress=on_progress)
 
 
 def editar_actividad(
-    token: str, id_: int, datos: dict, fotos: dict | None = None
+    token: str, id_: int, datos: dict, fotos: dict | None = None,
+    on_progress: Callable[[int, int], None] | None = None,
 ) -> dict:
     """Sin foto nueva se conserva la que ya tenía."""
-    return _call("editar_actividad", token, id_, datos, fotos or {})
+    return _call("editar_actividad", token, id_, datos, fotos or {}, on_progress=on_progress)
 
 
 def obtener_actividades(token: str, curso_id: int, mes: str | None = None) -> list[dict]:
@@ -368,12 +448,16 @@ def generar_informe_mensual(
     )
 
 
-def guardar_documento_informe(token: str, curso_id: int, mes: str, archivo: dict) -> dict:
+def guardar_documento_informe(
+    token: str, curso_id: int, mes: str, archivo: dict,
+    on_progress: Callable[[int, int], None] | None = None,
+) -> dict:
     """Sube a Drive el .docx del informe ya entregado, para que quede
     archivado y el revisor lo pueda abrir directo.
 
-    archivo: {"base64": ..., "mimeType": ...}"""
-    return _call("guardar_documento_informe", token, curso_id, mes, archivo)
+    archivo: {"base64": ..., "mimeType": ...} — puede pesar bastante si el
+    mes tuvo varias clases con fotos, de ahí on_progress."""
+    return _call("guardar_documento_informe", token, curso_id, mes, archivo, on_progress=on_progress)
 
 
 def guardar_informe_mensual(

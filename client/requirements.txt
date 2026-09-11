@@ -3,5 +3,6 @@ requests>=2.31
 Pillow>=10.0
 docxtpl>=0.17
 tkcalendar>=1.5
+spylls>=0.1.7
 pyinstaller>=6.0
 pywin32>=306; sys_platform == "win32"

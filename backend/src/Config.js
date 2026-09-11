@@ -31,7 +31,7 @@ function getScriptProperty_(key) {
   const value = PropertiesService.getScriptProperties().getProperty(key);
   if (!value) {
     throw new Error(
-      `Falta la Script Property "${key}". Configúrala en Project Settings > Script properties.`
+      `Falta la Script Property "${key}". Configúrela en Project Settings > Script properties.`
     );
   }
   return value;

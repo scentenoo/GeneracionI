@@ -40,7 +40,7 @@ function crear_curso(token, datos) {
   // pendiente y nadie se entera.
   const color = colorDeCurso_(datos.color);
   if (!color) {
-    throw new Error('Elegí el color del curso: es lo que define quién lo revisa (verde o morado)');
+    throw new Error('Elija el color del curso: es lo que define quién lo revisa (verde o morado)');
   }
 
   const docente = findRowById_(SHEET_NAMES.USUARIOS, datos.docente_id);
@@ -74,7 +74,7 @@ function listar_cursos(token, docente_id, incluir_inactivos) {
   const targetId = docente_id || sesion.id;
 
   if (String(targetId) !== String(sesion.id) && !puedeSupervisar_(sesion)) {
-    throw new Error('No tienes permiso para ver los cursos de otro docente');
+    throw new Error('No tiene permiso para ver los cursos de otro docente');
   }
 
   return readRowsWhere_(
@@ -207,7 +207,143 @@ function requireCursoDelDocente_(curso_id, docente_id) {
   const curso = findRowById_(SHEET_NAMES.CURSOS, curso_id);
   if (!curso) throw new Error(`No se encontró el curso ${curso_id}`);
   if (String(curso.docente_id) !== String(docente_id)) {
-    throw new Error('Ese curso no es tuyo');
+    throw new Error('Ese curso no es suyo');
   }
   return curso;
+}
+
+/**
+ * Estado del núcleo del propio usuario: una fila por cada curso de ese
+ * núcleo (el suyo y los de sus compañeros), con cuántas planeaciones lleva
+ * cada uno y si ya entregó el informe del mes.
+ *
+ * Existe porque la revisión de dirección pasó a ser por núcleo completo
+ * entregado, no por profe suelto: si a uno le falta, se atrasa la revisión
+ * de todos. Esta vista deja que los mismos profes se empujen entre sí sin
+ * que dirección tenga que estar recordándoles uno por uno.
+ *
+ * A diferencia de obtener_dashboard_directivo, la puede pedir cualquier
+ * usuario con sesión (no hace falta ser directivo) — pero solo ve los
+ * cursos de SU PROPIO núcleo, nunca de otro. Sin cursos propios (un
+ * directivo sin componente docente) devuelve la lista vacía.
+ */
+function obtener_estado_nucleo(token, mes) {
+  const sesion = requireSession_(token);
+
+  const misCursos = readRowsWhere_(
+    SHEET_NAMES.CURSOS,
+    (c) => String(c.docente_id) === String(sesion.id) && c.activo === true
+  );
+  const nucleos = {};
+  misCursos.forEach((c) => {
+    const nombre = String(c.nucleo || '').trim();
+    if (nombre) nucleos[nombre] = true;
+  });
+  const nombresNucleo = Object.keys(nucleos);
+  if (nombresNucleo.length === 0) return { nucleo: '', mes: mes, cursos: [] };
+
+  const nombrePorId = {};
+  readAllRows_(SHEET_NAMES.USUARIOS).forEach((u) => { nombrePorId[String(u.id)] = u.nombre; });
+
+  const clasesPorCurso = {};
+  readAllRows_(SHEET_NAMES.PLANEACIONES).forEach((p) => {
+    if (mesDeFecha_(p.fecha) !== mes) return;
+    const clave = String(p.curso_id);
+    clasesPorCurso[clave] = (clasesPorCurso[clave] || 0) + 1;
+  });
+
+  const informePorCurso = {};
+  readAllRows_(SHEET_NAMES.INFORMES).forEach((i) => {
+    if (mesDeFecha_(i.mes) !== mes) return;
+    informePorCurso[String(i.curso_id)] = true;
+  });
+
+  const cursosDelNucleo = readRowsWhere_(
+    SHEET_NAMES.CURSOS,
+    (c) => c.activo === true && nucleos[String(c.nucleo || '').trim()]
+  );
+
+  const cursos = cursosDelNucleo.map((curso) => {
+    const registradas = clasesPorCurso[String(curso.id)] || 0;
+    return {
+      curso_id: curso.id,
+      curso: curso.nombre,
+      docente_id: curso.docente_id,
+      docente: nombrePorId[String(curso.docente_id)] || `id ${curso.docente_id}`,
+      es_propio: String(curso.docente_id) === String(sesion.id),
+      registradas: registradas,
+      esperadas: CLASES_ESPERADAS_POR_MES,
+      // "al día" con el mínimo que de verdad bloquea entregar el informe —
+      // mismo criterio que obtener_estado_mes, no las 4 esperadas.
+      planeaciones_al_dia: registradas >= CLASES_MINIMAS_POR_MES,
+      informe_entregado: !!informePorCurso[String(curso.id)],
+    };
+  });
+
+  return {
+    nucleo: nombresNucleo.join(', '),
+    mes: mes,
+    cursos: cursos,
+  };
+}
+
+/**
+ * Resumen del mes para el propio usuario — los números del menú principal
+ * (planeaciones registradas/pendientes, horas ejecutadas, cursos activos,
+ * informes pendientes). Un solo viaje en vez de que el cliente arme la
+ * cuenta pidiendo cursos, planeaciones e informes por separado.
+ *
+ * Mismo criterio que obtener_estado_mes para "pendientes": lo que bloquea
+ * entregar el informe es el mínimo (3), no las 4 esperadas.
+ */
+function obtener_resumen_docente(token, mes) {
+  const sesion = requireSession_(token);
+
+  const misCursos = readRowsWhere_(
+    SHEET_NAMES.CURSOS,
+    (c) => String(c.docente_id) === String(sesion.id) && c.activo === true
+  );
+  const idsPropios = {};
+  misCursos.forEach((c) => { idsPropios[String(c.id)] = true; });
+
+  const planeacionesDelMes = readRowsWhere_(
+    SHEET_NAMES.PLANEACIONES,
+    (p) => idsPropios[String(p.curso_id)] && mesDeFecha_(p.fecha) === mes
+  );
+  const registradasPorCurso = {};
+  planeacionesDelMes.forEach((p) => {
+    const clave = String(p.curso_id);
+    registradasPorCurso[clave] = (registradasPorCurso[clave] || 0) + 1;
+  });
+
+  let planeacionesPendientes = 0;
+  misCursos.forEach((c) => {
+    const registradas = registradasPorCurso[String(c.id)] || 0;
+    planeacionesPendientes += Math.max(0, CLASES_MINIMAS_POR_MES - registradas);
+  });
+
+  const horasPlaneaciones = planeacionesDelMes.reduce((sum, p) => sum + (Number(p.horas) || 0), 0);
+  const actividadesDelMes = readRowsWhere_(
+    SHEET_NAMES.ACTIVIDADES,
+    (a) => idsPropios[String(a.curso_id)] && mesDeFecha_(a.fecha) === mes
+  );
+  const horasActividades = actividadesDelMes.reduce(
+    (sum, a) => sum + (Number(a.horas_sede) || 0) + (Number(a.horas_externas) || 0), 0
+  );
+
+  const informesDelMes = {};
+  readAllRows_(SHEET_NAMES.INFORMES).forEach((i) => {
+    if (mesDeFecha_(i.mes) !== mes) return;
+    if (idsPropios[String(i.curso_id)]) informesDelMes[String(i.curso_id)] = true;
+  });
+  const informesPendientes = misCursos.filter((c) => !informesDelMes[String(c.id)]).length;
+
+  return {
+    mes: mes,
+    planeaciones_registradas: planeacionesDelMes.length,
+    planeaciones_pendientes: planeacionesPendientes,
+    horas_ejecutadas: horasPlaneaciones + horasActividades,
+    cursos_activos: misCursos.length,
+    informes_pendientes: informesPendientes,
+  };
 }

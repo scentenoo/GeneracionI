@@ -6,6 +6,8 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 from config import TEMPLATES_DIR
+from ui import ctk_parches, tema
+from ui.barra_lateral import BarraLateral
 from ui.cargando import Cargando
 from ui.login_screen import LoginScreen
 from ui.home_screen import HomeScreen
@@ -20,7 +22,7 @@ from ui.usuarios_screen import UsuariosScreen
 from ui.password_screen import PasswordScreen
 from ui.revisores_screen import RevisoresScreen
 from ui.version_screen import VersionScreen
-from ui import tareas
+from ui import tareas, overlay_carga
 from ui.tareas import cache, en_segundo_plano
 import api_client
 from services import vista_previa
@@ -31,6 +33,7 @@ class App(ctk.CTk):
         super().__init__()
         self.title("Generación-I — Planeaciones")
         self._poner_icono()
+        ctk_parches.reparar_copiar_pegar(self)
         # Los equipos de la sede son viejos, así que hay que contar con
         # pantallas de 1366x768: descontando barra de tareas y título quedan
         # unos 696 px de alto útiles, y 720 se salía por abajo.
@@ -42,6 +45,11 @@ class App(ctk.CTk):
         # accesible recorriendo winfo_children(), así que guardamos la
         # pantalla activa acá para poder referenciarla directo.
         self.pantalla_actual: ctk.CTkBaseClass | None = None
+        # Barra lateral + área de contenido: se arman una sola vez tras el
+        # login (ver _armar_shell) y quedan en pie durante toda la sesión.
+        # Antes de eso (login, pantallas de bloqueo) no existen.
+        self._sidebar: BarraLateral | None = None
+        self._content: ctk.CTkFrame | None = None
 
         # Los borradores de vista previa llevan nombres de estudiantes y la
         # foto de la clase: no tienen por qué sobrevivir a la sesión.
@@ -76,8 +84,22 @@ class App(ctk.CTk):
             if not messagebox.askyesno(
                 "Hay algo subiéndose",
                 "Todavía se está subiendo algo al servidor.\n\n"
-                "Si cerrás ahora puede quedar a medio guardar y vas a tener que "
+                "Si cierra ahora puede quedar a medio guardar y va a tener que "
                 "cargarlo de nuevo.\n\n¿Cerrar igual?",
+                icon="warning",
+                default="no",
+            ):
+                return
+        # Sin escritura de por medio (una descarga, una consulta) no hay
+        # riesgo de quedar a medio guardar, pero cerrar en el medio sí
+        # tira lo ya avanzado — y con el overlay tapando la pantalla,
+        # cerrar en ese momento se siente como que algo se rompió.
+        elif overlay_carga.hay_overlay_activo(self):
+            if not messagebox.askyesno(
+                "Todavía se está cargando algo",
+                "La app está esperando una respuesta del servidor (una descarga, "
+                "una consulta).\n\nSi cierra ahora se corta a la mitad y va a "
+                "tener que empezar de nuevo.\n\n¿Cerrar igual?",
                 icon="warning",
                 default="no",
             ):
@@ -87,16 +109,91 @@ class App(ctk.CTk):
         self.destroy()
 
     def _limpiar(self):
+        """Limpia TODA la ventana — login y pantallas de bloqueo, donde no
+        hay barra lateral. Para navegar entre secciones ya logueado, usar
+        `_limpiar_contenido` en vez de esto (deja la barra en pie)."""
         for widget in self.winfo_children():
             widget.destroy()
         self.pantalla_actual = None
+        self._sidebar = None
+        self._content = None
+
+    def _limpiar_contenido(self):
+        """Limpia solo el área de contenido, sin tocar la barra lateral."""
+        for widget in self._content.winfo_children():
+            widget.destroy()
+        self.pantalla_actual = None
+
+    def _armar_shell(self):
+        """Arma barra lateral + área de contenido, una sola vez por sesión
+        (se llama justo después del login). Todo lo que se muestre de acá
+        en más empaqueta dentro de `self._content`, nunca sobre `self`
+        directo — así la barra no se destruye en cada cambio de pantalla."""
+        self._limpiar()
+        cuerpo = ctk.CTkFrame(self, fg_color="transparent", corner_radius=0)
+        cuerpo.pack(fill="both", expand=True)
+
+        self._sidebar = BarraLateral(
+            cuerpo, self.sesion, self._secciones_sidebar(), on_cerrar_sesion=self._cerrar_sesion,
+        )
+        self._sidebar.pack(side="left", fill="y")
+
+        self._content = ctk.CTkFrame(cuerpo, fg_color=tema.FONDO_CONTENIDO, corner_radius=0)
+        self._content.pack(side="left", fill="both", expand=True)
+
+    def _secciones_sidebar(self):
+        """Qué secciones ve cada quien — misma lógica de roles que antes
+        vivía en HomeScreen, ahora al servicio de la barra lateral."""
+        sesion = self.sesion
+        es_docente = sesion["rol"] in ("docente", "ambos")
+        # El administrador entra a las pantallas de gestión aunque su rol
+        # sea docente. Eso no lo vuelve directivo: ver comentario largo en
+        # _mostrar_informe.
+        es_directivo = sesion["rol"] in ("directivo", "ambos") or bool(sesion.get("es_admin"))
+
+        secciones = [("home", "Inicio", self._mostrar_home)]
+        if es_docente:
+            secciones.append(("planeaciones", "Planeaciones y actividades", self._mostrar_planeaciones))
+        secciones.append(("informe", "Generar informe mensual", self._mostrar_informe))
+
+        if es_directivo:
+            secciones.append(("revisar", "Revisar planeaciones e informes", self._mostrar_revisar))
+            secciones.append(("cursos", "Cursos", self._mostrar_cursos))
+            secciones.append(("horas_gestion", "Horas de gestión", self._mostrar_horas_gestion))
+            secciones.append(("usuarios", "Usuarios", self._mostrar_usuarios))
+
+        secciones.append(("password", "Cambiar contraseña", self._mostrar_password))
+        # Publicar una versión bloquea a quien no la tenga, y reasignar
+        # revisores cambia quién aprueba el trabajo de todos: las dos van
+        # detrás del administrador único y no del rol directivo.
+        if sesion.get("es_admin"):
+            secciones.append(("revisores", "Revisores por color", self._mostrar_revisores))
+            secciones.append(("version", "Versión de la app", self._mostrar_version))
+        return secciones
+
+    def _cerrar_sesion(self):
+        # Mismo resguardo que al cerrar la ventana entera: cortar en el
+        # medio de una subida la deja a medio guardar.
+        if tareas.hay_trabajo_pendiente():
+            if not messagebox.askyesno(
+                "Hay algo subiéndose",
+                "Todavía se está subiendo algo al servidor.\n\n"
+                "Si cierra la sesión ahora puede quedar a medio guardar.\n\n"
+                "¿Cerrar sesión igual?",
+                icon="warning",
+                default="no",
+            ):
+                return
+        self.sesion = None
+        vista_previa.limpiar_borradores()
+        self._mostrar_login()
 
     def _pantalla_cargando(self, texto: str):
         """Pantalla de transición con la animación de «trabajando», para las
         aperturas que primero tienen que ir a buscar algo al backend. Devuelve
         el widget Cargando por si hay que cambiarle el texto ante un error."""
-        self._limpiar()
-        marco = ctk.CTkFrame(self)
+        self._limpiar_contenido()
+        marco = ctk.CTkFrame(self._content, fg_color="transparent")
         marco.pack(fill="both", expand=True)
         cargando = Cargando(marco, texto=texto)
         cargando.place(relx=0.5, rely=0.5, anchor="center")
@@ -173,14 +270,21 @@ class App(ctk.CTk):
 
     def _on_login_exitoso(self, sesion: dict):
         self.sesion = sesion
+        self._armar_shell()
         self._mostrar_home()
         # Deja el caché listo mientras el usuario mira el menú, así las
         # pantallas abren sin esperar viajes al backend.
-        en_segundo_plano(self, lambda: cache.precargar(sesion), lambda _r: None, lambda _e: None)
+        en_segundo_plano(
+            self, lambda: cache.precargar(sesion), lambda _r: None, lambda _e: None,
+            mostrar_overlay=False,
+        )
         # Al entrar, avisar qué le devolvieron para corregir y cuándo cierra
         # el mes. Va aparte del caché para que un fallo del aviso no impida
         # usar la app.
-        en_segundo_plano(self, lambda: self._datos_aviso(sesion), self._avisos_al_entrar, lambda _e: None)
+        en_segundo_plano(
+            self, lambda: self._datos_aviso(sesion), self._avisos_al_entrar, lambda _e: None,
+            mostrar_overlay=False,
+        )
 
     def _datos_aviso(self, sesion: dict) -> dict:
         """Junta en un solo viaje lo que se muestra al entrar."""
@@ -212,7 +316,7 @@ class App(ctk.CTk):
             cuando = "hoy" if dias == 0 else ("mañana" if dias == 1 else f"en {dias} días")
             partes.append(
                 f"Ojo: el mes se cierra {cuando} ({date_utils.a_fecha_corta(fecha_cierre)}). "
-                "Después de esa fecha no vas a poder cargar ni corregir nada de este mes."
+                "Después de esa fecha no va a poder cargar ni corregir nada de este mes."
             )
 
         if not partes:
@@ -230,26 +334,16 @@ class App(ctk.CTk):
         return (objetivo - datetime.date.today()).days
 
     def _mostrar_home(self):
-        self._limpiar()
-        self.pantalla_actual = HomeScreen(
-            self,
-            self.sesion,
-            on_planeaciones=self._mostrar_planeaciones,
-            on_informe=self._mostrar_informe,
-            on_cursos=self._mostrar_cursos,
-            on_horas_gestion=self._mostrar_horas_gestion,
-            on_revisar=self._mostrar_revisar,
-            on_usuarios=self._mostrar_usuarios,
-            on_cambiar_password=self._mostrar_password,
-            on_version=self._mostrar_version,
-            on_revisores=self._mostrar_revisores,
-        )
+        self._limpiar_contenido()
+        self._sidebar.marcar_activo("home")
+        self.pantalla_actual = HomeScreen(self._content, self.sesion)
         self.pantalla_actual.pack(fill="both", expand=True)
 
     def _mostrar_planeaciones(self):
-        self._limpiar()
+        self._limpiar_contenido()
+        self._sidebar.marcar_activo("planeaciones")
         self.pantalla_actual = PlaneacionesScreen(
-            self,
+            self._content,
             self.sesion,
             on_volver=self._mostrar_home,
             # Editar sale del hub al editor de pantalla completa; al volver,
@@ -264,9 +358,9 @@ class App(ctk.CTk):
         cargando = self._pantalla_cargando("Cargando la planeación...")
 
         def listo(completa):
-            self._limpiar()
+            self._limpiar_contenido()
             self.pantalla_actual = PlaneacionEditorScreen(
-                self, self.sesion, completa, on_volver=on_volver
+                self._content, self.sesion, completa, on_volver=on_volver
             )
             self.pantalla_actual.pack(fill="both", expand=True)
 
@@ -287,15 +381,16 @@ class App(ctk.CTk):
         cursos propios. Se consulta primero —del caché, normalmente sin
         viaje— para no montar la pantalla equivocada."""
         self._pantalla_cargando("Abriendo...")
+        self._sidebar.marcar_activo("informe")
 
         es_directivo = self.sesion["rol"] in ("directivo", "ambos")
 
         def listo(mis_cursos):
-            self._limpiar()
+            self._limpiar_contenido()
             if es_directivo and not mis_cursos:
-                self.pantalla_actual = InformeGestionScreen(self, self.sesion, on_volver=self._mostrar_home)
+                self.pantalla_actual = InformeGestionScreen(self._content, self.sesion, on_volver=self._mostrar_home)
             else:
-                self.pantalla_actual = InformeScreen(self, self.sesion, on_volver=self._mostrar_home)
+                self.pantalla_actual = InformeScreen(self._content, self.sesion, on_volver=self._mostrar_home)
             self.pantalla_actual.pack(fill="both", expand=True)
 
         en_segundo_plano(
@@ -307,36 +402,43 @@ class App(ctk.CTk):
         )
 
     def _mostrar_cursos(self):
-        self._limpiar()
-        self.pantalla_actual = CursosHubScreen(self, self.sesion, on_volver=self._mostrar_home)
+        self._limpiar_contenido()
+        self._sidebar.marcar_activo("cursos")
+        self.pantalla_actual = CursosHubScreen(self._content, self.sesion, on_volver=self._mostrar_home)
         self.pantalla_actual.pack(fill="both", expand=True)
 
     def _mostrar_horas_gestion(self):
-        self._limpiar()
-        self.pantalla_actual = HorasGestionScreen(self, self.sesion, on_volver=self._mostrar_home)
+        self._limpiar_contenido()
+        self._sidebar.marcar_activo("horas_gestion")
+        self.pantalla_actual = HorasGestionScreen(self._content, self.sesion, on_volver=self._mostrar_home)
         self.pantalla_actual.pack(fill="both", expand=True)
 
     def _mostrar_revisar(self):
-        self._limpiar()
-        self.pantalla_actual = RevisarHubScreen(self, self.sesion, on_volver=self._mostrar_home)
+        self._limpiar_contenido()
+        self._sidebar.marcar_activo("revisar")
+        self.pantalla_actual = RevisarHubScreen(self._content, self.sesion, on_volver=self._mostrar_home)
         self.pantalla_actual.pack(fill="both", expand=True)
 
     def _mostrar_usuarios(self):
-        self._limpiar()
-        self.pantalla_actual = UsuariosScreen(self, self.sesion, on_volver=self._mostrar_home)
+        self._limpiar_contenido()
+        self._sidebar.marcar_activo("usuarios")
+        self.pantalla_actual = UsuariosScreen(self._content, self.sesion, on_volver=self._mostrar_home)
         self.pantalla_actual.pack(fill="both", expand=True)
 
     def _mostrar_revisores(self):
-        self._limpiar()
-        self.pantalla_actual = RevisoresScreen(self, self.sesion, on_volver=self._mostrar_home)
+        self._limpiar_contenido()
+        self._sidebar.marcar_activo("revisores")
+        self.pantalla_actual = RevisoresScreen(self._content, self.sesion, on_volver=self._mostrar_home)
         self.pantalla_actual.pack(fill="both", expand=True)
 
     def _mostrar_version(self):
-        self._limpiar()
-        self.pantalla_actual = VersionScreen(self, self.sesion, on_volver=self._mostrar_home)
+        self._limpiar_contenido()
+        self._sidebar.marcar_activo("version")
+        self.pantalla_actual = VersionScreen(self._content, self.sesion, on_volver=self._mostrar_home)
         self.pantalla_actual.pack(fill="both", expand=True)
 
     def _mostrar_password(self):
-        self._limpiar()
-        self.pantalla_actual = PasswordScreen(self, self.sesion, on_volver=self._mostrar_home)
+        self._limpiar_contenido()
+        self._sidebar.marcar_activo("password")
+        self.pantalla_actual = PasswordScreen(self._content, self.sesion, on_volver=self._mostrar_home)
         self.pantalla_actual.pack(fill="both", expand=True)

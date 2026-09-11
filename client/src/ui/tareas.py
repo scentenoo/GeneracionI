@@ -75,12 +75,38 @@ def _sumar(delta: int):
         _contador += delta
 
 
+def _mostrar_overlay(root):
+    """Import diferido: overlay_carga importa `ui.cargando`, y a su vez lo
+    usan pantallas que importan tareas — evita el ciclo en el import top-level."""
+    from ui.overlay_carga import obtener_overlay
+
+    overlay = obtener_overlay(root)
+    if overlay is not None:
+        overlay.mostrar()
+    return overlay
+
+
+def _extraer_fraccion(valor: object) -> float | None:
+    """De lo que reporta cada pantalla (formas distintas: (enviado, total),
+    (etapa, enviado, total), (hechos, total, nombre)...) saca los primeros
+    dos números que aparezcan, en orden, y los toma como (hecho, total).
+    Si no hay forma de sacar un porcentaje, devuelve None — el overlay
+    entonces se queda con el indicador genérico en vez de romperse."""
+    if not isinstance(valor, (tuple, list)):
+        return None
+    numeros = [v for v in valor if isinstance(v, (int, float)) and not isinstance(v, bool)]
+    if len(numeros) < 2 or not numeros[1]:
+        return None
+    return max(0.0, min(1.0, numeros[0] / numeros[1]))
+
+
 def en_segundo_plano(
     widget,
     trabajo: Callable[[], object],
     al_terminar: Callable[[object], None],
     al_fallar: Callable[[Exception], None] | None = None,
     bloquea_cierre: bool = False,
+    mostrar_overlay: bool = True,
 ):
     """Corre `trabajo()` fuera del hilo de la interfaz y entrega el
     resultado a `al_terminar` ya de vuelta en el hilo de Tk.
@@ -91,14 +117,22 @@ def en_segundo_plano(
     Con `bloquea_cierre` la tarea se cuenta como "subida en curso" y la app
     avisa antes de cerrarse. Va solo en lo que escribe en el backend: para
     una consulta de lectura, cerrar en el medio no rompe nada.
+
+    Con `mostrar_overlay` (por defecto sí) tapa la ventana entera con el
+    logo y una frase mientras dura la espera — como hace la Registraduría al
+    procesar un trámite. Se apaga solo para el trabajo silencioso de fondo
+    (precargar caché, avisos al entrar) que no tiene que congelar nada.
     """
     global _entrega_iniciada
+    root = widget.winfo_toplevel()
     if not _entrega_iniciada:
         _entrega_iniciada = True
-        _bombear(widget.winfo_toplevel())
+        _bombear(root)
 
     if bloquea_cierre:
         _sumar(1)
+
+    overlay = _mostrar_overlay(root) if mostrar_overlay else None
 
     def correr():
         try:
@@ -113,6 +147,8 @@ def en_segundo_plano(
         finally:
             if bloquea_cierre:
                 _sumar(-1)
+            if overlay is not None:
+                _cola.put((root, lambda _v: overlay.ocultar(), None))
 
     threading.Thread(target=correr, daemon=True).start()
 
@@ -123,20 +159,33 @@ def en_segundo_plano_con_progreso(
     al_progreso: Callable[[object], None],
     al_terminar: Callable[[object], None],
     al_fallar: Callable[[Exception], None] | None = None,
+    bloquea_cierre: bool = False,
+    mostrar_overlay: bool = True,
 ):
     """Como en_segundo_plano, pero `trabajo` recibe un `reportar(valor)`
     para ir avisando cómo avanza. Cada `reportar` entrega el valor a
-    `al_progreso` ya en el hilo de Tk, así una descarga larga puede pintar
-    una barra sin congelar la ventana ni tocar widgets desde el worker.
+    `al_progreso` ya en el hilo de Tk, así una descarga o subida larga puede
+    pintar una barra sin congelar la ventana ni tocar widgets desde el
+    worker. `bloquea_cierre` y `mostrar_overlay` funcionan igual que en
+    en_segundo_plano.
     """
     global _entrega_iniciada
+    root = widget.winfo_toplevel()
     if not _entrega_iniciada:
         _entrega_iniciada = True
-        _bombear(widget.winfo_toplevel())
+        _bombear(root)
+
+    if bloquea_cierre:
+        _sumar(1)
+
+    overlay = _mostrar_overlay(root) if mostrar_overlay else None
 
     def correr():
         def reportar(valor):
             _cola.put((widget, al_progreso, valor))
+            if overlay is not None:
+                fraccion = _extraer_fraccion(valor)
+                _cola.put((root, lambda _v, f=fraccion: overlay.actualizar_progreso(f), None))
 
         try:
             resultado = trabajo(reportar)
@@ -147,6 +196,11 @@ def en_segundo_plano_con_progreso(
                 traceback.print_exc(file=sys.stderr)
         else:
             _cola.put((widget, al_terminar, resultado))
+        finally:
+            if bloquea_cierre:
+                _sumar(-1)
+            if overlay is not None:
+                _cola.put((root, lambda _v: overlay.ocultar(), None))
 
     threading.Thread(target=correr, daemon=True).start()
 

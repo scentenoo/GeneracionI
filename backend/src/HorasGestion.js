@@ -69,7 +69,7 @@ function obtener_horas_gestion(token, directivo_id) {
   const sesion = requireSession_(token);
   const targetId = directivo_id || sesion.id;
   if (String(targetId) !== String(sesion.id) && !puedeSupervisar_(sesion)) {
-    throw new Error('No tienes permiso para ver las horas de gestión de otro usuario');
+    throw new Error('No tiene permiso para ver las horas de gestión de otro usuario');
   }
   return readRowsWhere_(
     SHEET_NAMES.HORAS_GESTION,
@@ -96,7 +96,7 @@ function editar_horas_gestion(token, id, cambios, fotos) {
   const fila = findRowById_(SHEET_NAMES.HORAS_GESTION, id);
   if (!fila) throw new Error('No se encontró esa hora de gestión');
   if (String(fila.directivo_id) !== String(sesion.id)) {
-    throw new Error('Solo podés editar tus propias horas de gestión');
+    throw new Error('Solo puede editar sus propias horas de gestión');
   }
 
   // Se valida la fila como va a quedar, no solo lo que llegó: editar manda
@@ -137,7 +137,7 @@ function eliminar_horas_gestion(token, id) {
   const fila = findRowById_(SHEET_NAMES.HORAS_GESTION, id);
   if (!fila) throw new Error('No se encontró esa hora de gestión');
   if (String(fila.directivo_id) !== String(sesion.id)) {
-    throw new Error('Solo podés eliminar tus propias horas de gestión');
+    throw new Error('Solo puede eliminar sus propias horas de gestión');
   }
 
   const lock = LockService.getScriptLock();

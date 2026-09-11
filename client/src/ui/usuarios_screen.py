@@ -18,12 +18,14 @@ import customtkinter as ctk
 
 import api_client
 from services import date_utils
+from ui import tema
 from ui.editar_usuario_screen import EditarUsuarioScreen
 from ui.cargando import Cargando
 from ui.tareas import cache, en_segundo_plano
 from ui.usuario_screen import UsuarioScreen
+from ui.widgets import chip
 
-ROJO, AMBAR, VERDE, GRIS = "#c0392b", "#8A6114", "#2fa84f", "gray"
+ROJO, AMBAR, VERDE, GRIS = tema.ROJO, tema.AMBAR, tema.VERDE, tema.GRIS
 
 # Un mes sin entrar no es raro en época de vacaciones, así que recién ahí
 # deja de contar como "viene usando la app".
@@ -42,11 +44,18 @@ class UsuariosScreen(ctk.CTkFrame):
         super().__init__(master)
         self.sesion = sesion
 
-        ctk.CTkButton(self, text="← Volver", width=90, command=on_volver).pack(
-            anchor="w", padx=12, pady=(12, 0)
-        )
+        ctk.CTkButton(
+            self, text="← Volver", width=90, fg_color="transparent", border_width=1,
+            text_color=tema.TEXTO_OSCURO, hover_color=tema.FONDO_TARJETA, command=on_volver,
+        ).pack(anchor="w", padx=12, pady=(12, 0))
 
-        self.tabview = ctk.CTkTabview(self)
+        self.tabview = ctk.CTkTabview(
+            self,
+            segmented_button_selected_color=tema.VERDE_OSCURO,
+            segmented_button_selected_hover_color=tema.VERDE_OSCURO_ACTIVO,
+            segmented_button_unselected_color=tema.FONDO_TARJETA,
+            text_color=tema.TEXTO_OSCURO,
+        )
         self.tabview.pack(fill="both", expand=True, padx=8, pady=8)
         for nombre in ("Lista", "Crear", "Editar"):
             self.tabview.add(nombre)
@@ -78,7 +87,7 @@ class ListaUsuariosTab(ctk.CTkScrollableFrame):
         cabecera = ctk.CTkFrame(self, fg_color="transparent")
         cabecera.pack(fill="x")
         self.resumen_label = ctk.CTkLabel(
-            cabecera, text="Cargando...", font=ctk.CTkFont(size=15, weight="bold"),
+            cabecera, text="Cargando...", font=tema.fuente(15, "bold"),
             anchor="w", justify="left",
         )
         self.resumen_label.pack(side="left")
@@ -150,7 +159,10 @@ class ListaUsuariosTab(ctk.CTkScrollableFrame):
         else:
             color = GRIS
 
-        marco = ctk.CTkFrame(self.tarjetas, corner_radius=8, border_width=1)
+        marco = ctk.CTkFrame(
+            self.tarjetas, fg_color=tema.FONDO_TARJETA, corner_radius=10,
+            border_width=1, border_color=tema.BORDE_TARJETA,
+        )
         marco.pack(fill="x", pady=4)
 
         franja = ctk.CTkFrame(marco, width=5, fg_color=color, corner_radius=0)
@@ -161,17 +173,21 @@ class ListaUsuariosTab(ctk.CTkScrollableFrame):
         cuerpo.pack(side="left", fill="both", expand=True, padx=12, pady=10)
 
         ctk.CTkLabel(
-            cuerpo, text=texto(usuario.get("nombre")), font=ctk.CTkFont(size=14, weight="bold"),
+            cuerpo, text=texto(usuario.get("nombre")), font=tema.fuente(14, "bold"),
             anchor="w", justify="left", wraplength=460,
         ).pack(fill="x")
-
-        etiquetas = [texto(usuario.get("usuario")), texto(usuario.get("rol"))]
-        if usuario.get("es_admin"):
-            etiquetas.append("administrador")
         ctk.CTkLabel(
-            cuerpo, text="  ·  ".join(e for e in etiquetas if e), text_color=GRIS, anchor="w"
+            cuerpo, text=texto(usuario.get("usuario")), text_color=GRIS, anchor="w"
         ).pack(fill="x")
-        ctk.CTkLabel(cuerpo, text=texto_acceso, text_color=color, anchor="w").pack(fill="x", pady=(4, 0))
+
+        etiquetas_fila = ctk.CTkFrame(cuerpo, fg_color="transparent")
+        etiquetas_fila.pack(fill="x", pady=(4, 0))
+        rol = texto(usuario.get("rol"))
+        if rol:
+            chip(etiquetas_fila, rol, tema.GRIS)
+        if usuario.get("es_admin"):
+            chip(etiquetas_fila, "administrador", tema.DORADO)
+        chip(etiquetas_fila, texto_acceso, color)
 
         botones = ctk.CTkFrame(cuerpo, fg_color="transparent")
         botones.pack(fill="x", pady=(8, 0))
@@ -202,7 +218,7 @@ class ListaUsuariosTab(ctk.CTkScrollableFrame):
         def listo(_r):
             self.aviso_label.configure(
                 text=f"Listo. La contraseña de {usuario.get('nombre', '')} ahora es:  {nueva}\n"
-                     "Pasásela y decile que la cambie desde «Cambiar contraseña».",
+                     "Pásesela y dígale que la cambie desde «Cambiar contraseña».",
                 text_color=VERDE,
             )
 

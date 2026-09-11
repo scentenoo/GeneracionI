@@ -21,11 +21,13 @@ from typing import Callable
 import customtkinter as ctk
 
 import api_client
+from ui import tema
 from ui.cargando import Cargando
 from ui.tareas import cache, en_segundo_plano
+from ui.widgets import chip
 
 SIN_COLOR = "(sin asignar)"
-AMBAR = "#8A6114"
+AMBAR = tema.AMBAR
 
 
 class CursosScreen(ctk.CTkScrollableFrame):
@@ -39,7 +41,7 @@ class CursosScreen(ctk.CTkScrollableFrame):
         if on_volver is not None:
             ctk.CTkButton(self, text="← Volver", width=90, command=on_volver).pack(anchor="w", pady=(0, 10))
 
-        ctk.CTkLabel(self, text="Nuevo curso", font=ctk.CTkFont(weight="bold")).pack(anchor="w")
+        ctk.CTkLabel(self, text="Nuevo curso", font=tema.fuente(peso="bold")).pack(anchor="w")
 
         ctk.CTkLabel(self, text="Docente", anchor="w").pack(fill="x", pady=(8, 0))
         self.docente_menu = ctk.CTkOptionMenu(self, values=["(cargando...)"])
@@ -56,7 +58,7 @@ class CursosScreen(ctk.CTkScrollableFrame):
         ctk.CTkLabel(fila_edades, text="a").pack(side="left", padx=6)
         self.edad_hasta_entry = ctk.CTkEntry(fila_edades, width=60, placeholder_text="hasta")
         self.edad_hasta_entry.pack(side="left")
-        ctk.CTkLabel(fila_edades, text="años  (sale en la cuenta de cobro)", text_color="gray").pack(
+        ctk.CTkLabel(fila_edades, text="años  (sale en la cuenta de cobro)", text_color=tema.GRIS).pack(
             side="left", padx=6
         )
 
@@ -67,16 +69,16 @@ class CursosScreen(ctk.CTkScrollableFrame):
         self.color_menu.set(SIN_COLOR)
         self.color_menu.pack(fill="x", pady=(2, 0))
 
-        self.error_label = ctk.CTkLabel(self, text="", text_color="#c0392b", wraplength=450, justify="left")
+        self.error_label = ctk.CTkLabel(self, text="", text_color=tema.ROJO, wraplength=450, justify="left")
         self.error_label.pack(fill="x", pady=(12, 4))
 
         self.crear_boton = ctk.CTkButton(self, text="Crear curso", command=self._crear)
         self.crear_boton.pack(pady=(0, 16))
 
-        ctk.CTkLabel(self, text="Cursos existentes", font=ctk.CTkFont(weight="bold")).pack(anchor="w", pady=(8, 4))
+        ctk.CTkLabel(self, text="Cursos existentes", font=tema.fuente(peso="bold")).pack(anchor="w", pady=(8, 4))
         self.lista_contenedor = ctk.CTkFrame(self, fg_color="transparent")
         self.lista_contenedor.pack(fill="both", expand=True)
-        self.cargando_label = ctk.CTkLabel(self.lista_contenedor, text="Cargando...", text_color="gray")
+        self.cargando_label = ctk.CTkLabel(self.lista_contenedor, text="Cargando...", text_color=tema.GRIS)
         self.cargando_label.pack(anchor="w")
 
         self._cargar_docentes()
@@ -88,7 +90,7 @@ class CursosScreen(ctk.CTkScrollableFrame):
         return entry
 
     def _trabajando(self, texto: str):
-        self.error_label.configure(text=texto, text_color="gray")
+        self.error_label.configure(text=texto, text_color=tema.GRIS)
 
     # --- carga (en segundo plano: la lista de usuarios y cursos puede costar
     # un viaje al backend si el caché no está caliente, y hacerlo en el hilo
@@ -109,7 +111,7 @@ class CursosScreen(ctk.CTkScrollableFrame):
             self,
             lambda: cache.usuarios(self.sesion["token"]),
             listo,
-            lambda exc: self.error_label.configure(text=str(exc), text_color="#c0392b"),
+            lambda exc: self.error_label.configure(text=str(exc), text_color=tema.ROJO),
         )
 
     def _cargar_lista(self):
@@ -123,7 +125,7 @@ class CursosScreen(ctk.CTkScrollableFrame):
 
             activos = [c for c in cursos if c.get("activo")]
             if not activos:
-                ctk.CTkLabel(self.lista_contenedor, text="Todavía no hay cursos.", text_color="gray").pack(anchor="w")
+                ctk.CTkLabel(self.lista_contenedor, text="Todavía no hay cursos.", text_color=tema.GRIS).pack(anchor="w")
                 return
 
             # Los que les falta núcleo o edad van primero: son los que hay
@@ -142,7 +144,7 @@ class CursosScreen(ctk.CTkScrollableFrame):
         def fallo(exc):
             for w in self.lista_contenedor.winfo_children():
                 w.destroy()
-            self.error_label.configure(text=str(exc), text_color="#c0392b")
+            self.error_label.configure(text=str(exc), text_color=tema.ROJO)
 
         en_segundo_plano(
             self,
@@ -152,30 +154,29 @@ class CursosScreen(ctk.CTkScrollableFrame):
         )
 
     def _fila_curso(self, curso: dict, incompleto: bool):
-        fila = ctk.CTkFrame(self.lista_contenedor, border_width=1, corner_radius=8)
+        fila = ctk.CTkFrame(
+            self.lista_contenedor, fg_color=tema.FONDO_TARJETA, corner_radius=10,
+            border_width=1, border_color=tema.BORDE_TARJETA,
+        )
         fila.pack(fill="x", pady=3)
 
         info = ctk.CTkFrame(fila, fg_color="transparent")
         info.pack(side="left", fill="both", expand=True, padx=10, pady=8)
-        ctk.CTkLabel(info, text=curso["nombre"], font=ctk.CTkFont(weight="bold"), anchor="w").pack(fill="x")
+        ctk.CTkLabel(info, text=curso["nombre"], font=tema.fuente(peso="bold"), anchor="w").pack(fill="x")
 
         docente = self._nombre_por_docente_id.get(curso["docente_id"], f"id {curso['docente_id']}")
         detalle = f"{docente}  ·  núcleo: {curso.get('nucleo') or '—'}"
         if curso.get("edad_desde") or curso.get("edad_hasta"):
             detalle += f"  ·  {curso.get('edad_desde')}–{curso.get('edad_hasta')} años"
-        ctk.CTkLabel(info, text=detalle, text_color="gray", anchor="w").pack(fill="x")
+        ctk.CTkLabel(info, text=detalle, text_color=tema.GRIS, anchor="w").pack(fill="x")
 
-        if incompleto:
-            ctk.CTkLabel(
-                info, text="Falta completar núcleo o edades", text_color=AMBAR, anchor="w",
-                font=ctk.CTkFont(size=11),
-            ).pack(fill="x")
-
-        if not str(curso.get("color") or "").strip():
-            ctk.CTkLabel(
-                info, text="Sin color — no lo revisa nadie más que el administrador",
-                text_color=AMBAR, anchor="w", font=ctk.CTkFont(size=11), wraplength=380, justify="left",
-            ).pack(fill="x")
+        if incompleto or not str(curso.get("color") or "").strip():
+            etiquetas = ctk.CTkFrame(info, fg_color="transparent")
+            etiquetas.pack(fill="x", pady=(4, 0))
+            if incompleto:
+                chip(etiquetas, "falta núcleo o edades", AMBAR)
+            if not str(curso.get("color") or "").strip():
+                chip(etiquetas, "sin color: solo la revisa el administrador", AMBAR)
 
         botones = ctk.CTkFrame(fila, fg_color="transparent")
         botones.pack(side="right", padx=10)
@@ -183,7 +184,7 @@ class CursosScreen(ctk.CTkScrollableFrame):
             side="left", padx=(0, 6)
         )
         ctk.CTkButton(
-            botones, text="Desactivar", width=100, fg_color="#c0392b", hover_color="#922b21",
+            botones, text="Desactivar", width=100, fg_color=tema.ROJO, hover_color=tema.ROJO_HOVER,
             command=lambda c=curso: self._desactivar(c),
         ).pack(side="left")
 
@@ -191,11 +192,11 @@ class CursosScreen(ctk.CTkScrollableFrame):
         docente_id = self._docentes_por_nombre.get(self.docente_menu.get())
         nombre = self.nombre_entry.get().strip()
         if docente_id is None or not nombre:
-            self.error_label.configure(text="Elegí un docente y escribí el nombre del curso.", text_color="#c0392b")
+            self.error_label.configure(text="Elija un docente y escriba el nombre del curso.", text_color=tema.ROJO)
             return
         if self.color_menu.get() == SIN_COLOR:
             self.error_label.configure(
-                text="Elegí el color del curso: es lo que define quién lo revisa.", text_color="#c0392b"
+                text="Elija el color del curso: es lo que define quién lo revisa.", text_color=tema.ROJO
             )
             return
 
@@ -218,11 +219,11 @@ class CursosScreen(ctk.CTkScrollableFrame):
                 entry.delete(0, "end")
             self.color_menu.set(SIN_COLOR)
             self._cargar_lista()
-            self.error_label.configure(text=f"Curso «{nombre}» creado ✓", text_color="#2fa84f")
+            self.error_label.configure(text=f"Curso «{nombre}» creado ✓", text_color=tema.VERDE)
 
         def fallo(exc):
             self.crear_boton.configure(state="normal")
-            self.error_label.configure(text=str(exc), text_color="#c0392b")
+            self.error_label.configure(text=str(exc), text_color=tema.ROJO)
 
         en_segundo_plano(
             self,
@@ -232,14 +233,14 @@ class CursosScreen(ctk.CTkScrollableFrame):
         )
 
     def _editar(self, curso: dict):
-        DialogoEditarCurso(self, curso, self._guardar_edicion)
+        DialogoEditarCurso(self, curso, self._docentes_por_nombre, self._guardar_edicion)
 
     def _guardar_edicion(self, curso_id: int, cambios: dict, dialogo):
         def listo(_r):
             cache.invalidar("cursos")
             dialogo.destroy()
             self._cargar_lista()
-            self.error_label.configure(text="Curso actualizado ✓", text_color="#2fa84f")
+            self.error_label.configure(text="Curso actualizado ✓", text_color=tema.VERDE)
 
         en_segundo_plano(
             self,
@@ -262,34 +263,48 @@ class CursosScreen(ctk.CTkScrollableFrame):
         def listo(_r):
             cache.invalidar("cursos")
             self._cargar_lista()
-            self.error_label.configure(text="Curso desactivado.", text_color="#2fa84f")
+            self.error_label.configure(text="Curso desactivado.", text_color=tema.VERDE)
 
         en_segundo_plano(
             self,
             lambda: api_client.desactivar_curso(self.sesion["token"], curso["id"]),
             listo,
-            lambda exc: self.error_label.configure(text=str(exc), text_color="#c0392b"),
+            lambda exc: self.error_label.configure(text=str(exc), text_color=tema.ROJO),
         )
 
 
 class DialogoEditarCurso(ctk.CTkToplevel):
-    """Ventanita para completar/corregir un curso. El docente no se cambia
-    acá: si un curso quedó con el docente equivocado, se desactiva y se
-    crea de nuevo, para no mover planeaciones ya cargadas de dueño."""
+    """Ventanita para completar/corregir un curso, incluido reasignarlo a
+    otro docente. Cambiar el docente NO toca las planeaciones e informes
+    ya cargados: cada uno guarda su propio docente_id de cuando se creó,
+    así que siguen atribuidos a quien los cargó — el curso simplemente deja
+    de aparecerle a partir de ahora al que lo tenía y empieza a aparecerle
+    al nuevo."""
 
-    def __init__(self, master, curso: dict, on_guardar):
+    def __init__(self, master, curso: dict, docentes_por_nombre: dict[str, int], on_guardar):
         super().__init__(master)
         self.curso = curso
         self.on_guardar = on_guardar
+        self._docentes_por_nombre = docentes_por_nombre
+        self._nombre_docente_original = next(
+            (nombre for nombre, id_ in docentes_por_nombre.items() if id_ == curso.get("docente_id")),
+            None,
+        )
 
         self.title("Editar curso")
-        self.geometry("380x430")
+        self.geometry("380x490")
         self.transient(master.winfo_toplevel())
         # Esperar a que la ventana exista antes de robar el foco, si no
         # customtkinter tira error en algunos equipos.
         self.after(200, self.grab_set)
 
-        ctk.CTkLabel(self, text=curso["nombre"], font=ctk.CTkFont(size=15, weight="bold")).pack(pady=(16, 8))
+        ctk.CTkLabel(self, text=curso["nombre"], font=tema.fuente(15, "bold")).pack(pady=(16, 8))
+
+        ctk.CTkLabel(self, text="Docente", anchor="w").pack(fill="x", padx=20, pady=(0, 0))
+        nombres = list(docentes_por_nombre) or ["(sin docentes)"]
+        self.docente_menu = ctk.CTkOptionMenu(self, width=340, values=nombres)
+        self.docente_menu.pack(padx=20)
+        self.docente_menu.set(self._nombre_docente_original or nombres[0])
 
         self.nombre_entry = self._campo("Nombre del curso", curso.get("nombre"))
         self.nucleo_entry = self._campo("Núcleo", curso.get("nucleo"))
@@ -316,7 +331,7 @@ class DialogoEditarCurso(ctk.CTkToplevel):
         self.color_menu.pack(padx=20)
         self.color_menu.set(str(curso.get("color") or SIN_COLOR))
 
-        self.error_label = ctk.CTkLabel(self, text="", text_color="#c0392b", wraplength=340)
+        self.error_label = ctk.CTkLabel(self, text="", text_color=tema.ROJO, wraplength=340)
         self.error_label.pack(pady=(10, 0))
 
         botones = ctk.CTkFrame(self, fg_color="transparent")
@@ -344,6 +359,18 @@ class DialogoEditarCurso(ctk.CTkToplevel):
             self.error_label.configure(text="El nombre no puede quedar vacío.")
             return
 
+        nombre_docente = self.docente_menu.get()
+        docente_id = self._docentes_por_nombre.get(nombre_docente)
+        cambia_docente = docente_id is not None and nombre_docente != self._nombre_docente_original
+        if cambia_docente and not messagebox.askyesno(
+            "Cambiar de docente",
+            f"«{self.curso['nombre']}» va a pasar de {self._nombre_docente_original or 'sin asignar'} "
+            f"a {nombre_docente}.\n\n"
+            "Las planeaciones e informes ya cargados siguen atribuidos a quien los cargó — "
+            "esto solo cambia quién ve y carga el curso de ahora en adelante.\n\n¿Confirmar?",
+        ):
+            return
+
         color = self.color_menu.get()
         cambios = {
             "nombre": nombre,
@@ -352,5 +379,7 @@ class DialogoEditarCurso(ctk.CTkToplevel):
             "edad_hasta": self.hasta_entry.get().strip(),
             "color": "" if color == SIN_COLOR else color,
         }
+        if docente_id is not None:
+            cambios["docente_id"] = docente_id
         self.guardar_boton.configure(state="disabled", text="Guardando...")
         self.on_guardar(self.curso["id"], cambios, self)

@@ -16,14 +16,14 @@ def texto_devoluciones(devoluciones: list[dict]) -> str:
         por = d.get("por") or "el revisor"
         motivo = d.get("motivo") or "(sin motivo)"
         if d.get("tipo") == "planeacion":
-            cabeza = f"• Planeación de {d.get('curso') or 'tu curso'} ({d.get('fecha', '')})"
+            cabeza = f"• Planeación de {d.get('curso') or 'su curso'} ({d.get('fecha', '')})"
         else:
             cabeza = f"• Informe del mes {d.get('mes', '')}"
         lineas.append(f"{cabeza}\n   Devuelto por {por}: {motivo}")
 
     plural = "cosas" if len(devoluciones) > 1 else "cosa"
     return (
-        f"Un revisor te devolvió {len(devoluciones)} {plural} para corregir y volver a "
+        f"Un revisor le devolvió {len(devoluciones)} {plural} para corregir y volver a "
         "enviar:\n\n" + "\n\n".join(lineas) +
-        "\n\nCorregilas y guardá de nuevo: vuelven a quedar pendientes de revisión."
+        "\n\nCorríjalas y guarde de nuevo: vuelven a quedar pendientes de revisión."
     )

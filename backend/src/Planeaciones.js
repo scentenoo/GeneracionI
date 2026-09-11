@@ -109,7 +109,7 @@ function guardar_documento_planeacion(token, planeacion_id, archivo) {
   const fila = findRowById_(SHEET_NAMES.PLANEACIONES, planeacion_id);
   if (!fila) throw new Error('Planeación no encontrada');
   if (String(fila.docente_id) !== String(sesion.id) && !puedeSupervisar_(sesion)) {
-    throw new Error('No tienes permiso para modificar esa planeación');
+    throw new Error('No tiene permiso para modificar esa planeación');
   }
   if (!archivo || !archivo.base64) throw new Error('Falta el documento');
 
@@ -157,7 +157,7 @@ function obtener_foto_planeacion(token, id) {
   const fila = findRowById_(SHEET_NAMES.PLANEACIONES, id);
   if (!fila) throw new Error(`No se encontró la planeación ${id}`);
   if (String(fila.docente_id) !== String(sesion.id) && !puedeSupervisar_(sesion)) {
-    throw new Error('No tienes permiso para ver esa planeación');
+    throw new Error('No tiene permiso para ver esa planeación');
   }
   return fotosClaseDriveIds_(fila)
     .map((driveId) => archivoABase64_(driveId))
@@ -180,7 +180,7 @@ function obtener_planeaciones(token, docente_id, curso_id, resumen) {
   const targetId = docente_id || sesion.id;
 
   if (String(targetId) !== String(sesion.id) && !puedeSupervisar_(sesion)) {
-    throw new Error('No tienes permiso para ver planeaciones de otro docente');
+    throw new Error('No tiene permiso para ver planeaciones de otro docente');
   }
 
   const filas = readRowsWhere_(
@@ -225,7 +225,7 @@ function obtener_planeacion(token, id) {
   const fila = findRowById_(SHEET_NAMES.PLANEACIONES, id);
   if (!fila) throw new Error(`No se encontró la planeación ${id}`);
   if (String(fila.docente_id) !== String(sesion.id) && !puedeSupervisar_(sesion)) {
-    throw new Error('No tienes permiso para ver esa planeación');
+    throw new Error('No tiene permiso para ver esa planeación');
   }
   const datos = parsePlaneacionRow_(fila);
   // El historial de revisión viaja con la planeación para imprimirse al
@@ -263,7 +263,7 @@ function editar_planeacion(token, id, cambios, fotos) {
 
   const esDueno = String(fila.docente_id) === String(sesion.id);
   if (!esDueno && !puedeSupervisar_(sesion)) {
-    throw new Error('Solo podés editar tus propias planeaciones');
+    throw new Error('Solo puede editar sus propias planeaciones');
   }
   requireMesAbierto_(sesion, fila.curso_id, mesDeFecha_(fila.fecha));
 
@@ -286,7 +286,7 @@ function editar_planeacion(token, id, cambios, fotos) {
       if (colision) {
         throw new Error(
           `Ya existe otra planeación de este curso para el ${fechaCorta_(diaNuevo)}. ` +
-          'No se puede tener dos clases el mismo día — elegí otra fecha.'
+          'No se puede tener dos clases el mismo día — elija otra fecha.'
         );
       }
     }
@@ -352,7 +352,7 @@ function eliminar_planeacion(token, id) {
   const fila = findRowById_(SHEET_NAMES.PLANEACIONES, id);
   if (!fila) throw new Error(`No se encontró la planeación ${id}`);
   if (String(fila.docente_id) !== String(sesion.id)) {
-    throw new Error('Solo podés eliminar tus propias planeaciones');
+    throw new Error('Solo puede eliminar sus propias planeaciones');
   }
   requireMesAbierto_(sesion, fila.curso_id, mesDeFecha_(fila.fecha));
 
@@ -383,7 +383,7 @@ function obtener_estado_mes(token, curso_id, mes) {
   const curso = findRowById_(SHEET_NAMES.CURSOS, curso_id);
   if (!curso) throw new Error('Curso no encontrado');
   if (String(curso.docente_id) !== String(sesion.id) && !puedeSupervisar_(sesion)) {
-    throw new Error('No tienes permiso para ver el estado de ese curso');
+    throw new Error('No tiene permiso para ver el estado de ese curso');
   }
 
   const planeaciones = readRowsWhere_(
