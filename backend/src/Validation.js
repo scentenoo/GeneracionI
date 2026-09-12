@@ -18,6 +18,9 @@ const MAX_FOTOS_CLASE = 3;
 /** Cada clase tiene que sumar al menos 2 horas repartidas entre sus momentos. */
 const MINUTOS_MINIMOS_CLASE = 120;
 
+/** Meta de horas de gestión externa (fuera de sede) que se espera por directivo al mes. */
+const HORAS_OBJETIVO_MENSUAL = 8;
+
 // Mínimo de palabras por momento del Diario Pedagógico (formato del
 // programa): el inicio se describe corto, el desarrollo es el grueso de la
 // clase, el cierre otra vez más breve.

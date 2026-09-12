@@ -4,7 +4,7 @@ from __future__ import annotations
 import customtkinter as ctk
 
 import api_client
-from config import APP_VERSION, comparar_versiones
+from config import APP_VERSION, TEMA_JSON, comparar_versiones
 from services import ortografia
 from ui import ctk_parches
 from ui.app import App
@@ -13,8 +13,16 @@ from ui.tareas import en_segundo_plano
 
 def main():
     ctk_parches.aplicar()
-    ctk.set_appearance_mode("system")
-    ctk.set_default_color_theme("green")
+    ctk.set_appearance_mode("light")
+    # Tema propio (ver ui/tema.py y client/assets/tema_generacion_i.json):
+    # sin esto, cualquier widget que no fije sus colores a mano cae en el
+    # azul/verde-menta genérico de customtkinter y con esquinas casi rectas
+    # (radius 6) — el motivo real por el que la app entera no se parecía al
+    # mockup, más que cualquier pantalla puntual. "light" fijo y no "system"
+    # porque el mockup es un diseño de un solo modo: con "system" un equipo
+    # en modo oscuro de Windows mezclaría este tema claro con la mitad
+    # "dark" del tema, que no está diseñada aparte.
+    ctk.set_default_color_theme(str(TEMA_JSON))
 
     # El diccionario del corrector ortográfico tarda un momento en cargar
     # (~60 mil palabras); arrancarlo ya, mientras se ve el login, hace que
@@ -24,7 +32,13 @@ def main():
     app = App()
 
     def verificar():
-        en_segundo_plano(app, api_client.version_actual, al_responder, al_fallar)
+        # Sin overlay: el telón (ver App._mostrar_telon) ya cubre esta
+        # espera. Mostrar el overlay genérico encima solo duplicaba trabajo
+        # de construcción justo al abrir, sin agregar nada que el telón no
+        # dijera ya.
+        en_segundo_plano(
+            app, api_client.version_actual, al_responder, al_fallar, mostrar_overlay=False
+        )
 
     def al_responder(info):
         vigente = str(info.get("version", "")).strip()

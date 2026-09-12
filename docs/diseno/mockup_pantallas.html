@@ -1,0 +1,152 @@
+<!--
+  Referencia de diseño (Design Claude Canvas) para el rediseño de la app.
+  Extraído del export original: se guarda solo el marcado real (estilos
+  inline + estructura) y los datos de ejemplo, sin el envoltorio del
+  bundler (manifest de fuentes en base64, loader JS, etc.) que no aporta
+  nada para comparar contra la implementación en customtkinter.
+
+  No se ejecuta ni se sirve: es solo material de consulta para no perder
+  el mockup entre sesiones.
+-->
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  body { margin: 0; background: #DCE1DD; font-family: Poppins, Helvetica, Arial, sans-serif; }
+  a { color: #1F7A3F; }
+  a:hover { color: #0F3D2E; }
+</style>
+</head>
+<body>
+
+<div style="width:1920px;height:1080px;display:flex;overflow:hidden;font-family:Poppins,Helvetica,Arial,sans-serif;color:#1F2A24;background:#F5F6F5">
+
+  <!-- ================= SIDEBAR ================= -->
+  <div style="width:270px;flex:0 0 270px;background:#0F3D2E;display:flex;flex-direction:column;height:100%">
+
+    <div style="background:#E8A11C;padding:20px 22px;display:flex;align-items:center;gap:14px">
+      <div style="width:42px;height:42px;border-radius:9px;background:#FFFFFF;flex:0 0 42px;display:flex;align-items:center;justify-content:center">
+        <img src="LOGO" alt="Generación-I" style="width:30px;height:30px;object-fit:contain;display:block">
+      </div>
+      <div>
+        <div style="font-family:Oswald,Poppins,sans-serif;font-size:22px;font-weight:600;color:#FFFFFF;letter-spacing:.01em;line-height:1.1">Generación i</div>
+        <div style="font-size:12px;color:#FFF6E4;letter-spacing:.02em">Plataforma educativa</div>
+      </div>
+    </div>
+
+    <div style="padding:20px 22px 10px">
+      <div style="font-family:Oswald,Poppins,sans-serif;font-size:12px;font-weight:600;letter-spacing:.18em;color:#E8A11C;text-transform:uppercase">Menú principal</div>
+      <div style="height:2px;width:52px;background:#E8A11C;margin-top:6px;border-radius:2px"></div>
+    </div>
+
+    <!-- Ítem ACTIVO: una sola tarjeta redondeada (radius 11px) con fondo
+         #17573F (verde más claro que el fondo del sidebar), borde
+         izquierdo de 3px dorado INSERTADO dentro de esa misma tarjeta
+         (no una barra separada afuera de un botón), texto blanco 600. -->
+    <div style="display:flex;align-items:center;gap:13px;padding:12px 14px;border-radius:11px;background:#17573F;color:#FFFFFF;font-size:14px;font-weight:600;cursor:pointer;border-left:3px solid #E8A11C">
+      <span>Planeaciones y actividades</span>
+    </div>
+    <!-- Ítem INACTIVO: texto apagado #B9C7C0, fondo transparente,
+         border-left transparente (mismo grosor, para no saltar de
+         posición al activarse), hover fondo #144734 texto blanco. -->
+    <div style="display:flex;align-items:center;gap:13px;padding:12px 14px;border-radius:11px;color:#B9C7C0;font-size:14px;font-weight:500;cursor:pointer;border-left:3px solid transparent">
+      <span>Generar informe mensual</span>
+    </div>
+
+    <!-- Tarjeta de perfil al fondo -->
+    <div style="background:#0B3125;border:1px solid #1C5340;border-radius:14px;padding:14px">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="width:42px;height:42px;border-radius:999px;background:#E8A11C;color:#0F3D2E;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;flex:0 0 42px">AT</div>
+        <div style="min-width:0">
+          <div style="font-size:14px;font-weight:600;color:#FFFFFF">Alejandro Torrado</div>
+          <div style="font-size:12px;color:#B9C7C0">Docente · administrador</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:center;gap:9px;margin-top:12px;background:transparent;border:1px solid #2A6952;color:#B9C7C0;border-radius:10px;padding:10px 0;font-size:13px;font-weight:600;cursor:pointer">
+        <span>⇥  Cerrar sesión</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MAIN ================= -->
+  <div style="flex:1;min-width:0;display:flex;flex-direction:column;height:100%">
+
+    <!-- Encabezado superior: 70px, mismo verde oscuro que el sidebar,
+         título en mayúsculas dorado con letter-spacing amplio, buscador
+         como PÍLDORA BLANCA embebida directo en la barra (no una caja
+         gris aparte), "Periodo activo" a la derecha en gris claro. -->
+    <div style="height:70px;flex:0 0 70px;background:#0F3D2E;display:flex;align-items:center;gap:28px;padding:0 32px">
+      <div style="font-family:Oswald,Poppins,sans-serif;font-size:23px;font-weight:600;letter-spacing:.1em;color:#E8A11C;text-transform:uppercase">PLANEACIONES Y ACTIVIDADES</div>
+      <div style="flex:1;max-width:560px;background:#FFFFFF;border-radius:999px;padding:10px 18px;display:flex;align-items:center;gap:12px">
+        <div style="width:13px;height:13px;border:2px solid #8A948E;border-radius:999px;box-sizing:border-box"></div>
+        <span style="font-size:13px;color:#8A948E">Buscar planeación, informe, curso o docente…</span>
+      </div>
+      <div style="flex:1"></div>
+      <div style="font-size:12px;color:#B9C7C0;white-space:nowrap">Periodo activo · <span style="color:#FFFFFF;font-weight:600">2026-09</span></div>
+    </div>
+
+    <!-- Área de contenido: fondo #F5F6F5 (gris cálido muy claro, NO
+         blanco puro), padding generoso 26px 32px 40px. -->
+    <div style="flex:1;min-height:0;overflow:auto;padding:26px 32px 40px;background:#F5F6F5">
+
+      <!-- Botón "Volver": pastilla con borde, esquinas muy redondeadas -->
+      <div style="display:inline-flex;align-items:center;gap:8px;background:#FFFFFF;border:1px solid #DDE2DE;color:#4A574F;border-radius:10px;padding:9px 18px;font-size:13px;font-weight:500;cursor:pointer;margin-bottom:18px">← Volver</div>
+
+      <!-- Sub-tabs de un hub: pastillas, activa verde oscuro sólido,
+           inactivas blancas con borde -->
+      <div style="display:flex;gap:10px;margin-bottom:22px">
+        <div style="padding:10px 20px;border-radius:999px;background:#0F3D2E;color:#FFFFFF;font-size:13px;font-weight:600;cursor:pointer">Horas en sede</div>
+        <div style="padding:10px 20px;border-radius:999px;background:#FFFFFF;border:1px solid #DDE2DE;color:#4A574F;font-size:13px;font-weight:500;cursor:pointer">Mis planeaciones</div>
+        <div style="padding:10px 20px;border-radius:999px;background:#FFFFFF;border:1px solid #DDE2DE;color:#4A574F;font-size:13px;font-weight:500;cursor:pointer">Horas externas</div>
+      </div>
+
+      <!-- Tarjeta de contenido genérica: blanco, borde #E4E6E4, radio 16px
+           (muy redondeado), padding 26px 28px -->
+      <div style="background:#FFFFFF;border:1px solid #E4E6E4;border-radius:16px;padding:26px 28px">
+
+        <!-- Acordeón: encabezado con número en caja redondeada
+             (#F1F5F2 fondo, texto verde oscuro), título, conteo de
+             estado a la derecha (verde si ok, rojo si falta), flecha -->
+        <div style="border:1px solid #E4E6E4;border-radius:16px;overflow:hidden">
+          <div style="display:flex;align-items:center;gap:16px;padding:18px 22px;cursor:pointer">
+            <div style="width:34px;height:30px;border-radius:9px;background:#F1F5F2;color:#0F3D2E;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:0 0 34px">1</div>
+            <div style="flex:1;font-size:14px;font-weight:600">Momento inicial</div>
+            <div style="font-size:12px;color:#C0392B">0 / 80 palabras</div>
+            <div style="color:#7A857E;font-size:11px">▼</div>
+          </div>
+        </div>
+
+        <!-- Chips / pills de estado -->
+        <div style="display:inline-block;background:#E7F6EC;color:#1F7A3F;border-radius:999px;padding:5px 13px;font-size:12px;font-weight:600">Aprobada</div>
+        <div style="display:inline-block;background:#FDF2DC;color:#8A6114;border-radius:999px;padding:5px 13px;font-size:12px;font-weight:600">Pendiente</div>
+        <div style="display:inline-block;background:#FDECEA;color:#C0392B;border-radius:999px;padding:5px 13px;font-size:12px;font-weight:600">Faltan 2.5 h</div>
+        <div style="display:inline-block;background:#EFF1EF;color:#6B756F;border-radius:999px;padding:5px 13px;font-size:12px;font-weight:600">Mes cerrado</div>
+
+        <!-- Botones -->
+        <div style="background:#2FA84F;color:#FFFFFF;border-radius:10px;padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer">Botón primario (hover #248A3D)</div>
+        <div style="border:1px solid #2FA84F;color:#1F7A3F;border-radius:9px;padding:8px 16px;font-size:12px;font-weight:600;cursor:pointer">Botón secundario / Editar</div>
+        <div style="border:1px solid #DDE2DE;color:#4A574F;border-radius:9px;padding:8px 16px;font-size:12px;cursor:pointer">Botón neutro (Abrir/Descargar)</div>
+        <div style="background:#C0392B;color:#FFFFFF;border-radius:9px;padding:8px 16px;font-size:12px;font-weight:600;cursor:pointer">Botón peligro (Eliminar/Quitar)</div>
+        <div style="background:#8A6114;color:#FFFFFF;border-radius:9px;padding:8px 16px;font-size:12px;font-weight:600;cursor:pointer">Botón devolver</div>
+
+        <!-- Avatar iniciales -->
+        <div style="width:44px;height:44px;border-radius:999px;background:#F1F5F2;color:#0F3D2E;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;flex:0 0 44px">AT</div>
+
+        <!-- Buscador de lista (no el del encabezado) -->
+        <div style="display:flex;align-items:center;gap:10px;background:#FFFFFF;border:1px solid #DDE2DE;border-radius:999px;padding:11px 16px;width:280px">
+          <div style="width:12px;height:12px;border:2px solid #8A948E;border-radius:999px;box-sizing:border-box;flex:0 0 12px"></div>
+          <span style="font-size:13px;color:#8A948E">Buscar…</span>
+        </div>
+
+        <!-- Barra de progreso -->
+        <div style="height:7px;flex:1;border-radius:4px;background:#2FA84F"></div>
+        <div style="height:7px;flex:1;border-radius:4px;background:#E4E6E4"></div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

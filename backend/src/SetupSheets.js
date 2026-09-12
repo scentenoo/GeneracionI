@@ -102,6 +102,8 @@ const ESQUEMA_SHEETS_ = {
   [SHEET_NAMES.HORAS_GESTION]: [
     'id', 'directivo_id', 'fecha', 'actividad', 'horas_sede',
     'entregable', 'link_soporte', 'foto_drive_id', 'creado_en',
+    // Revisión (Revisar → Horas externas): pendiente / aprobado / devuelto.
+    'estado', 'revisado_por', 'revisado_en', 'motivo_devolucion',
   ],
   // Un mes que el equipo directivo volvió a abrir para un curso puntual,
   // después de la fecha de corte.

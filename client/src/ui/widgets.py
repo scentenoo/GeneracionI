@@ -158,7 +158,12 @@ class BarraDeSubida(ctk.CTkFrame):
     terminar (con éxito o con error)."""
 
     def __init__(self, master):
-        super().__init__(master, fg_color="transparent")
+        # height=1 explícito: CTkFrame por defecto reserva 200px de alto
+        # aunque esté vacía y sin empacar nada adentro (sale así hasta que
+        # `iniciar()` empaqueta la barra/el label) — invisible al fondo de
+        # un formulario scrollable, pero rompe cualquier panel de alto fijo
+        # que la contenga (ver «Antes de guardar» en planeacion_screen.py).
+        super().__init__(master, fg_color="transparent", height=1)
         self.barra = ctk.CTkProgressBar(self)
         self.barra.set(0)
         self.label = ctk.CTkLabel(self, text="", text_color="gray", font=ctk.CTkFont(size=11))
@@ -324,6 +329,31 @@ class CampoConInstruccion(ctk.CTkFrame):
             self.textbox.tag_remove(_TAG_ORTOGRAFIA, "1.0", "end")
 
 
+def campo_label(padre, texto: str) -> ctk.CTkLabel:
+    """Etiqueta de campo corto de formulario (Fecha, Curso, Horas...),
+    como en el mockup: mayúscula, chica, gris, semi-negrita — muy distinta
+    de un CTkLabel liso, que es lo que usaba toda la app hasta ahora. No
+    la usan las preguntas largas (objetivo, observaciones, narrativa del
+    informe): esas van en letra normal, ver CampoConContador/
+    CampoConInstruccion — la mayúscula ahí volvería ilegible un párrafo
+    entero."""
+    return ctk.CTkLabel(
+        padre, text=texto.upper(), font=tema.fuente(11, "bold"),
+        text_color=tema.TEXTO_MUTED, anchor="w",
+    )
+
+
+def pildora(padre, texto: str, texto_color: str, fondo_color: str) -> ctk.CTkLabel:
+    """Cápsula con fondo teñido de su propio color (mínimo/máximo de fotos,
+    minutos completos, presentes en asistencia...) — a diferencia de
+    `chip()`, que usa siempre el mismo fondo gris parejo sea cual sea el
+    color del texto."""
+    return ctk.CTkLabel(
+        padre, text=f"  {texto}  ", text_color=texto_color, font=tema.fuente(12, "bold"),
+        corner_radius=999, fg_color=fondo_color,
+    )
+
+
 def chip(padre, texto: str, color: str) -> ctk.CTkLabel:
     """Etiqueta de estado tipo cápsula (rediseño). Antes vivía duplicada
     como `_chip` adentro de dashboard_screen.py; queda acá para que
@@ -365,6 +395,167 @@ class TarjetaResumen(ctk.CTkFrame):
 
     def actualizar(self, numero):
         self.numero_label.configure(text=str(numero))
+
+
+def avatar_iniciales(
+    padre, nombre: str, tamano: int = 40, color: str = tema.DORADO_ACENTO,
+    text_color: str = tema.VERDE_OSCURO,
+) -> ctk.CTkFrame:
+    """Círculo con las iniciales de una persona (primera letra de las dos
+    primeras palabras del nombre), para la barra lateral y las tarjetas de
+    Usuarios.
+
+    Envuelto en un `CTkFrame` con `pack_propagate(False)` en vez de un
+    `CTkLabel` suelto con `width`/`height`: un `CTkLabel` se expande para
+    que quepan las dos letras del texto y el círculo termina ovalado
+    (probado a ojo con "AT"/"MA" — ver captura de la sesión). El frame sí
+    respeta el tamaño fijo pase lo que pase adentro."""
+    palabras = [p for p in nombre.split() if p]
+    iniciales = "".join(p[0] for p in palabras[:2]).upper() or "?"
+    circulo = ctk.CTkFrame(
+        padre, width=tamano, height=tamano, corner_radius=tamano // 2, fg_color=color,
+    )
+    circulo.pack_propagate(False)
+    ctk.CTkLabel(
+        circulo, text=iniciales, text_color=text_color, font=tema.fuente(13, "bold"),
+    ).place(relx=0.5, rely=0.5, anchor="center")
+    return circulo
+
+
+class Acordeon(ctk.CTkFrame):
+    """Sección colapsable: encabezado clicleable (título + flecha) y un
+    frame de contenido que se muestra/oculta. Reemplaza el patrón manual
+    de "diccionario de booleanos + flecha a mano" que varias pantallas
+    (momentos de clase, gestión institucional del informe) reinventaban
+    cada una por su cuenta.
+
+    Uso: `ac = Acordeon(padre, "Momento inicial"); algo.pack(in_=ac.contenido)`.
+    `abierto` decide el estado inicial; `en_cambiar(abierto: bool)` es un
+    callback opcional para cuando quien llama necesita reaccionar al
+    abrir/cerrar (por ejemplo, revisar ortografía recién al mostrar)."""
+
+    def __init__(
+        self, master, titulo: str, abierto: bool = False,
+        en_cambiar: Callable[[bool], None] | None = None,
+        encabezado_extra: Callable[[ctk.CTkFrame], None] | None = None,
+        prefijo: Callable[[ctk.CTkFrame], None] | None = None,
+    ):
+        super().__init__(
+            master, fg_color=tema.FONDO_TARJETA, corner_radius=14,
+            border_width=1, border_color=tema.BORDE_TARJETA,
+        )
+        self._abierto = abierto
+        self._en_cambiar = en_cambiar
+
+        # Transparente (no el verde-gris tenue del mockup): CTk no redondea
+        # una esquina sola, y un fondo propio acá asomaría cuadrado por
+        # detrás de las esquinas redondeadas de la tarjeta que lo contiene.
+        self.encabezado = ctk.CTkFrame(self, fg_color="transparent", cursor="hand2")
+        self.encabezado.pack(fill="x")
+        if prefijo is not None:
+            # El prefijo (una insignia numerada, por ejemplo) se hace cargo
+            # del margen izquierdo de 16px — si el título pusiera el suyo
+            # además, quedarían los dos sumados.
+            prefijo(self.encabezado)
+        self.titulo_label = ctk.CTkLabel(
+            self.encabezado, text=titulo, font=tema.fuente(14, "bold"), anchor="w",
+        )
+        padx_titulo = (0, 8) if prefijo is not None else (16, 8)
+        self.titulo_label.pack(side="left", fill="x", expand=True, padx=padx_titulo, pady=12)
+        # La flecha se empaqueta ANTES que `encabezado_extra`: en el
+        # gestor de `pack`, cada widget nuevo del lado "right" se ubica a
+        # la izquierda de los ya empacados de ese lado — así lo que agregue
+        # `encabezado_extra` (minutos, contador de palabras...) queda a la
+        # izquierda de la flecha, como en el mockup, y no al revés.
+        self.flecha_label = ctk.CTkLabel(
+            self.encabezado, text="", text_color=tema.TEXTO_MUTED, font=tema.fuente(11), width=16,
+        )
+        self.flecha_label.pack(side="right", padx=(0, 16))
+        if encabezado_extra is not None:
+            encabezado_extra(self.encabezado)
+
+        self.contenido = ctk.CTkFrame(self, fg_color="transparent")
+
+        for widget in (self.encabezado, self.titulo_label, self.flecha_label):
+            widget.bind("<Button-1>", lambda _e: self.alternar())
+
+        self._actualizar()
+
+    def alternar(self):
+        self._abierto = not self._abierto
+        self._actualizar()
+        if self._en_cambiar is not None:
+            self._en_cambiar(self._abierto)
+
+    def abrir(self):
+        if not self._abierto:
+            self.alternar()
+
+    def cerrar(self):
+        if self._abierto:
+            self.alternar()
+
+    def _actualizar(self):
+        self.flecha_label.configure(text="▲" if self._abierto else "▼")
+        if self._abierto:
+            self.contenido.pack(fill="x", padx=16, pady=(0, 16))
+        else:
+            self.contenido.pack_forget()
+
+    def configurar_titulo(self, titulo: str):
+        self.titulo_label.configure(text=titulo)
+
+
+class CampoBusqueda(ctk.CTkFrame):
+    """Entry de búsqueda con ícono de lupa que llama a `on_cambiar(texto)`
+    con un pequeño debounce (misma idea que el corrector ortográfico: no
+    refiltrar en cada tecla, esperar una pausa corta) — para filtrar en el
+    cliente listas que la pantalla ya cargó completas en memoria, sin ida
+    al backend."""
+
+    _DEBOUNCE_MS = 300
+    _ALTO = 38
+
+    def __init__(self, master, placeholder: str, on_cambiar: Callable[[str], None], ancho: int = 260):
+        super().__init__(
+            master, fg_color=tema.FONDO_TARJETA, corner_radius=self._ALTO // 2,
+            border_width=1, border_color=tema.BORDE_TARJETA, width=ancho, height=self._ALTO,
+        )
+        # Sin alto fijo + pack_propagate(False) el frame crece con el
+        # contenido (entry + label) y con corner_radius=999 termina como
+        # un óvalo gigante en vez de una píldora angosta — visto a ojo con
+        # el harness de captura de pantalla de la sesión.
+        self.pack_propagate(False)
+        self._on_cambiar = on_cambiar
+        self._pendiente_id = None
+
+        ctk.CTkLabel(
+            self, text="🔎", font=tema.fuente(12), text_color=tema.TEXTO_MUTED, width=18,
+        ).pack(side="left", padx=(12, 4))
+        self.entry = ctk.CTkEntry(
+            self, placeholder_text=placeholder, fg_color="transparent", border_width=0,
+        )
+        self.entry.pack(side="left", fill="both", expand=True, padx=(0, 12))
+        self.entry.bind("<KeyRelease>", self._al_teclear)
+
+    def _al_teclear(self, _evento=None):
+        if self._pendiente_id is not None:
+            try:
+                self.after_cancel(self._pendiente_id)
+            except Exception:  # noqa: BLE001
+                pass
+        self._pendiente_id = self.after(self._DEBOUNCE_MS, self._disparar)
+
+    def _disparar(self):
+        self._pendiente_id = None
+        self._on_cambiar(self.entry.get().strip())
+
+    def get(self) -> str:
+        return self.entry.get().strip()
+
+    def limpiar(self):
+        self.entry.delete(0, "end")
+        self._on_cambiar("")
 
 
 class Tabla(ctk.CTkFrame):

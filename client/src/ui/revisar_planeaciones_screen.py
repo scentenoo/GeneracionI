@@ -47,6 +47,7 @@ class RevisarPlaneacionesScreen(ctk.CTkScrollableFrame):
         self._planeaciones: list[dict] = []
         self._mes_cargado = ""
         self._mostrar_hasta = _TANDA
+        self._filtro_texto = ""
 
         if on_volver is not None:
             ctk.CTkButton(self, text="← Volver", width=90, command=on_volver).pack(anchor="w", pady=(0, 10))
@@ -97,6 +98,14 @@ class RevisarPlaneacionesScreen(ctk.CTkScrollableFrame):
             fallo,
         )
 
+    def filtrar(self, texto: str):
+        """Lo llama el buscador del encabezado superior (ver
+        `RevisarHubScreen`) — filtra por curso o docente sobre lo que ya
+        está en memoria."""
+        self._filtro_texto = texto.strip().lower()
+        self._mostrar_hasta = _TANDA
+        self._redibujar()
+
     def _redibujar(self):
         """Reconstruye la lista con lo que ya está en memoria —no le pide
         nada de nuevo al backend—, ordenada: pendientes primero, devueltas
@@ -116,9 +125,21 @@ class RevisarPlaneacionesScreen(ctk.CTkScrollableFrame):
         self._planeaciones.sort(key=lambda p: p["fecha"], reverse=True)
         self._planeaciones.sort(key=lambda p: _PRIORIDAD_ESTADO.get(p.get("estado", "pendiente"), 0))
 
+        filtradas = self._planeaciones
+        if self._filtro_texto:
+            filtradas = [
+                p for p in filtradas
+                if self._filtro_texto in f"{p.get('curso', '')} {p.get('docente', '')}".lower()
+            ]
+            if not filtradas:
+                ctk.CTkLabel(
+                    self.contenedor, text="Ninguna planeación coincide con la búsqueda.", text_color=GRIS,
+                ).pack(anchor="w", pady=10)
+                return
+
         # De a tandas, con "Cargar más" al final: ver _TANDA arriba.
-        visibles = self._planeaciones[: self._mostrar_hasta]
-        restantes = len(self._planeaciones) - len(visibles)
+        visibles = filtradas[: self._mostrar_hasta]
+        restantes = len(filtradas) - len(visibles)
         for p in visibles:
             self._fila_planeacion(p)
 

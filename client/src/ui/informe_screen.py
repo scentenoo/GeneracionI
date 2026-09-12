@@ -14,7 +14,7 @@ from ui.tareas import cache
 from services import date_utils, vista_previa
 from ui.avance_semana_editor import AvanceSemanaEditor
 from ui.tareas import en_segundo_plano, en_segundo_plano_con_progreso
-from ui.widgets import BarraDeSubida, CampoConInstruccion, MIN_PALABRAS, contar_palabras
+from ui.widgets import Acordeon, BarraDeSubida, CampoConInstruccion, MIN_PALABRAS, contar_palabras
 
 # Las seis preguntas narrativas (2.1 a 2.6) piden más desarrollo que un
 # campo de detalle común — mismo mínimo que exige el backend (Informes.js).
@@ -95,50 +95,71 @@ class InformeScreen(ctk.CTkScrollableFrame):
         )
         self.faltantes_label.pack(fill="x", pady=(4, 0))
 
-    def _campo(self, etiqueta: str, instruccion: str = "", minimo: int = MIN_PALABRAS) -> CampoConInstruccion:
-        campo = CampoConInstruccion(self, etiqueta, instruccion, minimo=minimo)
+        # Empacada acá mismo (no en _cargar_entregado) para que quede
+        # siempre inmediatamente debajo del texto de faltantes: si se
+        # empacara más tarde, quedaría al final de todo el formulario en
+        # vez de debajo de su propio texto (pack ordena por momento de
+        # llamada, no por creación).
+        self.faltantes_barra = ctk.CTkProgressBar(self)
+        self.faltantes_barra.set(0)
+        self.faltantes_barra.pack(fill="x", pady=(6, 0))
+
+    def _campo(
+        self, etiqueta: str, instruccion: str = "", minimo: int = MIN_PALABRAS, padre=None,
+    ) -> CampoConInstruccion:
+        campo = CampoConInstruccion(padre if padre is not None else self, etiqueta, instruccion, minimo=minimo)
         campo.pack(fill="x")
         return campo
 
     def _construir_narrativa(self):
-        ctk.CTkLabel(self, text="2. Desarrollo del curso en el mes", font=ctk.CTkFont(weight="bold")).pack(
-            anchor="w", pady=(16, 0)
-        )
+        # Acordeon en vez de las 6 cajas siempre visibles: son las preguntas
+        # más largas del formulario, y colapsadas de a una vez completadas
+        # dejan ver el resto de la pantalla sin scroll interminable.
+        self.narrativa_acordeon = Acordeon(self, "2. Desarrollo del curso en el mes", abierto=True)
+        self.narrativa_acordeon.pack(fill="x", pady=(16, 0))
+        contenedor = self.narrativa_acordeon.contenido
+
         # Preguntas e instrucciones tal cual el formato oficial del programa
         # (formato informe mensual.docx). La instrucción va como marca de agua.
         self.objetivo_box = self._campo(
             "2.1. ¿Cuáles eran los objetivos o metas planteadas para el mes y en qué medida se cumplieron?",
             "Texto amplio: describa con amplitud los objetivos del mes, no un texto por salir del paso.",
             minimo=MIN_PALABRAS_NARRATIVA,
+            padre=contenedor,
         )
         self.logros_box = self._campo(
             "2.2. Principales logros y avances observados en los estudiantes durante el mes.",
             "Háganlos a conciencia, revisando el nivel del grupo y los avances; sirve de insumo para "
             "mostrar que el programa avanza.",
             minimo=MIN_PALABRAS_NARRATIVA,
+            padre=contenedor,
         )
         self.dificultades_box = self._campo(
             "2.3. Dificultades, inconvenientes o novedades presentadas.",
             "En lista.",
             minimo=MIN_PALABRAS_NARRATIVA,
+            padre=contenedor,
         )
         self.estrategias_box = self._campo(
             "2.4. Estrategias, ajustes metodológicos implementados durante el mes.",
             "Describa con amplitud las estrategias desarrolladas en las clases; preste especial atención "
             "a si tuvo que hacer adecuaciones con estudiantes con discapacidad o trastornos del desarrollo.",
             minimo=MIN_PALABRAS_NARRATIVA,
+            padre=contenedor,
         )
         self.situacion_box = self._campo(
             "2.5. Describa alguna situación excepcionalmente positiva que haya notado en algún estudiante o grupo.",
             "Escriba las cosas positivas dignas de resaltar y mostrar; lo que escriba acá se publica en la "
             "bitácora al final del año.",
             minimo=MIN_PALABRAS_NARRATIVA,
+            padre=contenedor,
         )
         self.ctei_box = self._campo(
             "2.6. ¿Cómo integró el componente CTeI (ciencia, tecnología e innovación) en el mes?",
             "Todos los cursos deben integrar la misionalidad científica de Generación-I; describa AMPLIAMENTE "
             "cómo se desarrolló.",
             minimo=MIN_PALABRAS_NARRATIVA,
+            padre=contenedor,
         )
 
     def _construir_avance_semanal(self):
@@ -198,28 +219,29 @@ class InformeScreen(ctk.CTkScrollableFrame):
             self.avances.append(editor)
 
     def _construir_gestion(self):
-        ctk.CTkLabel(self, text="Gestión institucional (su parte como directivo)", font=ctk.CTkFont(weight="bold")).pack(
-            anchor="w", pady=(16, 0)
-        )
+        self.gestion_acordeon = Acordeon(self, "Gestión institucional (su parte como directivo)", abierto=False)
+        self.gestion_acordeon.pack(fill="x", pady=(16, 0))
+        contenedor = self.gestion_acordeon.contenido
+
         # Si tenés varios cursos, las horas de gestión van en UNO solo de los
         # informes del mes; si no, se cobrarían dos veces.
         self.incluir_gestion_var = ctk.BooleanVar(value=True)
         ctk.CTkCheckBox(
-            self,
+            contenedor,
             text="Incluir mis horas de gestión en este informe",
             variable=self.incluir_gestion_var,
         ).pack(anchor="w", pady=(6, 0))
         ctk.CTkLabel(
-            self,
+            contenedor,
             text="Si tiene varios cursos, márquelo en uno solo del mes.",
             text_color="gray",
             font=ctk.CTkFont(size=11),
         ).pack(anchor="w")
-        self.gestion_objetivos_box = self._campo("Objetivos y metas del mes")
-        self.gestion_logros_box = self._campo("Principales logros, avances y entregables clave")
-        self.gestion_novedades_box = self._campo("Novedades, obstáculos o riesgos identificados")
-        self.gestion_estrategias_box = self._campo("Estrategias y acciones correctivas")
-        self.gestion_pendientes_box = self._campo("Pendientes prioritarios para el próximo mes")
+        self.gestion_objetivos_box = self._campo("Objetivos y metas del mes", padre=contenedor)
+        self.gestion_logros_box = self._campo("Principales logros, avances y entregables clave", padre=contenedor)
+        self.gestion_novedades_box = self._campo("Novedades, obstáculos o riesgos identificados", padre=contenedor)
+        self.gestion_estrategias_box = self._campo("Estrategias y acciones correctivas", padre=contenedor)
+        self.gestion_pendientes_box = self._campo("Pendientes prioritarios para el próximo mes", padre=contenedor)
 
     def _construir_acciones(self):
         self.error_label = ctk.CTkLabel(self, text="", text_color="#c0392b", wraplength=450, justify="left")
@@ -497,6 +519,15 @@ class InformeScreen(ctk.CTkScrollableFrame):
                 )
             else:
                 self.faltantes_label.configure(text="")
+
+            if esperadas > 0:
+                self.faltantes_barra.set(min(registradas / esperadas, 1.0))
+                self.faltantes_barra.configure(
+                    progress_color="#2fa84f" if registradas >= esperadas else "#c0392b"
+                )
+            else:
+                self.faltantes_barra.set(0)
+
             self._permitir(faltan == 0)
 
         en_segundo_plano(

@@ -58,6 +58,10 @@ function guardar_horas_gestion(token, datos, fotos) {
       link_soporte: datos.link_soporte || '',
       foto_drive_id: fotoId,
       creado_en: new Date().toISOString(),
+      // Vacío = pendiente (mismo criterio que estaPendiente_ en
+      // Revisiones.js): así una fila de antes del piloto, sin esta
+      // columna, también cuenta como pendiente y no hace falta migrarla.
+      estado: '',
     });
     return { ok: true, id: fila.id };
   } finally {
@@ -75,6 +79,73 @@ function obtener_horas_gestion(token, directivo_id) {
     SHEET_NAMES.HORAS_GESTION,
     (h) => String(h.directivo_id) === String(targetId)
   );
+}
+
+/**
+ * Vista de supervisión: horas de gestión (evidencia con foto+entregable)
+ * de TODO el equipo directivo en un mes, para Revisar → Horas externas.
+ * Solo el administrador — es una vista de supervisión, no de
+ * autoservicio, igual que obtener_revisores/fijar_revisores en
+ * Revisiones.js.
+ *
+ * Mismo patrón que Usuarios.js#obtener_dashboard_directivo: una lectura
+ * de cada hoja, agrupado en memoria, en vez de una llamada por persona.
+ * Devuelve el resumen por persona (total contra HORAS_OBJETIVO_MENSUAL,
+ * para la barra de progreso) y el detalle de actividades (para aprobar o
+ * devolver una por una desde el panel de la derecha).
+ */
+function obtener_horas_del_equipo(token, mes) {
+  const sesion = requireSession_(token);
+  requireAdministrador_(sesion);
+
+  const usuarioPorId = {};
+  readAllRows_(SHEET_NAMES.USUARIOS).forEach((u) => {
+    usuarioPorId[String(u.id)] = u;
+  });
+
+  const filasDelMes = readAllRows_(SHEET_NAMES.HORAS_GESTION).filter(
+    (h) => mesDeFecha_(h.fecha) === mes
+  );
+
+  const totalPorDirectivo = {};
+  filasDelMes.forEach((h) => {
+    const clave = String(h.directivo_id);
+    totalPorDirectivo[clave] = (totalPorDirectivo[clave] || 0) + Number(h.horas_sede || 0);
+  });
+
+  const resumen = Object.keys(totalPorDirectivo).map((directivoId) => {
+    const usuario = usuarioPorId[directivoId];
+    const total = totalPorDirectivo[directivoId];
+    return {
+      directivo_id: Number(directivoId),
+      nombre: usuario ? usuario.nombre : `id ${directivoId}`,
+      rol: usuario ? usuario.rol : '',
+      total_horas: total,
+      objetivo: HORAS_OBJETIVO_MENSUAL,
+      cumple: total >= HORAS_OBJETIVO_MENSUAL,
+    };
+  });
+
+  const actividades = filasDelMes.map((h) => {
+    const usuario = usuarioPorId[String(h.directivo_id)];
+    return {
+      id: h.id,
+      directivo_id: h.directivo_id,
+      directivo: usuario ? usuario.nombre : `id ${h.directivo_id}`,
+      fecha: fechaISO_(h.fecha),
+      actividad: h.actividad,
+      horas_sede: h.horas_sede,
+      entregable: h.entregable,
+      link_soporte: h.link_soporte || '',
+      foto_drive_id: h.foto_drive_id || '',
+      estado: h.estado || ESTADO_PENDIENTE,
+      revisado_por: h.revisado_por || '',
+      revisado_en: h.revisado_en || '',
+      motivo_devolucion: h.motivo_devolucion || '',
+    };
+  });
+
+  return { resumen: resumen, actividades: actividades };
 }
 
 const CAMPOS_EDITABLES_GESTION_ = ['fecha', 'actividad', 'horas_sede', 'entregable', 'link_soporte'];

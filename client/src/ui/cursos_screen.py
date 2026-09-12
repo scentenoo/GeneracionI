@@ -37,6 +37,8 @@ class CursosScreen(ctk.CTkScrollableFrame):
         self.sesion = sesion
         self._docentes_por_nombre: dict[str, int] = {}
         self._nombre_por_docente_id: dict[int, str] = {}
+        self._cursos_cache: list[dict] = []
+        self._filtro_texto = ""
 
         if on_volver is not None:
             ctk.CTkButton(self, text="← Volver", width=90, command=on_volver).pack(anchor="w", pady=(0, 10))
@@ -114,32 +116,21 @@ class CursosScreen(ctk.CTkScrollableFrame):
             lambda exc: self.error_label.configure(text=str(exc), text_color=tema.ROJO),
         )
 
+    def filtrar(self, texto: str):
+        """Lo llama el buscador del encabezado superior (ver
+        `CursosHubScreen._al_cambiar_pestana`) — filtra por nombre,
+        docente o núcleo sobre lo que ya está en memoria."""
+        self._filtro_texto = texto.strip().lower()
+        self._renderizar_lista()
+
     def _cargar_lista(self):
         for w in self.lista_contenedor.winfo_children():
             w.destroy()
         Cargando(self.lista_contenedor, texto="Cargando...").pack(pady=16)
 
         def listo(cursos):
-            for w in self.lista_contenedor.winfo_children():
-                w.destroy()
-
-            activos = [c for c in cursos if c.get("activo")]
-            if not activos:
-                ctk.CTkLabel(self.lista_contenedor, text="Todavía no hay cursos.", text_color=tema.GRIS).pack(anchor="w")
-                return
-
-            # Los que les falta núcleo o edad van primero: son los que hay
-            # que completar antes de que su cuenta de cobro salga bien.
-            def incompleto(c):
-                return not c.get("nucleo") or not (c.get("edad_desde") and c.get("edad_hasta"))
-
-            # Un curso sin color tampoco está terminado —no tiene quien lo
-            # revise— así que sube al mismo grupo de "hay que completar".
-            def pendiente(c):
-                return incompleto(c) or not str(c.get("color") or "").strip()
-
-            for curso in sorted(activos, key=lambda c: (not pendiente(c), str(c["nombre"]).lower())):
-                self._fila_curso(curso, incompleto(curso))
+            self._cursos_cache = cursos
+            self._renderizar_lista()
 
         def fallo(exc):
             for w in self.lista_contenedor.winfo_children():
@@ -152,6 +143,39 @@ class CursosScreen(ctk.CTkScrollableFrame):
             listo,
             fallo,
         )
+
+    def _renderizar_lista(self):
+        """Redibuja con lo que ya está en `self._cursos_cache`, sin pedir
+        nada nuevo al backend — la llaman tanto la carga inicial como el
+        buscador."""
+        for w in self.lista_contenedor.winfo_children():
+            w.destroy()
+
+        activos = [c for c in self._cursos_cache if c.get("activo")]
+        if self._filtro_texto:
+            def coincide(c):
+                docente = self._nombre_por_docente_id.get(c.get("docente_id"), "")
+                texto = f"{c.get('nombre', '')} {docente} {c.get('nucleo', '')}".lower()
+                return self._filtro_texto in texto
+            activos = [c for c in activos if coincide(c)]
+
+        if not activos:
+            mensaje = "Ningún curso coincide con la búsqueda." if self._filtro_texto else "Todavía no hay cursos."
+            ctk.CTkLabel(self.lista_contenedor, text=mensaje, text_color=tema.GRIS).pack(anchor="w")
+            return
+
+        # Los que les falta núcleo o edad van primero: son los que hay
+        # que completar antes de que su cuenta de cobro salga bien.
+        def incompleto(c):
+            return not c.get("nucleo") or not (c.get("edad_desde") and c.get("edad_hasta"))
+
+        # Un curso sin color tampoco está terminado —no tiene quien lo
+        # revise— así que sube al mismo grupo de "hay que completar".
+        def pendiente(c):
+            return incompleto(c) or not str(c.get("color") or "").strip()
+
+        for curso in sorted(activos, key=lambda c: (not pendiente(c), str(c["nombre"]).lower())):
+            self._fila_curso(curso, incompleto(curso))
 
     def _fila_curso(self, curso: dict, incompleto: bool):
         fila = ctk.CTkFrame(

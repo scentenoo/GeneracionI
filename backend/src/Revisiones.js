@@ -249,6 +249,34 @@ function revisar_informe(token, curso_id, mes, aprobar, motivo) {
   return { ok: true, estado: aprobar ? ESTADO_APROBADO : ESTADO_DEVUELTO };
 }
 
+/**
+ * Aprobar/devolver una hora de gestión externa del equipo directivo. Solo
+ * el administrador: a diferencia de planeaciones e informes (que reparte
+ * el color del curso entre revisores), acá no hay color/curso de por
+ * medio — es horas de un directivo, y quien las revisa es siempre el
+ * administrador (ver obtener_horas_del_equipo en HorasGestion.js).
+ */
+function revisar_hora_gestion(token, id, aprobar, motivo) {
+  const sesion = requireSession_(token);
+  requireAdministrador_(sesion);
+
+  const fila = findRowById_(SHEET_NAMES.HORAS_GESTION, id);
+  if (!fila) throw new Error('No se encontró esa hora de gestión');
+  if (!aprobar && !String(motivo || '').trim()) {
+    throw new Error('Escriba el motivo de la devolución para que la persona sepa qué corregir');
+  }
+
+  updateRowById_(SHEET_NAMES.HORAS_GESTION, id, {
+    estado: aprobar ? ESTADO_APROBADO : ESTADO_DEVUELTO,
+    revisado_por: sesion.nombre,
+    revisado_en: ahoraISO_(),
+    motivo_devolucion: aprobar ? '' : String(motivo).trim(),
+  });
+  registrarRevision_('hora_gestion', id, aprobar ? 'aprobado' : 'devuelto',
+    aprobar ? '' : String(motivo).trim(), sesion.nombre);
+  return { ok: true, estado: aprobar ? ESTADO_APROBADO : ESTADO_DEVUELTO };
+}
+
 // --- Listas -------------------------------------------------------------
 
 /**

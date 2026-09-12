@@ -10,8 +10,11 @@ from __future__ import annotations
 import customtkinter as ctk
 
 from services import date_utils
+from ui import tema
 
 NIVELES = ["Bajo", "Medio", "Alto"]
+_COLOR_NIVEL = {"Bajo": tema.ROJO, "Medio": tema.AMBAR, "Alto": tema.VERDE}
+_COLOR_NIVEL_HOVER = {"Bajo": tema.ROJO_HOVER, "Medio": tema.AMBAR_HOVER, "Alto": tema.VERDE_HOVER}
 
 
 class AvanceSemanaEditor(ctk.CTkFrame):
@@ -36,17 +39,45 @@ class AvanceSemanaEditor(ctk.CTkFrame):
         fila = ctk.CTkFrame(self, fg_color="transparent")
         fila.pack(fill="x", padx=10, pady=(6, 10))
 
-        self.nivel_menu = ctk.CTkOptionMenu(fila, values=NIVELES, width=90)
-        self.nivel_menu.pack(side="left")
+        self._nivel = NIVELES[0]
+        self._nivel_botones: dict[str, ctk.CTkButton] = {}
+        pastillas = ctk.CTkFrame(fila, fg_color="transparent")
+        pastillas.pack(side="left")
+        for nivel in NIVELES:
+            boton = ctk.CTkButton(
+                pastillas, text=nivel, width=64, height=26, corner_radius=13,
+                font=tema.fuente(12), border_width=1, border_color=tema.BORDE_TARJETA,
+                command=lambda n=nivel: self._elegir_nivel(n),
+            )
+            boton.pack(side="left", padx=(0, 4))
+            self._nivel_botones[nivel] = boton
+        self._actualizar_pastillas()
 
         self.observaciones_entry = ctk.CTkEntry(fila, placeholder_text="Observaciones de la semana")
         self.observaciones_entry.pack(side="left", fill="x", expand=True, padx=(8, 0))
+
+    def _elegir_nivel(self, nivel: str):
+        self._nivel = nivel
+        self._actualizar_pastillas()
+
+    def _actualizar_pastillas(self):
+        for nivel, boton in self._nivel_botones.items():
+            if nivel == self._nivel:
+                boton.configure(
+                    fg_color=_COLOR_NIVEL[nivel], hover_color=_COLOR_NIVEL_HOVER[nivel],
+                    text_color=tema.TEXTO_CLARO,
+                )
+            else:
+                boton.configure(
+                    fg_color="transparent", hover_color=tema.FONDO_TARJETA,
+                    text_color=tema.TEXTO_OSCURO,
+                )
 
     def a_dict(self) -> dict:
         # `semana` va como número: el backend la usa para emparejar esta
         # respuesta con los temas que ya sacó de las planeaciones.
         return {
             "semana": self.semana,
-            "nivel": self.nivel_menu.get(),
+            "nivel": self._nivel,
             "observaciones": self.observaciones_entry.get().strip(),
         }

@@ -23,7 +23,7 @@ from ui.editar_usuario_screen import EditarUsuarioScreen
 from ui.cargando import Cargando
 from ui.tareas import cache, en_segundo_plano
 from ui.usuario_screen import UsuarioScreen
-from ui.widgets import chip
+from ui.widgets import avatar_iniciales, chip
 
 ROJO, AMBAR, VERDE, GRIS = tema.ROJO, tema.AMBAR, tema.VERDE, tema.GRIS
 
@@ -40,9 +40,13 @@ def texto(valor) -> str:
 
 
 class UsuariosScreen(ctk.CTkFrame):
-    def __init__(self, master, sesion: dict, on_volver: Callable[[], None]):
+    def __init__(
+        self, master, sesion: dict, on_volver: Callable[[], None],
+        on_buscador: Callable[[Callable[[str], None] | None, str], None] | None = None,
+    ):
         super().__init__(master)
         self.sesion = sesion
+        self.on_buscador = on_buscador
 
         ctk.CTkButton(
             self, text="← Volver", width=90, fg_color="transparent", border_width=1,
@@ -51,10 +55,11 @@ class UsuariosScreen(ctk.CTkFrame):
 
         self.tabview = ctk.CTkTabview(
             self,
-            segmented_button_selected_color=tema.VERDE_OSCURO,
-            segmented_button_selected_hover_color=tema.VERDE_OSCURO_ACTIVO,
+            segmented_button_selected_color=tema.DORADO_ACENTO,
+            segmented_button_selected_hover_color=tema.DORADO_ACENTO_HOVER,
             segmented_button_unselected_color=tema.FONDO_TARJETA,
             text_color=tema.TEXTO_OSCURO,
+            command=self._al_cambiar_pestana,
         )
         self.tabview.pack(fill="both", expand=True, padx=8, pady=8)
         for nombre in ("Lista", "Crear", "Editar"):
@@ -72,10 +77,20 @@ class UsuariosScreen(ctk.CTkFrame):
         self.lista.pack(fill="both", expand=True)
 
         self.tabview.set("Lista")
+        self._al_cambiar_pestana()
 
     def _ir_a_editar(self, usuario: dict):
         self.tabview.set("Editar")
         self.editar.seleccionar(usuario["nombre"])
+        self._al_cambiar_pestana()
+
+    def _al_cambiar_pestana(self):
+        if self.on_buscador is None:
+            return
+        if self.tabview.get() == "Lista":
+            self.on_buscador(self.lista.filtrar, "Buscar nombre, usuario o rol...")
+        else:
+            self.on_buscador(None)
 
 
 class ListaUsuariosTab(ctk.CTkScrollableFrame):
@@ -104,11 +119,20 @@ class ListaUsuariosTab(ctk.CTkScrollableFrame):
         self.tarjetas = ctk.CTkFrame(self, fg_color="transparent")
         self.tarjetas.pack(fill="both", expand=True)
 
+        self._usuarios_cache: list[dict] = []
+        self._filtro_texto = ""
         self._cargar()
 
     def _recargar(self):
         cache.invalidar("usuarios")
         self._cargar()
+
+    def filtrar(self, texto: str):
+        """Lo llama el buscador del encabezado superior (ver
+        `UsuariosScreen`) — filtra por nombre, usuario o rol sobre lo que
+        ya está en memoria."""
+        self._filtro_texto = texto.strip().lower()
+        self._renderizar()
 
     def _cargar(self):
         for w in self.tarjetas.winfo_children():
@@ -117,15 +141,13 @@ class ListaUsuariosTab(ctk.CTkScrollableFrame):
         Cargando(self.tarjetas, texto="Cargando usuarios...").pack(pady=16)
 
         def listo(usuarios):
-            for w in self.tarjetas.winfo_children():
-                w.destroy()
+            self._usuarios_cache = usuarios
             nunca = sum(1 for u in usuarios if not u.get("ultimo_acceso"))
             self.resumen_label.configure(text=f"{len(usuarios)} usuarios", text_color=self.color_normal)
             self.detalle_label.configure(
                 text=f"{nunca} todavía no entraron a la app" if nunca else "Todos entraron alguna vez"
             )
-            for usuario in sorted(usuarios, key=lambda u: str(u.get("nombre", "")).lower()):
-                self._tarjeta(usuario)
+            self._renderizar()
 
         def fallo(exc):
             for w in self.tarjetas.winfo_children():
@@ -138,6 +160,28 @@ class ListaUsuariosTab(ctk.CTkScrollableFrame):
             listo,
             fallo,
         )
+
+    def _renderizar(self):
+        """Redibuja con lo que ya está en `self._usuarios_cache`, sin
+        pedir nada nuevo al backend — la llaman tanto la carga inicial
+        como el buscador."""
+        for w in self.tarjetas.winfo_children():
+            w.destroy()
+
+        usuarios = self._usuarios_cache
+        if self._filtro_texto:
+            def coincide(u):
+                texto = f"{u.get('nombre', '')} {u.get('usuario', '')} {u.get('rol', '')}".lower()
+                return self._filtro_texto in texto
+            usuarios = [u for u in usuarios if coincide(u)]
+            if not usuarios:
+                ctk.CTkLabel(
+                    self.tarjetas, text="Ningún usuario coincide con la búsqueda.", text_color=GRIS,
+                ).pack(anchor="w", pady=10)
+                return
+
+        for usuario in sorted(usuarios, key=lambda u: str(u.get("nombre", "")).lower()):
+            self._tarjeta(usuario)
 
     def _puede_restablecer(self, usuario: dict) -> bool:
         """Misma regla que aplica el backend: un directivo restablece
@@ -169,12 +213,17 @@ class ListaUsuariosTab(ctk.CTkScrollableFrame):
         franja.pack(side="left", fill="y")
         franja.pack_propagate(False)
 
-        cuerpo = ctk.CTkFrame(marco, fg_color="transparent")
-        cuerpo.pack(side="left", fill="both", expand=True, padx=12, pady=10)
+        fila_superior = ctk.CTkFrame(marco, fg_color="transparent")
+        fila_superior.pack(side="left", fill="both", expand=True, padx=12, pady=10)
+
+        avatar_iniciales(fila_superior, texto(usuario.get("nombre")) or "?").pack(side="left")
+
+        cuerpo = ctk.CTkFrame(fila_superior, fg_color="transparent")
+        cuerpo.pack(side="left", fill="both", expand=True, padx=(10, 0))
 
         ctk.CTkLabel(
             cuerpo, text=texto(usuario.get("nombre")), font=tema.fuente(14, "bold"),
-            anchor="w", justify="left", wraplength=460,
+            anchor="w", justify="left", wraplength=420,
         ).pack(fill="x")
         ctk.CTkLabel(
             cuerpo, text=texto(usuario.get("usuario")), text_color=GRIS, anchor="w"

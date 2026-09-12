@@ -86,18 +86,28 @@ def _mostrar_overlay(root):
     return overlay
 
 
-def _extraer_fraccion(valor: object) -> float | None:
+def _extraer_numeros(valor: object) -> tuple[float, float] | None:
     """De lo que reporta cada pantalla (formas distintas: (enviado, total),
     (etapa, enviado, total), (hechos, total, nombre)...) saca los primeros
     dos números que aparezcan, en orden, y los toma como (hecho, total).
-    Si no hay forma de sacar un porcentaje, devuelve None — el overlay
-    entonces se queda con el indicador genérico en vez de romperse."""
+    Si no hay forma de sacarlos, devuelve None."""
     if not isinstance(valor, (tuple, list)):
         return None
     numeros = [v for v in valor if isinstance(v, (int, float)) and not isinstance(v, bool)]
     if len(numeros) < 2 or not numeros[1]:
         return None
-    return max(0.0, min(1.0, numeros[0] / numeros[1]))
+    return numeros[0], numeros[1]
+
+
+def _extraer_fraccion(valor: object) -> float | None:
+    """Como _extraer_numeros, pero devuelve el cociente (hecho/total) ya
+    calculado. Si no hay forma de sacar un porcentaje, devuelve None — el
+    overlay entonces se queda con el indicador genérico en vez de romperse."""
+    numeros = _extraer_numeros(valor)
+    if numeros is None:
+        return None
+    hecho, total = numeros
+    return max(0.0, min(1.0, hecho / total))
 
 
 def en_segundo_plano(
@@ -184,8 +194,17 @@ def en_segundo_plano_con_progreso(
         def reportar(valor):
             _cola.put((widget, al_progreso, valor))
             if overlay is not None:
-                fraccion = _extraer_fraccion(valor)
-                _cola.put((root, lambda _v, f=fraccion: overlay.actualizar_progreso(f), None))
+                numeros = _extraer_numeros(valor)
+                fraccion = None
+                hecho = total = None
+                if numeros is not None:
+                    hecho, total = numeros
+                    fraccion = max(0.0, min(1.0, hecho / total))
+                _cola.put((
+                    root,
+                    lambda _v, f=fraccion, h=hecho, t=total: overlay.actualizar_progreso(f, h, t),
+                    None,
+                ))
 
         try:
             resultado = trabajo(reportar)

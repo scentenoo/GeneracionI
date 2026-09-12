@@ -29,9 +29,11 @@ class PlaneacionesScreen(ctk.CTkFrame):
         sesion: dict,
         on_volver: Callable[[], None],
         on_editar: Callable[[dict], None],
+        on_buscador: Callable[[Callable[[str], None] | None, str], None] | None = None,
     ):
         super().__init__(master)
         self.sesion = sesion
+        self.on_buscador = on_buscador
 
         ctk.CTkButton(
             self, text="← Volver", width=90, fg_color="transparent", border_width=1,
@@ -40,8 +42,8 @@ class PlaneacionesScreen(ctk.CTkFrame):
 
         self.tabview = ctk.CTkTabview(
             self,
-            segmented_button_selected_color=tema.VERDE_OSCURO,
-            segmented_button_selected_hover_color=tema.VERDE_OSCURO_ACTIVO,
+            segmented_button_selected_color=tema.DORADO_ACENTO,
+            segmented_button_selected_hover_color=tema.DORADO_ACENTO_HOVER,
             segmented_button_unselected_color=tema.FONDO_TARJETA,
             text_color=tema.TEXTO_OSCURO,
             command=self._al_cambiar_pestana,
@@ -64,9 +66,19 @@ class PlaneacionesScreen(ctk.CTkFrame):
         self.actividades.pack(fill="both", expand=True)
 
         self.tabview.set("Horas en sede")
+        self._al_cambiar_pestana()
 
     def _al_cambiar_pestana(self):
         # Al volver a «Mis planeaciones» se recarga, para que aparezca lo
         # que se cargó recién en las otras pestañas.
-        if self.tabview.get() == "Mis planeaciones":
+        pestana = self.tabview.get()
+        if pestana == "Mis planeaciones":
             self.mias._cargar()
+        # El buscador del encabezado superior es de la app, no de la
+        # pestaña: se prende/apaga acá según cuál esté activa, en vez de
+        # que cada pestaña lo maneje por su cuenta.
+        if self.on_buscador is not None:
+            if pestana == "Mis planeaciones":
+                self.on_buscador(self.mias.filtrar, "Buscar curso u objetivo...")
+            else:
+                self.on_buscador(None)

@@ -25,6 +25,8 @@ class GrupoScreen(ctk.CTkScrollableFrame):
         self.on_volver = on_volver
         self._cursos_por_etiqueta: dict[str, dict] = {}
         self._checkboxes: dict[int, tuple[ctk.CTkCheckBox, ctk.BooleanVar]] = {}
+        self._estudiantes_cache: list[dict] = []
+        self._filtro_texto = ""
 
         if on_volver is not None:
             ctk.CTkButton(self, text="← Volver", width=90, command=on_volver).pack(anchor="w", pady=(0, 10))
@@ -104,6 +106,13 @@ class GrupoScreen(ctk.CTkScrollableFrame):
     def _curso_actual(self) -> dict | None:
         return self._cursos_por_etiqueta.get(self.curso_menu.get())
 
+    def filtrar(self, texto: str):
+        """Lo llama el buscador del encabezado superior (ver
+        `CursosHubScreen._al_cambiar_pestana`) — filtra por nombre sobre
+        los estudiantes del curso elegido, ya cargados en memoria."""
+        self._filtro_texto = texto.strip().lower()
+        self._renderizar_estudiantes()
+
     def _cargar(self):
         for w in self.lista_contenedor.winfo_children():
             w.destroy()
@@ -117,25 +126,8 @@ class GrupoScreen(ctk.CTkScrollableFrame):
         Cargando(self.lista_contenedor, texto="Cargando estudiantes...").pack(pady=16)
 
         def listo(estudiantes):
-            for w in self.lista_contenedor.winfo_children():
-                w.destroy()
-            self._checkboxes.clear()
-            if not estudiantes:
-                ctk.CTkLabel(
-                    self.lista_contenedor, text="Todavía no hay estudiantes.", text_color=tema.GRIS
-                ).pack(anchor="w")
-                return
-            for est in estudiantes:
-                var = ctk.BooleanVar(value=False)
-                # Quien está en otro curso sigue inscrito ahí si lo sacás de
-                # este: conviene verlo antes de marcarlo.
-                otros = est.get("otros_cursos", 0)
-                etiqueta = str(est["nombre"])
-                if otros:
-                    etiqueta += f"   (también en {otros} curso{'s' if otros > 1 else ''})"
-                cb = ctk.CTkCheckBox(self.lista_contenedor, text=etiqueta, variable=var)
-                cb.pack(anchor="w", pady=2)
-                self._checkboxes[est["id"]] = (cb, var)
+            self._estudiantes_cache = estudiantes
+            self._renderizar_estudiantes()
 
         en_segundo_plano(
             self,
@@ -143,6 +135,41 @@ class GrupoScreen(ctk.CTkScrollableFrame):
             listo,
             self._mostrar_error,
         )
+
+    def _renderizar_estudiantes(self):
+        """Redibuja con lo que ya está en `self._estudiantes_cache`, sin
+        pedir nada nuevo al backend — la llaman tanto la carga inicial
+        como el buscador. Las casillas marcadas se pierden al refiltrar
+        (es lo mismo que ya pasaba al recargar), no vale la pena guardar
+        selección entre filtros para una lista que se usa para tildar y
+        quitar de una sola vez."""
+        for w in self.lista_contenedor.winfo_children():
+            w.destroy()
+        self._checkboxes.clear()
+
+        estudiantes = self._estudiantes_cache
+        if self._filtro_texto:
+            estudiantes = [e for e in estudiantes if self._filtro_texto in str(e["nombre"]).lower()]
+
+        if not estudiantes:
+            mensaje = (
+                "Ningún estudiante coincide con la búsqueda." if self._filtro_texto
+                else "Todavía no hay estudiantes."
+            )
+            ctk.CTkLabel(self.lista_contenedor, text=mensaje, text_color=tema.GRIS).pack(anchor="w")
+            return
+
+        for est in estudiantes:
+            var = ctk.BooleanVar(value=False)
+            # Quien está en otro curso sigue inscrito ahí si lo sacás de
+            # este: conviene verlo antes de marcarlo.
+            otros = est.get("otros_cursos", 0)
+            etiqueta = str(est["nombre"])
+            if otros:
+                etiqueta += f"   (también en {otros} curso{'s' if otros > 1 else ''})"
+            cb = ctk.CTkCheckBox(self.lista_contenedor, text=etiqueta, variable=var)
+            cb.pack(anchor="w", pady=2)
+            self._checkboxes[est["id"]] = (cb, var)
 
     # --- acciones ---------------------------------------------------------
 

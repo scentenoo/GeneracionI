@@ -38,6 +38,8 @@ const ACCIONES_PERMITIDAS_ = {
   editar_horas_gestion,
   eliminar_horas_gestion,
   obtener_horas_gestion,
+  obtener_horas_del_equipo,
+  revisar_hora_gestion,
   guardar_actividad,
   editar_actividad,
   obtener_actividades,

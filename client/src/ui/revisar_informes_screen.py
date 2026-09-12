@@ -68,6 +68,7 @@ class RevisarInformesScreen(ctk.CTkScrollableFrame):
         self._informes_curso: list[dict] = []
         self._informes_gestion: list[dict] = []
         self._mes_cargado = ""
+        self._filtro_texto = ""
 
         if on_volver is not None:
             ctk.CTkButton(self, text="← Volver", width=90, command=on_volver).pack(anchor="w", pady=(0, 10))
@@ -139,6 +140,21 @@ class RevisarInformesScreen(ctk.CTkScrollableFrame):
 
         en_segundo_plano(self, traer, listo, fallo)
 
+    def filtrar(self, texto: str):
+        """Lo llama el buscador del encabezado superior (ver
+        `RevisarHubScreen`) — filtra por curso o docente sobre lo que ya
+        está en memoria. El botón de ZIP sigue bajando TODO lo entregado
+        del mes, no solo lo filtrado: es una descarga administrativa, no
+        depende de qué se esté mirando en pantalla."""
+        self._filtro_texto = texto.strip().lower()
+        self._redibujar()
+
+    def _coincide_filtro(self, item: dict) -> bool:
+        if not self._filtro_texto:
+            return True
+        texto = f"{item.get('curso', '')} {item.get('docente', '')}".lower()
+        return self._filtro_texto in texto
+
     def _redibujar(self):
         """Reconstruye la lista con lo que ya está en memoria —no le pide
         nada de nuevo al backend—, con los informes de curso ordenados:
@@ -155,21 +171,30 @@ class RevisarInformesScreen(ctk.CTkScrollableFrame):
             ).pack(anchor="w", pady=10)
             return
 
-        if self._informes_curso:
-            self._informes_curso.sort(
+        informes_curso = [i for i in self._informes_curso if self._coincide_filtro(i)]
+        informes_gestion = [d for d in self._informes_gestion if self._coincide_filtro(d)]
+
+        if not informes_curso and not informes_gestion:
+            ctk.CTkLabel(
+                self.contenedor, text="Ningún informe coincide con la búsqueda.", text_color=GRIS,
+            ).pack(anchor="w", pady=10)
+            return
+
+        if informes_curso:
+            informes_curso.sort(
                 key=lambda i: _PRIORIDAD_ESTADO.get(i.get("estado", "pendiente"), 0)
             )
             ctk.CTkLabel(
                 self.contenedor, text="Informes de curso", font=tema.fuente(peso="bold")
             ).pack(anchor="w", pady=(6, 2))
-            for i in self._informes_curso:
+            for i in informes_curso:
                 self._fila_informe_curso(i)
 
-        if self._informes_gestion:
+        if informes_gestion:
             ctk.CTkLabel(
                 self.contenedor, text="Informes de gestión", font=tema.fuente(peso="bold")
             ).pack(anchor="w", pady=(12, 2))
-            for d in self._informes_gestion:
+            for d in informes_gestion:
                 self._fila_informe_gestion(d)
 
     def _actualizar_resumen(self):

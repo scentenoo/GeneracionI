@@ -24,6 +24,11 @@ VERDE_HOVER = "#248a3d"
 # --- Dorado / naranja (acento de marca, ya está en el logo) ----------------
 DORADO = "#F2A900"
 DORADO_HOVER = "#D99400"
+# Dorado exacto del mockup de rediseño completo (barra lateral, acentos
+# nuevos) — distinto por muy poco de DORADO, que sigue usándose donde ya
+# estaba (badge de administrador) para no desarmar nada.
+DORADO_ACENTO = "#E8A11C"
+DORADO_ACENTO_HOVER = "#D0900E"
 
 # --- Neutros ------------------------------------------------------------
 BLANCO = "#FFFFFF"
@@ -34,12 +39,26 @@ TEXTO_OSCURO = "#1F2A24"
 TEXTO_CLARO = "#FFFFFF"
 TEXTO_CLARO_APAGADO = "#B9C7C0"  # texto secundario sobre el panel oscuro
 GRIS = "gray"
+TEXTO_MUTED = "#7A857E"  # gris de metadatos (fechas, conteos) sobre fondo claro
 
 # --- Estado (coinciden con lo que ya usan las pantallas existentes) --------
 ROJO = "#c0392b"
 ROJO_HOVER = "#922b21"
 AMBAR = "#8A6114"
 AMBAR_HOVER = "#6b4d10"
+
+# --- Cápsulas de estado (fondo tintado + texto del mismo color, del mockup:
+# contadores de sección — minutos, fotos, asistencia — y los ítems del
+# checklist "Antes de guardar") — distintas de `chip()`, que usa un fondo
+# gris parejo para todos los colores. ---------------------------------------
+VERDE_CHIP_BG = "#E7F6EC"
+VERDE_CHIP_TEXTO = "#1F7A3F"
+ROJO_CHIP_BG = "#FDECEA"
+AMBAR_CHIP_BG = "#FDF2DC"
+
+# Línea divisoria fina entre secciones de una misma tarjeta (más clara que
+# BORDE_TARJETA, que es el borde exterior de la tarjeta).
+DIVISOR = "#EDEFED"
 
 # --- Acentos de tarjeta (variedad como en el mockup: cada tarjeta un color) -
 AZUL = "#2F80ED"

@@ -55,3 +55,4 @@ def _base_dir() -> Path:
 
 TEMPLATES_DIR = _base_dir() / "templates"
 DICCIONARIO_DIR = _base_dir() / "client" / "assets" / "diccionario"
+TEMA_JSON = _base_dir() / "client" / "assets" / "tema_generacion_i.json"

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 import tkinter as tk
 from tkinter import messagebox
 
@@ -8,6 +9,7 @@ import customtkinter as ctk
 from config import TEMPLATES_DIR
 from ui import ctk_parches, tema
 from ui.barra_lateral import BarraLateral
+from ui.barra_superior import BarraSuperior
 from ui.cargando import Cargando
 from ui.login_screen import LoginScreen
 from ui.home_screen import HomeScreen
@@ -49,13 +51,15 @@ class App(ctk.CTk):
         # login (ver _armar_shell) y quedan en pie durante toda la sesión.
         # Antes de eso (login, pantallas de bloqueo) no existen.
         self._sidebar: BarraLateral | None = None
+        self._encabezado: BarraSuperior | None = None
         self._content: ctk.CTkFrame | None = None
 
         # Los borradores de vista previa llevan nombres de estudiantes y la
         # foto de la clase: no tienen por qué sobrevivir a la sesión.
         self.protocol("WM_DELETE_WINDOW", self._al_cerrar)
 
-        self._mostrar_login()
+        self._telon_mostrado_en: float | None = None
+        self._mostrar_telon()
 
     def _poner_icono(self):
         """El ícono de la ventana (esquina superior, Alt+Tab, barra de
@@ -116,6 +120,7 @@ class App(ctk.CTk):
             widget.destroy()
         self.pantalla_actual = None
         self._sidebar = None
+        self._encabezado = None
         self._content = None
 
     def _limpiar_contenido(self):
@@ -125,10 +130,11 @@ class App(ctk.CTk):
         self.pantalla_actual = None
 
     def _armar_shell(self):
-        """Arma barra lateral + área de contenido, una sola vez por sesión
-        (se llama justo después del login). Todo lo que se muestre de acá
-        en más empaqueta dentro de `self._content`, nunca sobre `self`
-        directo — así la barra no se destruye en cada cambio de pantalla."""
+        """Arma barra lateral + encabezado superior + área de contenido,
+        una sola vez por sesión (se llama justo después del login). Todo
+        lo que se muestre de acá en más empaqueta dentro de
+        `self._content`, nunca sobre `self` directo — así la barra y el
+        encabezado no se destruyen en cada cambio de pantalla."""
         self._limpiar()
         cuerpo = ctk.CTkFrame(self, fg_color="transparent", corner_radius=0)
         cuerpo.pack(fill="both", expand=True)
@@ -138,8 +144,14 @@ class App(ctk.CTk):
         )
         self._sidebar.pack(side="left", fill="y")
 
-        self._content = ctk.CTkFrame(cuerpo, fg_color=tema.FONDO_CONTENIDO, corner_radius=0)
-        self._content.pack(side="left", fill="both", expand=True)
+        columna_derecha = ctk.CTkFrame(cuerpo, fg_color="transparent", corner_radius=0)
+        columna_derecha.pack(side="left", fill="both", expand=True)
+
+        self._encabezado = BarraSuperior(columna_derecha)
+        self._encabezado.pack(fill="x")
+
+        self._content = ctk.CTkFrame(columna_derecha, fg_color=tema.FONDO_CONTENIDO, corner_radius=0)
+        self._content.pack(fill="both", expand=True)
 
     def _secciones_sidebar(self):
         """Qué secciones ve cada quien — misma lógica de roles que antes
@@ -205,6 +217,33 @@ class App(ctk.CTk):
         self.pantalla_actual = LoginScreen(self, on_login_exitoso=self._on_login_exitoso)
         self.pantalla_actual.pack(fill="both", expand=True)
 
+    def _mostrar_telon(self):
+        """Lo primero que ve el profe al abrir la app, mientras se verifica
+        la versión contra el backend (ver main.py) — reemplaza la espera
+        silenciosa que antes tapaba el login con el botón deshabilitado."""
+        from ui.overlay_carga import TelonVerde
+
+        self._limpiar()
+        self.pantalla_actual = TelonVerde(self)
+        self.pantalla_actual.pack(fill="both", expand=True)
+        self._telon_mostrado_en = time.monotonic()
+
+    def _tras_telon_minimo(self, accion):
+        """Si el telón de arranque sigue en pantalla, espera lo que falte
+        para completar DURACION_MINIMA_TELON_MS antes de correr `accion`
+        —así no parpadea en una conexión rápida—; si no hay telón (por
+        ejemplo, un Reintentar desde la pantalla de bloqueo), corre
+        `accion` de una vez."""
+        from ui.overlay_carga import DURACION_MINIMA_TELON_MS, TelonVerde
+
+        if isinstance(self.pantalla_actual, TelonVerde) and self._telon_mostrado_en is not None:
+            transcurrido_ms = (time.monotonic() - self._telon_mostrado_en) * 1000
+            falta_ms = DURACION_MINIMA_TELON_MS - transcurrido_ms
+            if falta_ms > 0:
+                self.after(int(falta_ms), accion)
+                return
+        accion()
+
     # --- chequeo de versión, que corre de fondo al abrir (ver main.py) ---
 
     def version_verificada(self, aviso: str | None = None, link: str | None = None):
@@ -217,9 +256,12 @@ class App(ctk.CTk):
         Con `aviso` hay una versión más nueva pero no obligatoria: se
         entra igual y el login muestra el mensaje con el link.
         """
-        if not isinstance(self.pantalla_actual, LoginScreen):
-            self._mostrar_login()
-        self.pantalla_actual.habilitar(aviso=aviso, link=link)
+        def mostrar():
+            if not isinstance(self.pantalla_actual, LoginScreen):
+                self._mostrar_login()
+            self.pantalla_actual.habilitar(aviso=aviso, link=link)
+
+        self._tras_telon_minimo(mostrar)
 
     def bloquear(self, mensaje: str, titulo: str = "No se puede usar la app",
                  al_reintentar=None, link: str | None = None):
@@ -230,6 +272,11 @@ class App(ctk.CTk):
         lo que corresponde cuando la causa es la conexión y no algo que el
         usuario tenga que ir a resolver a otro lado.
         """
+        self._tras_telon_minimo(
+            lambda: self._bloquear_ya(mensaje, titulo, al_reintentar, link)
+        )
+
+    def _bloquear_ya(self, mensaje: str, titulo: str, al_reintentar, link: str | None):
         self._limpiar()
         aviso = ctk.CTkFrame(self)
         aviso.pack(fill="both", expand=True)
@@ -336,12 +383,15 @@ class App(ctk.CTk):
     def _mostrar_home(self):
         self._limpiar_contenido()
         self._sidebar.marcar_activo("home")
+        self._encabezado.configurar_titulo("Inicio")
+        self._encabezado.configurar_buscador(None)
         self.pantalla_actual = HomeScreen(self._content, self.sesion)
         self.pantalla_actual.pack(fill="both", expand=True)
 
     def _mostrar_planeaciones(self):
         self._limpiar_contenido()
         self._sidebar.marcar_activo("planeaciones")
+        self._encabezado.configurar_titulo("Planeaciones y actividades")
         self.pantalla_actual = PlaneacionesScreen(
             self._content,
             self.sesion,
@@ -349,6 +399,7 @@ class App(ctk.CTk):
             # Editar sale del hub al editor de pantalla completa; al volver,
             # se regresa al hub (que abre en «Mis planeaciones» recargada).
             on_editar=lambda p: self._mostrar_editor_planeacion(p, self._mostrar_planeaciones),
+            on_buscador=self._encabezado.configurar_buscador,
         )
         self.pantalla_actual.pack(fill="both", expand=True)
 
@@ -359,6 +410,8 @@ class App(ctk.CTk):
 
         def listo(completa):
             self._limpiar_contenido()
+            self._encabezado.configurar_titulo("Editar planeación")
+            self._encabezado.configurar_buscador(None)
             self.pantalla_actual = PlaneacionEditorScreen(
                 self._content, self.sesion, completa, on_volver=on_volver
             )
@@ -382,6 +435,8 @@ class App(ctk.CTk):
         viaje— para no montar la pantalla equivocada."""
         self._pantalla_cargando("Abriendo...")
         self._sidebar.marcar_activo("informe")
+        self._encabezado.configurar_titulo("Generar informe mensual")
+        self._encabezado.configurar_buscador(None)
 
         es_directivo = self.sesion["rol"] in ("directivo", "ambos")
 
@@ -404,41 +459,61 @@ class App(ctk.CTk):
     def _mostrar_cursos(self):
         self._limpiar_contenido()
         self._sidebar.marcar_activo("cursos")
-        self.pantalla_actual = CursosHubScreen(self._content, self.sesion, on_volver=self._mostrar_home)
+        self._encabezado.configurar_titulo("Cursos")
+        self.pantalla_actual = CursosHubScreen(
+            self._content, self.sesion, on_volver=self._mostrar_home,
+            on_buscador=self._encabezado.configurar_buscador,
+        )
         self.pantalla_actual.pack(fill="both", expand=True)
 
     def _mostrar_horas_gestion(self):
         self._limpiar_contenido()
         self._sidebar.marcar_activo("horas_gestion")
+        self._encabezado.configurar_titulo("Horas de gestión")
+        self._encabezado.configurar_buscador(None)
         self.pantalla_actual = HorasGestionScreen(self._content, self.sesion, on_volver=self._mostrar_home)
         self.pantalla_actual.pack(fill="both", expand=True)
 
     def _mostrar_revisar(self):
         self._limpiar_contenido()
         self._sidebar.marcar_activo("revisar")
-        self.pantalla_actual = RevisarHubScreen(self._content, self.sesion, on_volver=self._mostrar_home)
+        self._encabezado.configurar_titulo("Revisar planeaciones e informes")
+        self.pantalla_actual = RevisarHubScreen(
+            self._content, self.sesion, on_volver=self._mostrar_home,
+            on_buscador=self._encabezado.configurar_buscador,
+        )
         self.pantalla_actual.pack(fill="both", expand=True)
 
     def _mostrar_usuarios(self):
         self._limpiar_contenido()
         self._sidebar.marcar_activo("usuarios")
-        self.pantalla_actual = UsuariosScreen(self._content, self.sesion, on_volver=self._mostrar_home)
+        self._encabezado.configurar_titulo("Usuarios")
+        self.pantalla_actual = UsuariosScreen(
+            self._content, self.sesion, on_volver=self._mostrar_home,
+            on_buscador=self._encabezado.configurar_buscador,
+        )
         self.pantalla_actual.pack(fill="both", expand=True)
 
     def _mostrar_revisores(self):
         self._limpiar_contenido()
         self._sidebar.marcar_activo("revisores")
+        self._encabezado.configurar_titulo("Revisores por color")
+        self._encabezado.configurar_buscador(None)
         self.pantalla_actual = RevisoresScreen(self._content, self.sesion, on_volver=self._mostrar_home)
         self.pantalla_actual.pack(fill="both", expand=True)
 
     def _mostrar_version(self):
         self._limpiar_contenido()
         self._sidebar.marcar_activo("version")
+        self._encabezado.configurar_titulo("Versión de la app")
+        self._encabezado.configurar_buscador(None)
         self.pantalla_actual = VersionScreen(self._content, self.sesion, on_volver=self._mostrar_home)
         self.pantalla_actual.pack(fill="both", expand=True)
 
     def _mostrar_password(self):
         self._limpiar_contenido()
         self._sidebar.marcar_activo("password")
+        self._encabezado.configurar_titulo("Cambiar contraseña")
+        self._encabezado.configurar_buscador(None)
         self.pantalla_actual = PasswordScreen(self._content, self.sesion, on_volver=self._mostrar_home)
         self.pantalla_actual.pack(fill="both", expand=True)

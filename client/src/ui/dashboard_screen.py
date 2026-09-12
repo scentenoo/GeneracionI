@@ -69,7 +69,16 @@ class DashboardScreen(ctk.CTkScrollableFrame):
         # Cambiar de mes deja la consulta anterior viajando: si esa llega
         # última, el directivo termina viendo el mes que ya no pidió.
         self.consulta = 0
+        self._estados_cache: list[dict] = []
+        self._filtro_texto = ""
         self._cargar()
+
+    def filtrar(self, texto: str):
+        """Lo llama el buscador del encabezado superior (ver
+        `RevisarHubScreen`) — filtra por curso o docente sobre lo que ya
+        está en memoria."""
+        self._filtro_texto = texto.strip().lower()
+        self._renderizar_tarjetas()
 
     # --- cierre del mes -------------------------------------------------
 
@@ -194,6 +203,7 @@ class DashboardScreen(ctk.CTkScrollableFrame):
                 return
             cargando.detener()
             cargando.destroy()
+            self._estados_cache = estados
             if not estados:
                 self.resumen_label.configure(text="Todavía no hay cursos.", text_color=GRIS)
                 return
@@ -209,9 +219,7 @@ class DashboardScreen(ctk.CTkScrollableFrame):
             )
 
             self._prefijar_cierre(mes)
-
-            for estado in sorted(estados, key=lambda e: (self._clasificar(e)[0], e.get("curso", ""))):
-                self._tarjeta(estado)
+            self._renderizar_tarjetas()
 
         def fallo(exc):
             if consulta != self.consulta:
@@ -226,6 +234,28 @@ class DashboardScreen(ctk.CTkScrollableFrame):
             listo,
             fallo,
         )
+
+    def _renderizar_tarjetas(self):
+        """Redibuja con lo que ya está en `self._estados_cache`, sin pedir
+        nada nuevo al backend — la llama tanto la carga inicial como el
+        buscador."""
+        for w in self.tarjetas.winfo_children():
+            w.destroy()
+
+        estados = self._estados_cache
+        if self._filtro_texto:
+            estados = [
+                e for e in estados
+                if self._filtro_texto in f"{e.get('curso', '')} {e.get('docente', '')}".lower()
+            ]
+            if not estados:
+                ctk.CTkLabel(
+                    self.tarjetas, text="Ningún curso coincide con la búsqueda.", text_color=GRIS,
+                ).pack(anchor="w", pady=10)
+                return
+
+        for estado in sorted(estados, key=lambda e: (self._clasificar(e)[0], e.get("curso", ""))):
+            self._tarjeta(estado)
 
     def _tarjeta(self, estado: dict):
         _, color, texto_informe = self._clasificar(estado)

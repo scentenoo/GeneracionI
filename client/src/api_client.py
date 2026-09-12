@@ -397,6 +397,19 @@ def obtener_horas_gestion(token: str, directivo_id: int | None = None) -> list[d
     return _call("obtener_horas_gestion", token, directivo_id)
 
 
+def obtener_horas_del_equipo(token: str, mes: str) -> dict:
+    """Solo administrador. {resumen: [{directivo_id, nombre, rol, total_horas,
+    objetivo, cumple}], actividades: [{..., estado, revisado_por, motivo_devolucion}]}
+    de TODO el equipo directivo en ese mes, para Revisar → Horas externas."""
+    return _call("obtener_horas_del_equipo", token, mes)
+
+
+def revisar_hora_gestion(token: str, id_: int, aprobar: bool, motivo: str = "") -> dict:
+    """Solo administrador. Aprobar/devolver una hora de gestión externa;
+    devolver necesita motivo."""
+    return _call("revisar_hora_gestion", token, id_, aprobar, motivo)
+
+
 # --- Actividades que no son clases ---------------------------------------------
 
 def guardar_actividad(

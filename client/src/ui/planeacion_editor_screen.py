@@ -26,7 +26,7 @@ from services import date_utils, image_utils, vista_previa
 from ui import tema
 from ui.lista_dinamica import ListaDinamica
 from ui.tareas import en_segundo_plano, en_segundo_plano_con_progreso
-from ui.widgets import BarraDeSubida, CampoConContador, MIN_PALABRAS, miniatura_ctk
+from ui.widgets import Acordeon, BarraDeSubida, CampoConContador, MIN_PALABRAS, contar_palabras, miniatura_ctk
 
 MINUTOS_MINIMOS = 120
 MIN_FOTOS_CLASE = 1
@@ -46,6 +46,7 @@ class PlaneacionEditorScreen(ctk.CTkScrollableFrame):
         self.planeacion = planeacion
         self.on_volver = on_volver
         self.momentos: dict[str, dict] = {}
+        self.momentos_acordeones: dict[str, Acordeon] = {}
 
         ctk.CTkButton(self, text="← Volver", width=90, command=on_volver).pack(anchor="w", pady=(0, 10))
 
@@ -80,28 +81,26 @@ class PlaneacionEditorScreen(ctk.CTkScrollableFrame):
         self.minutos_label.pack(side="right")
 
         guardados = planeacion.get("momentos") or {}
-        for clave, etiqueta, minimo, sug in MOMENTOS:
+        for indice, (clave, etiqueta, minimo, sug) in enumerate(MOMENTOS):
             m = guardados.get(clave) or {}
-            marco = ctk.CTkFrame(
-                self, fg_color=tema.FONDO_TARJETA, corner_radius=10,
-                border_width=1, border_color=tema.BORDE_TARJETA,
-            )
-            marco.pack(fill="x", pady=6)
+            acordeon = Acordeon(self, etiqueta, abierto=(indice == 0))
+            acordeon.pack(fill="x", pady=6)
 
-            fila = ctk.CTkFrame(marco, fg_color="transparent")
-            fila.pack(fill="x", padx=10, pady=(8, 0))
-            ctk.CTkLabel(fila, text=etiqueta, font=tema.fuente(peso="bold")).pack(side="left")
-            ctk.CTkLabel(fila, text="Minutos:").pack(side="left", padx=(12, 4))
+            fila = ctk.CTkFrame(acordeon.contenido, fg_color="transparent")
+            fila.pack(fill="x")
+            ctk.CTkLabel(fila, text="Minutos:").pack(side="left")
             minutos_entry = ctk.CTkEntry(fila, width=60)
             minutos_entry.insert(0, str(m.get("minutos") or sug))
-            minutos_entry.pack(side="left")
+            minutos_entry.pack(side="left", padx=(4, 0))
             minutos_entry.bind("<KeyRelease>", lambda _e: self._actualizar_minutos())
 
-            texto = CampoConContador(marco, "Qué pasó en este momento", alto=110, minimo=minimo)
+            texto = CampoConContador(acordeon.contenido, "Qué pasó en este momento", alto=110, minimo=minimo)
             texto.set(m.get("texto", ""))
-            texto.pack(fill="x", padx=10, pady=(4, 10))
+            texto.pack(fill="x", pady=(8, 0))
+            texto.textbox.bind("<KeyRelease>", lambda _e: self._actualizar_minutos(), add="+")
 
             self.momentos[clave] = {"minutos": minutos_entry, "texto": texto}
+            self.momentos_acordeones[clave] = acordeon
 
         ctk.CTkLabel(self, text="Sobre toda la clase", font=tema.fuente(peso="bold")).pack(
             fill="x", pady=(16, 0)
@@ -238,6 +237,14 @@ class PlaneacionEditorScreen(ctk.CTkScrollableFrame):
         total = sum(self._minutos_de(c) for c in self.momentos)
         color = tema.VERDE if total >= MINUTOS_MINIMOS else tema.ROJO
         self.minutos_label.configure(text=f"{total} de {MINUTOS_MINIMOS} min mínimos", text_color=color)
+
+        for clave, etiqueta, _minimo, _sug in MOMENTOS:
+            acordeon = self.momentos_acordeones.get(clave)
+            if acordeon is None:
+                continue
+            minutos = self._minutos_de(clave)
+            palabras = contar_palabras(self.momentos[clave]["texto"].get())
+            acordeon.configurar_titulo(f"{etiqueta} · {minutos} min · {palabras} palabras")
 
     def _validar(self) -> str | None:
         if not self._fotos_listas:

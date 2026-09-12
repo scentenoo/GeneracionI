@@ -47,6 +47,25 @@ class PlaneacionListScreen(ctk.CTkScrollableFrame):
         if on_volver is not None:
             ctk.CTkButton(self, text="← Volver", width=90, command=on_volver).pack(anchor="w", pady=(0, 10))
 
+        # Chips de filtro por estado (client-side, sobre lo ya cargado —
+        # el texto de búsqueda lo maneja el buscador del encabezado
+        # superior de la app, ver `filtrar`).
+        filtros = ctk.CTkFrame(self, fg_color="transparent")
+        filtros.pack(anchor="w", pady=(0, 10))
+        self._botones_filtro: dict[str, ctk.CTkButton] = {}
+        for clave, etiqueta in (
+            ("todas", "Todas"), ("aprobado", "Aprobadas"),
+            ("pendiente", "Pendientes"), ("cerrado", "Mes cerrado"),
+        ):
+            boton = ctk.CTkButton(
+                filtros, text=etiqueta, width=100, corner_radius=999, height=30,
+                fg_color="transparent", border_width=1, border_color=tema.BORDE_TARJETA,
+                text_color=tema.TEXTO_OSCURO, hover_color=tema.FONDO_TARJETA,
+                command=lambda c=clave: self._elegir_filtro(c),
+            )
+            boton.pack(side="left", padx=(0, 8))
+            self._botones_filtro[clave] = boton
+
         self.error_label = ctk.CTkLabel(self, text="", text_color=ROJO, wraplength=560, justify="left")
         self.error_label.pack(fill="x", pady=(0, 4))
 
@@ -63,7 +82,50 @@ class PlaneacionListScreen(ctk.CTkScrollableFrame):
         self._version_carga = 0
         self._planeaciones: list[dict] = []
         self._mostrar_hasta = _TANDA
+        self._filtro_texto = ""
+        self._filtro_estado = "todas"
+        self._marcar_filtro_activo()
         self._cargar()
+
+    def filtrar(self, texto: str):
+        """Lo llama el buscador del encabezado superior de la app (ver
+        `PlaneacionesScreen._al_cambiar_pestana`) — filtra por curso u
+        objetivo sobre lo que ya está en memoria, sin pedir nada al
+        backend."""
+        self._filtro_texto = texto.strip().lower()
+        self._mostrar_hasta = _TANDA
+        self._redibujar()
+
+    def _elegir_filtro(self, clave: str):
+        self._filtro_estado = clave
+        self._mostrar_hasta = _TANDA
+        self._marcar_filtro_activo()
+        self._redibujar()
+
+    def _marcar_filtro_activo(self):
+        for clave, boton in self._botones_filtro.items():
+            activo = clave == self._filtro_estado
+            boton.configure(
+                fg_color=tema.VERDE_OSCURO if activo else "transparent",
+                text_color=tema.BLANCO if activo else tema.TEXTO_OSCURO,
+            )
+
+    def _coincide_filtro(self, p: dict) -> bool:
+        if self._filtro_texto:
+            texto = f"{p.get('grupo', '')} {p.get('objetivo', '')}".lower()
+            if self._filtro_texto not in texto:
+                return False
+        if self._filtro_estado == "todas":
+            return True
+        if self._filtro_estado == "cerrado":
+            return bool(p.get("bloqueada"))
+        if p.get("bloqueada"):
+            return False
+        if self._filtro_estado == "aprobado":
+            return p.get("estado") == "aprobado"
+        # "Pendientes" agrupa lo pendiente y lo devuelto: ambas necesitan
+        # que el docente todavía haga algo, a diferencia de lo aprobado.
+        return p.get("estado") != "aprobado"
 
     def _cargar(self):
         self._version_carga += 1
@@ -109,12 +171,22 @@ class PlaneacionListScreen(ctk.CTkScrollableFrame):
 
     def _redibujar(self):
         """Reconstruye la lista con lo que ya está en memoria, de a tandas
-        (ver _TANDA) — no le pide nada de nuevo al backend."""
+        (ver _TANDA) — no le pide nada de nuevo al backend. Aplica el
+        filtro de texto (buscador del encabezado) y el chip de estado
+        elegido antes de paginar."""
         for w in self.lista_contenedor.winfo_children():
             w.destroy()
 
-        visibles = self._planeaciones[: self._mostrar_hasta]
-        restantes = len(self._planeaciones) - len(visibles)
+        filtradas = [p for p in self._planeaciones if self._coincide_filtro(p)]
+        if not filtradas and self._planeaciones:
+            ctk.CTkLabel(
+                self.lista_contenedor, text="Ninguna planeación coincide con la búsqueda.",
+                text_color=GRIS,
+            ).pack(anchor="w", pady=10)
+            return
+
+        visibles = filtradas[: self._mostrar_hasta]
+        restantes = len(filtradas) - len(visibles)
         for p in visibles:
             self._fila_planeacion(p)
 
