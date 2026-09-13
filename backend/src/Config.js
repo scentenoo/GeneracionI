@@ -37,8 +37,17 @@ function getScriptProperty_(key) {
   return value;
 }
 
+// Cachea el handle por ejecución: `batch` puede correr varias acciones en un
+// mismo POST y cada una llama a getSheet_ varias veces — sin esto, cada
+// llamada volvía a abrir el spreadsheet entero (openById tarda de verdad,
+// no es gratis) aunque ya lo hubiéramos abierto un segundo antes.
+let _spreadsheetCache_ = null;
+
 function getSpreadsheet_() {
-  return SpreadsheetApp.openById(getScriptProperty_('SHEET_ID'));
+  if (!_spreadsheetCache_) {
+    _spreadsheetCache_ = SpreadsheetApp.openById(getScriptProperty_('SHEET_ID'));
+  }
+  return _spreadsheetCache_;
 }
 
 function getDriveRootFolder_() {

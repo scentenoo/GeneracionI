@@ -59,13 +59,24 @@ function appendRow_(sheetName, obj) {
   return obj;
 }
 
+// Último id entregado por pestaña, cacheado durante esta ejecución. Sin
+// esto, importar un CSV de 30 estudiantes releía la pestaña Estudiantes
+// entera (y la de Inscripciones) una vez por cada fila nueva — la carga de
+// un curso completo se sentía lentísima aunque cada lectura individual
+// fuera rápida. Vive y muere con la ejecución: no hay forma de que quede
+// desactualizado entre pedidos.
+const _ultimoIdCache_ = {};
+
 function nextId_(sheetName) {
-  const rows = readAllRows_(sheetName);
-  const maxId = rows.reduce((max, r) => {
-    const n = Number(r.id);
-    return Number.isFinite(n) && n > max ? n : max;
-  }, 0);
-  return maxId + 1;
+  if (!(sheetName in _ultimoIdCache_)) {
+    const rows = readAllRows_(sheetName);
+    _ultimoIdCache_[sheetName] = rows.reduce((max, r) => {
+      const n = Number(r.id);
+      return Number.isFinite(n) && n > max ? n : max;
+    }, 0);
+  }
+  _ultimoIdCache_[sheetName] += 1;
+  return _ultimoIdCache_[sheetName];
 }
 
 /**
@@ -117,11 +128,19 @@ function updateRowById_(sheetName, id, cambios) {
   if (!row) throw new Error(`No se encontró id=${id} en "${sheetName}"`);
 
   const cambiosReales = [];
+  // Una sola escritura para toda la fila en vez de un setValue() por campo
+  // cambiado: al motor de Sheets cada llamada le cuesta lo mismo tenga un
+  // valor o diez, así que juntarlas en una sola gana justo cuando más de un
+  // campo cambia a la vez (el caso normal de un "editar").
+  const nuevaFila = headers.map((h) => row[h]);
   headers.forEach((h, colIdx) => {
     if (Object.prototype.hasOwnProperty.call(cambios, h) && cambios[h] !== row[h]) {
       cambiosReales.push({ campo: h, antes: row[h], despues: cambios[h] });
-      sheet.getRange(row._row, colIdx + 1).setValue(cambios[h]);
+      nuevaFila[colIdx] = cambios[h];
     }
   });
+  if (cambiosReales.length > 0) {
+    sheet.getRange(row._row, 1, 1, headers.length).setValues([nuevaFila]);
+  }
   return cambiosReales;
 }
