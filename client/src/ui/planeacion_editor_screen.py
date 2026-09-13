@@ -26,7 +26,9 @@ from services import date_utils, image_utils, vista_previa
 from ui import tema
 from ui.lista_dinamica import ListaDinamica
 from ui.tareas import en_segundo_plano, en_segundo_plano_con_progreso
-from ui.widgets import Acordeon, BarraDeSubida, CampoConContador, MIN_PALABRAS, contar_palabras, miniatura_ctk
+from ui.widgets import (
+    Acordeon, BarraDeSubida, CampoConContador, MIN_PALABRAS, campo_label, contar_palabras, miniatura_ctk,
+)
 
 MINUTOS_MINIMOS = 120
 MIN_FOTOS_CLASE = 1
@@ -63,13 +65,13 @@ class PlaneacionEditorScreen(ctk.CTkScrollableFrame):
         self.objetivo.set(planeacion.get("objetivo", ""))
         self.objetivo.pack(fill="x", pady=(2, 8))
 
-        ctk.CTkLabel(self, text="Temas vistos", anchor="w").pack(fill="x", pady=(8, 0))
+        campo_label(self, "Temas vistos").pack(fill="x", pady=(8, 0))
         self.temas_lista = ListaDinamica(self, placeholder="Tema visto")
         temas = planeacion.get("temas_vistos") or []
         if temas:
             self.temas_lista.filas[0].insert(0, temas[0])
-            for tema in temas[1:]:
-                self.temas_lista.agregar_fila(tema)
+            for tema_visto in temas[1:]:
+                self.temas_lista.agregar_fila(tema_visto)
         self.temas_lista.pack(fill="x", pady=(2, 8))
 
         encabezado = ctk.CTkFrame(self, fg_color="transparent")
@@ -319,12 +321,14 @@ class PlaneacionEditorScreen(ctk.CTkScrollableFrame):
         }
 
         self.guardar_boton.configure(state="disabled", text="Guardando...")
-        self.error_label.configure(text="Guardando...", text_color=tema.GRIS)
-
-        fotos = None
-        if self._fotos_modificadas:
+        hay_fotos_nuevas = self._fotos_modificadas
+        foto_paths = self.foto_paths
+        self.error_label.configure(
+            text="Comprimiendo las fotos..." if hay_fotos_nuevas else "Guardando...",
+            text_color=tema.GRIS,
+        )
+        if hay_fotos_nuevas:
             self.barra_subida.iniciar("Subiendo las fotos")
-            fotos = {"fotos_clase": [image_utils.foto_a_payload(p) for p in self.foto_paths]}
 
         # Se arma ACÁ, en el hilo principal — es la única parte que lee
         # campos de Tkinter (self.objetivo.get(), etc.), y eso no se puede
@@ -334,7 +338,16 @@ class PlaneacionEditorScreen(ctk.CTkScrollableFrame):
         contexto = self._contexto_documento(historial=None)
 
         def trabajo(reportar):
-            on_progress = (lambda e, t: reportar(("planeacion", e, t))) if fotos else None
+            # La compresión de las fotos (decodificar, redimensionar,
+            # recodificar a JPEG) va acá adentro y no antes: hecha en el
+            # hilo principal congelaba la ventana entera durante ese rato
+            # —sin poder repintar ni la barra de subida— antes de que
+            # arrancara siquiera el viaje al backend.
+            fotos = None
+            on_progress = None
+            if hay_fotos_nuevas:
+                fotos = {"fotos_clase": [image_utils.foto_a_payload(p) for p in foto_paths]}
+                on_progress = lambda e, t: reportar(("planeacion", e, t))
             resultado = api_client.editar_planeacion(
                 self.sesion["token"], planeacion_id, cambios, fotos, on_progress=on_progress
             )

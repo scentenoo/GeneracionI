@@ -11,11 +11,15 @@ import customtkinter as ctk
 # su propio núcleo y rango de edades.
 CAMPOS_PERFIL = [
     ("cedula", "Cédula"),
+    ("telefono", "Teléfono"),
     ("valor_hora_docente", "Valor hora docente"),
     ("valor_hora_directivo", "Valor hora directivo"),
     ("numero_cuenta", "Número de cuenta"),
     ("tipo_cuenta", "Tipo de cuenta"),
     ("entidad_bancaria", "Entidad bancaria"),
+    # Título/profesión: lo pide el certificado de pago mensual (columna
+    # FORMACIÓN), no se usa en ningún otro documento.
+    ("formacion", "Formación (profesión/título)"),
 ]
 
 

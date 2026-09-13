@@ -25,6 +25,7 @@ from config import TEMPLATES_DIR
 PLANEACION_TEMPLATE = TEMPLATES_DIR / "planeacion_individual.docx"
 INFORME_TEMPLATE = TEMPLATES_DIR / "informe_mensual.docx"
 INFORME_GESTION_TEMPLATE = TEMPLATES_DIR / "informe_gestion.docx"
+CERTIFICADO_PAGO_TEMPLATE = TEMPLATES_DIR / "certificado_pago.docx"
 
 _IMG_WIDTH_GRANDE_MM = 90
 _IMG_WIDTH_CHICA_MM = 55
@@ -161,6 +162,18 @@ def generar_informe_mensual_docx(contexto: dict, ruta_salida: str | Path) -> Pat
     ruta_salida = Path(ruta_salida)
     tpl.save(str(ruta_salida))
     _anexar_historial(ruta_salida, contexto.get("historial"))
+    return ruta_salida
+
+
+def generar_certificado_pago_docx(contexto: dict, ruta_salida: str | Path) -> Path:
+    """Certificado mensual de horas de docencia para pago (ver
+    Certificados.js#generar_certificado_pago) — solo administradores. Sin
+    historial de revisión: no es un documento que se apruebe o devuelva."""
+    tpl = DocxTemplate(str(CERTIFICADO_PAGO_TEMPLATE))
+    tpl.render(dict(contexto))
+
+    ruta_salida = Path(ruta_salida)
+    tpl.save(str(ruta_salida))
     return ruta_salida
 
 

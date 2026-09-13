@@ -8,6 +8,7 @@ from __future__ import annotations
 def aplicar():
     _parchar_scroll_sobre_desplegables()
     _parchar_repintado_al_scrollear()
+    _parchar_scrollbar_lenta_al_agregar_filas()
 
 
 def reparar_copiar_pegar(root):
@@ -108,3 +109,46 @@ def _parchar_repintado_al_scrollear():
         return original_yview(self, *args, **kwargs)
 
     tkinter.Canvas.yview = _yview_frenado
+
+
+def _parchar_scrollbar_lenta_al_agregar_filas():
+    """CTkScrollbar.set() —que el canvas de una CTkScrollableFrame llama
+    solo, cada vez que cambia su scrollregion, es decir cada vez que se
+    agrega o saca UN widget de la lista— redibuja el "thumb" de la barra Y
+    llama canvas.update_idletasks() sin condición ninguna. update_idletasks
+    fuerza un repintado sincrónico de TODA la ventana, no solo de la barra.
+
+    Con una pantalla que arma una lista de filas en un `for` (Mis
+    planeaciones, Usuarios, Revisar...), cada fila mete varios widgets, así
+    que esto se dispara decenas de veces seguidas — y cada una repinta de
+    nuevo lo que ya se había agregado antes. El costo crece con el cuadrado
+    de la cantidad de widgets: medido a mano, redibujar una lista de 20
+    filas (unos 200 widgets) tardaba ~2.9s, con esta cascada sola
+    explicando cerca de la mitad. Es la causa real de que cambiar a una
+    pantalla con una lista larga se sienta pesado, más allá de cualquier
+    espera al backend.
+
+    El arreglo: en vez de redibujar en el momento en cada `set()`, se junta
+    la ráfaga con `after_idle` y se dibuja una sola vez, con el valor más
+    reciente, cuando Tk se queda libre — que es también el único momento en
+    que alguien puede llegar a VER la barra, así que no se pierde nada
+    visualmente. El arrastre manual de la barra (`_on_motion`,
+    `_mouse_scroll_event`) no pasa por acá, llama a `_draw()` directo, así
+    que sigue tan sincrónico como antes."""
+    from customtkinter.windows.widgets.ctk_scrollbar import CTkScrollbar
+
+    def _set_agrupado(self, start_value, end_value):
+        self._start_value = float(start_value)
+        self._end_value = float(end_value)
+        if getattr(self, "_ctk_parche_redibujo_pendiente", False):
+            return
+
+        def _dibujar_ya():
+            self._ctk_parche_redibujo_pendiente = False
+            if self.winfo_exists():
+                self._draw()
+
+        self._ctk_parche_redibujo_pendiente = True
+        self.after_idle(_dibujar_ya)
+
+    CTkScrollbar.set = _set_agrupado

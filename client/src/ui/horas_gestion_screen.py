@@ -21,79 +21,168 @@ import customtkinter as ctk
 
 import api_client
 from services import date_utils, image_utils
+from ui import tema
 from ui.cargando import Cargando
 from ui.tareas import en_segundo_plano
-from ui.widgets import miniatura_ctk
+from ui.widgets import campo_label, miniatura_ctk
 
-ROJO, VERDE, GRIS, AMBAR = "#c0392b", "#2fa84f", "gray", "#8A6114"
+ANCHO_PANEL_DERECHO = 380
 
 
-class HorasGestionScreen(ctk.CTkScrollableFrame):
+class HorasGestionScreen(ctk.CTkFrame):
     def __init__(self, master, sesion: dict, on_volver: Callable[[], None]):
-        super().__init__(master, label_text="Horas de gestión")
+        super().__init__(master, fg_color="transparent")
         self.sesion = sesion
         self._editando: dict | None = None  # la fila que se está corrigiendo, o None
         self.foto_path: str | None = None  # foto elegida y todavía no subida
 
-        ctk.CTkButton(self, text="← Volver", width=90, command=on_volver).pack(anchor="w", pady=(0, 10))
+        ctk.CTkButton(
+            self, text="← Volver", width=90, fg_color="transparent", border_width=1,
+            text_color=tema.TEXTO_OSCURO, hover_color=tema.FONDO_TARJETA, command=on_volver,
+        ).pack(anchor="w", pady=(0, 12))
 
-        self.titulo_form = ctk.CTkLabel(self, text="Registrar actividad", font=ctk.CTkFont(weight="bold"))
-        self.titulo_form.pack(anchor="w")
+        cuerpo = ctk.CTkFrame(self, fg_color="transparent")
+        cuerpo.pack(fill="both", expand=True)
 
-        ctk.CTkLabel(self, text="Fecha (AAAA-MM-DD)").pack(anchor="w", pady=(8, 0))
-        self.fecha_entry = ctk.CTkEntry(self)
+        self.columna_izquierda = ctk.CTkScrollableFrame(cuerpo, fg_color="transparent", label_text="")
+        self.columna_izquierda.pack(side="left", fill="both", expand=True, padx=(0, 22))
+
+        self._tarjeta_formulario = ctk.CTkFrame(
+            self.columna_izquierda, fg_color=tema.FONDO_TARJETA, corner_radius=16,
+            border_width=1, border_color=tema.BORDE_TARJETA,
+        )
+        self._tarjeta_formulario.pack(fill="both", expand=True)
+        self._form = ctk.CTkFrame(self._tarjeta_formulario, fg_color="transparent")
+        self._form.pack(fill="both", expand=True, padx=28, pady=26)
+
+        self.panel_derecho = ctk.CTkScrollableFrame(
+            cuerpo, fg_color="transparent", label_text="", width=ANCHO_PANEL_DERECHO,
+        )
+        self.panel_derecho.pack(side="right", fill="y")
+
+        self._construir_formulario()
+        self._construir_panel_derecho()
+        self._cargar_lista()
+
+    # ------------------------------------------------------------------
+    # Formulario
+    # ------------------------------------------------------------------
+
+    def _construir_formulario(self):
+        self.titulo_form = ctk.CTkLabel(
+            self._form, text="Registrar actividad", font=tema.fuente(17, "bold"), anchor="w",
+        )
+        self.titulo_form.pack(fill="x")
+        ctk.CTkLabel(
+            self._form,
+            text="Horas de gestión directiva: lo que no es clase pero queda documentado.",
+            font=tema.fuente(12), text_color=tema.TEXTO_MUTED, anchor="w",
+        ).pack(fill="x", pady=(3, 0))
+        ctk.CTkFrame(self._form, fg_color=tema.DIVISOR, height=1).pack(fill="x", pady=(18, 20))
+
+        fila = ctk.CTkFrame(self._form, fg_color="transparent")
+        fila.pack(fill="x")
+        # Sin ancho fijo por CTkFrame (y sin pack_propagate(False)): esos
+        # frames por defecto piden 200px de alto, y al fijar solo el ancho
+        # con propagate apagado ese alto de 200 queda pegado — como `fila`
+        # empaqueta por altura del más alto, la columna de "Actividad" (sin
+        # ancho fijo, alto real ~60px) termina centrada dentro de esos
+        # 200px en vez de arriba. El ancho angosto de fecha/horas sale de
+        # limitar el CTkEntry mismo, no el frame que lo contiene.
+        col_fecha = ctk.CTkFrame(fila, fg_color="transparent")
+        col_fecha.pack(side="left", padx=(0, 16))
+        col_actividad = ctk.CTkFrame(fila, fg_color="transparent")
+        col_actividad.pack(side="left", fill="x", expand=True, padx=(0, 16))
+        col_horas = ctk.CTkFrame(fila, fg_color="transparent")
+        col_horas.pack(side="left")
+
+        campo_label(col_fecha, "Fecha").pack(fill="x")
+        self.fecha_entry = ctk.CTkEntry(col_fecha, width=140)
         self.fecha_entry.insert(0, date_utils.hoy_iso())
-        self.fecha_entry.pack(fill="x", pady=(2, 0))
+        self.fecha_entry.pack(fill="x", pady=(4, 0))
 
-        ctk.CTkLabel(self, text="Actividad / tarea").pack(anchor="w", pady=(8, 0))
-        self.actividad_entry = ctk.CTkEntry(self)
-        self.actividad_entry.pack(fill="x", pady=(2, 0))
+        campo_label(col_actividad, "Actividad / tarea").pack(fill="x")
+        self.actividad_entry = ctk.CTkEntry(col_actividad, placeholder_text="Ej: Claustro de docentes")
+        self.actividad_entry.pack(fill="x", pady=(4, 0))
 
-        ctk.CTkLabel(self, text="Horas").pack(anchor="w", pady=(8, 0))
-        self.horas_entry = ctk.CTkEntry(self, width=80)
-        self.horas_entry.pack(anchor="w", pady=(2, 0))
+        campo_label(col_horas, "Horas").pack(fill="x")
+        self.horas_entry = ctk.CTkEntry(col_horas, placeholder_text="0.0", width=90)
+        self.horas_entry.pack(fill="x", pady=(4, 0))
 
-        ctk.CTkLabel(self, text="Producto / entregable").pack(anchor="w", pady=(8, 0))
+        campo_label(self._form, "Producto / entregable").pack(fill="x", pady=(18, 0))
         self.entregable_entry = ctk.CTkEntry(
-            self, placeholder_text="Qué quedó de la actividad: acta, listado, informe..."
+            self._form, placeholder_text="Qué quedó de la actividad: acta, listado, informe…"
         )
-        self.entregable_entry.pack(fill="x", pady=(2, 0))
+        self.entregable_entry.pack(fill="x", pady=(4, 0))
 
-        ctk.CTkLabel(self, text="Link a soporte / carpeta (opcional)").pack(anchor="w", pady=(8, 0))
-        self.link_entry = ctk.CTkEntry(self)
-        self.link_entry.pack(fill="x", pady=(2, 0))
+        fila_link = ctk.CTkFrame(self._form, fg_color="transparent")
+        fila_link.pack(fill="x", pady=(18, 0))
+        campo_label(fila_link, "Link a soporte / carpeta").pack(side="left")
+        ctk.CTkLabel(
+            fila_link, text="  (opcional)", font=tema.fuente(11), text_color=tema.TEXTO_MUTED,
+        ).pack(side="left")
+        self.link_entry = ctk.CTkEntry(self._form, placeholder_text="https://")
+        self.link_entry.pack(fill="x", pady=(4, 0))
 
-        ctk.CTkLabel(self, text="Foto de la actividad").pack(anchor="w", pady=(8, 0))
-        fila_foto = ctk.CTkFrame(self, fg_color="transparent")
-        fila_foto.pack(fill="x", pady=(2, 0))
-        ctk.CTkButton(fila_foto, text="Elegir foto...", width=110, command=self._elegir_foto).pack(
-            side="left"
+        campo_label(self._form, "Foto de la actividad · obligatoria").pack(fill="x", pady=(20, 9))
+        self._construir_dropzone_foto()
+
+        self.error_label = ctk.CTkLabel(
+            self._form, text="", text_color=tema.ROJO, wraplength=560, justify="left",
         )
-        self.foto_miniatura = ctk.CTkLabel(fila_foto, image=None, text="")
-        self.foto_miniatura.pack(side="left", padx=(10, 0))
-        self.foto_label = ctk.CTkLabel(fila_foto, text="", anchor="w")
-        self.foto_label.pack(side="left", padx=10)
-        self._actualizar_foto_label()
+        self.error_label.pack(fill="x", pady=(14, 0))
 
-        self.error_label = ctk.CTkLabel(self, text="", text_color=ROJO, wraplength=450, justify="left")
-        self.error_label.pack(fill="x", pady=(12, 4))
-
-        botones = ctk.CTkFrame(self, fg_color="transparent")
-        botones.pack(pady=(0, 20))
-        self.guardar_boton = ctk.CTkButton(botones, text="Guardar", command=self._guardar)
-        self.guardar_boton.pack(side="left", padx=4)
+        botones = ctk.CTkFrame(self._form, fg_color="transparent")
+        botones.pack(anchor="e", pady=(16, 0))
         self.cancelar_boton = ctk.CTkButton(
             botones, text="Cancelar edición", fg_color="transparent", border_width=1,
-            command=self._cancelar_edicion,
+            text_color=tema.TEXTO_OSCURO, command=self._cancelar_edicion,
         )  # se muestra solo mientras se edita
-
-        ctk.CTkLabel(self, text="Actividades registradas", font=ctk.CTkFont(weight="bold")).pack(
-            anchor="w", pady=(10, 4)
+        self.guardar_boton = ctk.CTkButton(
+            botones, text="Guardar", fg_color=tema.VERDE_OSCURO, hover_color=tema.VERDE_OSCURO_ACTIVO,
+            command=self._guardar,
         )
-        self.lista_contenedor = ctk.CTkFrame(self, fg_color="transparent")
-        self.lista_contenedor.pack(fill="both", expand=True)
+        self.guardar_boton.pack(side="left")
 
-        self._cargar_lista()
+        self.nota_editar_label = ctk.CTkLabel(
+            self._form,
+            text="Al editar una actividad guardada el título pasa a «Editar actividad» "
+                 "y el botón a «Guardar cambios».",
+            font=tema.fuente(11), text_color=tema.TEXTO_MUTED, anchor="e", justify="right",
+        )
+        self.nota_editar_label.pack(fill="x", pady=(6, 0))
+
+    def _construir_dropzone_foto(self):
+        self.dropzone = ctk.CTkFrame(
+            self._form, fg_color=tema.FONDO_CONTENIDO, corner_radius=14,
+            border_width=1.5, border_color=tema.BORDE_TARJETA,
+        )
+        self.dropzone.pack(fill="x")
+        contenido = ctk.CTkFrame(self.dropzone, fg_color="transparent")
+        contenido.pack(fill="x", padx=18, pady=18)
+
+        self.foto_miniatura_label = ctk.CTkLabel(contenido, image=None, text="")
+        self.foto_miniatura_label.pack(side="left")
+
+        textos = ctk.CTkFrame(contenido, fg_color="transparent")
+        textos.pack(side="left", fill="x", expand=True, padx=(16, 12))
+        self.foto_titulo_label = ctk.CTkLabel(
+            textos, text="", font=tema.fuente(14, "bold"), anchor="w",
+        )
+        self.foto_titulo_label.pack(fill="x")
+        self.foto_label = ctk.CTkLabel(
+            textos, text="", font=tema.fuente(11), text_color=tema.TEXTO_MUTED, anchor="w",
+        )
+        self.foto_label.pack(fill="x", pady=(2, 0))
+
+        self.foto_boton = ctk.CTkButton(
+            contenido, text="Elegir foto…", fg_color=tema.VERDE, hover_color=tema.VERDE_HOVER,
+            command=self._elegir_foto,
+        )
+        self.foto_boton.pack(side="left")
+        self._actualizar_foto_label()
+
+    # --- helpers del formulario -----------------------------------------
 
     def _limpiar_form(self):
         self.fecha_entry.delete(0, "end")
@@ -107,19 +196,25 @@ class HorasGestionScreen(ctk.CTkScrollableFrame):
         """La foto es obligatoria salvo que se esté corrigiendo una fila que
         ya tiene la suya: en ese caso, no elegir ninguna la conserva."""
         if self.foto_path:
-            self._miniatura_actual = miniatura_ctk(self.foto_path)
-            self.foto_miniatura.configure(image=self._miniatura_actual)
+            self._miniatura_actual = miniatura_ctk(self.foto_path, tamano=64)
+            self.foto_miniatura_label.configure(image=self._miniatura_actual)
             nombre = self.foto_path.replace("\\", "/").split("/")[-1]
-            self.foto_label.configure(text=nombre, text_color=VERDE)
+            self.foto_titulo_label.configure(text=nombre)
+            self.foto_label.configure(text="Lista para subir", text_color=tema.VERDE_CHIP_TEXTO)
+            self.foto_boton.configure(text="Cambiar foto…")
             return
         self._miniatura_actual = None
-        self.foto_miniatura.configure(image=None)
+        self.foto_miniatura_label.configure(image=None)
+        self.foto_titulo_label.configure(text="Arrastre la foto o elíjala del equipo")
+        self.foto_boton.configure(text="Elegir foto…")
         if self._editando and self._editando.get("foto_drive_id"):
-            self.foto_label.configure(text="conserva la foto que ya tenía", text_color=GRIS)
+            self.foto_label.configure(text="conserva la foto que ya tenía", text_color=tema.TEXTO_MUTED)
         elif self._editando:
-            self.foto_label.configure(text="sin foto (de antes del piloto, no hace falta agregarla)", text_color=GRIS)
+            self.foto_label.configure(
+                text="sin foto (de antes del piloto, no hace falta agregarla)", text_color=tema.TEXTO_MUTED,
+            )
         else:
-            self.foto_label.configure(text="obligatoria", text_color=ROJO)
+            self.foto_label.configure(text="Sin foto la actividad no se guarda.", text_color=tema.ROJO)
 
     def _elegir_foto(self):
         ruta = filedialog.askopenfilename(
@@ -142,7 +237,7 @@ class HorasGestionScreen(ctk.CTkScrollableFrame):
         self._editando = a
         self.titulo_form.configure(text="Editar actividad")
         self.guardar_boton.configure(text="Guardar cambios")
-        self.cancelar_boton.pack(side="left", padx=4)
+        self.cancelar_boton.pack(side="left", padx=(0, 8), before=self.guardar_boton)
 
         self._limpiar_form()
         self.fecha_entry.delete(0, "end")
@@ -155,11 +250,11 @@ class HorasGestionScreen(ctk.CTkScrollableFrame):
 
     def _guardar(self):
         if not self.actividad_entry.get().strip() or not self.horas_entry.get().strip():
-            self.error_label.configure(text="Actividad y horas son obligatorias.", text_color=ROJO)
+            self.error_label.configure(text="Actividad y horas son obligatorias.", text_color=tema.ROJO)
             return
         if not self.entregable_entry.get().strip():
             self.error_label.configure(
-                text="Falta el producto o entregable: es la prueba de la actividad.", text_color=ROJO
+                text="Falta el producto o entregable: es la prueba de la actividad.", text_color=tema.ROJO
             )
             return
 
@@ -167,7 +262,7 @@ class HorasGestionScreen(ctk.CTkScrollableFrame):
         # ya tenía (incluso si esa fila es de antes del piloto y nunca tuvo
         # una) — exigirla ahí bloquearía corregir hasta la fecha.
         if not self._editando and not self.foto_path:
-            self.error_label.configure(text="Falta la foto de la actividad.", text_color=ROJO)
+            self.error_label.configure(text="Falta la foto de la actividad.", text_color=tema.ROJO)
             return
 
         datos = {
@@ -179,7 +274,7 @@ class HorasGestionScreen(ctk.CTkScrollableFrame):
         }
 
         self.guardar_boton.configure(state="disabled")
-        self.error_label.configure(text="Guardando...", text_color=GRIS)
+        self.error_label.configure(text="Guardando...", text_color=tema.TEXTO_MUTED)
         editando = self._editando
         ruta_foto = self.foto_path
 
@@ -187,13 +282,13 @@ class HorasGestionScreen(ctk.CTkScrollableFrame):
             self.guardar_boton.configure(state="normal")
             self._cancelar_edicion()
             self.error_label.configure(
-                text="Cambios guardados ✓" if editando else "Actividad guardada ✓", text_color=VERDE
+                text="Cambios guardados ✓" if editando else "Actividad guardada ✓", text_color=tema.VERDE
             )
             self._cargar_lista()
 
         def fallo(exc):
             self.guardar_boton.configure(state="normal")
-            self.error_label.configure(text=str(exc), text_color=ROJO)
+            self.error_label.configure(text=str(exc), text_color=tema.ROJO)
 
         def trabajo():
             # Comprimir la foto también tarda, así que va al hilo.
@@ -216,13 +311,59 @@ class HorasGestionScreen(ctk.CTkScrollableFrame):
         ):
             return
 
-        self.error_label.configure(text="Eliminando...", text_color=GRIS)
+        self.error_label.configure(text="Eliminando...", text_color=tema.TEXTO_MUTED)
         en_segundo_plano(
             self,
             lambda: api_client.eliminar_horas_gestion(self.sesion["token"], a["id"]),
             lambda _r: self._cargar_lista(),
-            lambda exc: self.error_label.configure(text=str(exc), text_color=ROJO),
+            lambda exc: self.error_label.configure(text=str(exc), text_color=tema.ROJO),
         )
+
+    # ------------------------------------------------------------------
+    # Panel derecho: resumen del mes + actividades registradas
+    # ------------------------------------------------------------------
+
+    def _construir_panel_derecho(self):
+        tarjeta = ctk.CTkFrame(
+            self.panel_derecho, fg_color=tema.FONDO_TARJETA, corner_radius=16,
+            border_width=1, border_color=tema.BORDE_TARJETA,
+        )
+        tarjeta.pack(fill="both", expand=True)
+        contenido = ctk.CTkFrame(tarjeta, fg_color="transparent")
+        contenido.pack(fill="both", expand=True, padx=22, pady=22)
+
+        encabezado = ctk.CTkFrame(contenido, fg_color="transparent")
+        encabezado.pack(fill="x")
+        ctk.CTkLabel(
+            encabezado, text="Actividades registradas", font=tema.fuente(15, "bold"), anchor="w",
+        ).pack(side="left")
+        ctk.CTkLabel(
+            encabezado, text=date_utils.hoy_iso()[:7], font=tema.fuente(12), text_color=tema.TEXTO_MUTED,
+        ).pack(side="right")
+
+        fila_stats = ctk.CTkFrame(contenido, fg_color="transparent")
+        fila_stats.pack(fill="x", pady=(16, 0))
+        self.tile_actividades = self._tile(fila_stats, "0", "actividades")
+        self.tile_actividades.pack(side="left", fill="x", expand=True, padx=(0, 7))
+        self.tile_horas = self._tile(fila_stats, "0h", "de gestión")
+        self.tile_horas.pack(side="left", fill="x", expand=True, padx=(7, 0))
+
+        ctk.CTkFrame(contenido, fg_color=tema.DIVISOR, height=1).pack(fill="x", pady=18)
+
+        self.lista_contenedor = ctk.CTkFrame(contenido, fg_color="transparent")
+        self.lista_contenedor.pack(fill="both", expand=True)
+
+    def _tile(self, padre, numero: str, etiqueta: str) -> ctk.CTkFrame:
+        tile = ctk.CTkFrame(padre, fg_color=tema.FONDO_CONTENIDO, corner_radius=12)
+        numero_label = ctk.CTkLabel(
+            tile, text=numero, font=tema.fuente(24, "bold"), text_color=tema.VERDE_OSCURO, anchor="w",
+        )
+        numero_label.pack(fill="x", padx=14, pady=(14, 0))
+        ctk.CTkLabel(
+            tile, text=etiqueta, font=tema.fuente(11), text_color=tema.TEXTO_MUTED, anchor="w",
+        ).pack(fill="x", padx=14, pady=(2, 14))
+        tile.numero_label = numero_label  # type: ignore[attr-defined]
+        return tile
 
     def _cargar_lista(self):
         for w in self.lista_contenedor.winfo_children():
@@ -232,9 +373,15 @@ class HorasGestionScreen(ctk.CTkScrollableFrame):
         def listo(actividades):
             for w in self.lista_contenedor.winfo_children():
                 w.destroy()
+
+            total_horas = sum(float(a.get("horas_sede") or 0) for a in actividades)
+            self.tile_actividades.numero_label.configure(text=str(len(actividades)))
+            self.tile_horas.numero_label.configure(text=f"{total_horas:g}h")
+
             if not actividades:
                 ctk.CTkLabel(
-                    self.lista_contenedor, text="Todavía no hay actividades registradas.", text_color=GRIS
+                    self.lista_contenedor, text="Todavía no hay actividades registradas.",
+                    text_color=tema.TEXTO_MUTED,
                 ).pack(anchor="w")
                 return
 
@@ -245,7 +392,7 @@ class HorasGestionScreen(ctk.CTkScrollableFrame):
         def fallo(exc):
             for w in self.lista_contenedor.winfo_children():
                 w.destroy()
-            self.error_label.configure(text=str(exc), text_color=ROJO)
+            self.error_label.configure(text=str(exc), text_color=tema.ROJO)
 
         en_segundo_plano(
             self,
@@ -260,31 +407,49 @@ class HorasGestionScreen(ctk.CTkScrollableFrame):
         except ValueError:
             fecha_legible = a["fecha"]
 
-        fila = ctk.CTkFrame(self.lista_contenedor, border_width=1, corner_radius=8)
-        fila.pack(fill="x", pady=3)
+        marco = ctk.CTkFrame(
+            self.lista_contenedor, fg_color=tema.BLANCO, corner_radius=12,
+            border_width=1, border_color=tema.DIVISOR,
+        )
+        marco.pack(fill="x", pady=5)
+        contenido = ctk.CTkFrame(marco, fg_color="transparent")
+        contenido.pack(fill="x", padx=14, pady=12)
 
-        info = ctk.CTkFrame(fila, fg_color="transparent")
-        info.pack(side="left", fill="both", expand=True, padx=10, pady=6)
+        fila_superior = ctk.CTkFrame(contenido, fg_color="transparent")
+        fila_superior.pack(fill="x")
+        ctk.CTkFrame(
+            fila_superior, width=44, height=44, fg_color=tema.FONDO_CONTENIDO, corner_radius=9,
+        ).pack(side="left")
+
+        info = ctk.CTkFrame(fila_superior, fg_color="transparent")
+        info.pack(side="left", fill="both", expand=True, padx=(12, 0))
         ctk.CTkLabel(
-            info, text=f"{fecha_legible} — {a['actividad']} ({a['horas_sede']}h)",
-            anchor="w", justify="left", wraplength=360,
+            info, text=f"{a['actividad']}", font=tema.fuente(13, "bold"),
+            anchor="w", justify="left", wraplength=260,
         ).pack(fill="x")
+        ctk.CTkLabel(
+            info, text=f"{fecha_legible} · {a.get('horas_sede', 0)}h", text_color=tema.TEXTO_MUTED,
+            font=tema.fuente(11), anchor="w",
+        ).pack(fill="x", pady=(2, 0))
         if a.get("entregable"):
             ctk.CTkLabel(
-                info, text=f"Entregable: {a['entregable']}", text_color=GRIS,
-                anchor="w", font=ctk.CTkFont(size=11),
-            ).pack(fill="x")
+                info, text=f"Producto: {a['entregable']}", text_color=tema.TEXTO_OSCURO,
+                font=tema.fuente(11), anchor="w", justify="left", wraplength=260,
+            ).pack(fill="x", pady=(3, 0))
         # Las filas de antes del piloto no tienen foto: se avisa para que se
         # les pueda agregar una desde «Editar».
         if not a.get("foto_drive_id"):
             ctk.CTkLabel(
-                info, text="sin foto", text_color=AMBAR, anchor="w", font=ctk.CTkFont(size=11),
-            ).pack(fill="x")
+                info, text="sin foto", text_color=tema.AMBAR, font=tema.fuente(10), anchor="w",
+            ).pack(fill="x", pady=(3, 0))
 
-        acciones = ctk.CTkFrame(fila, fg_color="transparent")
-        acciones.pack(side="right", padx=8)
-        ctk.CTkButton(acciones, text="Editar", width=70, command=lambda: self._editar(a)).pack(pady=2)
+        botones = ctk.CTkFrame(contenido, fg_color="transparent")
+        botones.pack(fill="x", pady=(10, 0))
         ctk.CTkButton(
-            acciones, text="Eliminar", width=70, fg_color=ROJO, hover_color="#922b21",
+            botones, text="Editar", fg_color="transparent", border_width=1, text_color=tema.VERDE_CHIP_TEXTO,
+            border_color=tema.VERDE, command=lambda: self._editar(a),
+        ).pack(side="left", fill="x", expand=True, padx=(0, 6))
+        ctk.CTkButton(
+            botones, text="Eliminar", fg_color=tema.ROJO, hover_color=tema.ROJO_HOVER,
             command=lambda: self._eliminar(a),
-        ).pack(pady=2)
+        ).pack(side="left", fill="x", expand=True)

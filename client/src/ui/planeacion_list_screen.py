@@ -19,9 +19,7 @@ from services import date_utils
 from ui import tema
 from ui.cargando import Cargando
 from ui.tareas import en_segundo_plano
-from ui.widgets import chip
-
-ROJO, VERDE, GRIS = tema.ROJO, tema.VERDE, tema.GRIS
+from ui.widgets import pildora
 
 # Ver la misma constante en revisar_planeaciones_screen.py: con listas
 # largas, CTkScrollableFrame tiene un bug de fondo de Tk en Windows que
@@ -29,6 +27,15 @@ ROJO, VERDE, GRIS = tema.ROJO, tema.VERDE, tema.GRIS
 # https://github.com/TomSchimansky/CustomTkinter/issues/215). "Mis
 # planeaciones" no tiene límite de mes, así que con el tiempo crece sola.
 _TANDA = 20
+
+# (ancho, peso): igual proporción que el grid del mockup — fecha y estado
+# a ancho fijo, curso/objetivo se reparten lo que sobra.
+_COLUMNAS = [("Fecha", 0, 100), ("Curso", 3, 0), ("Objetivo", 4, 0), ("Estado", 0, 130), ("Acciones", 0, 170)]
+
+
+def _configurar_columnas(fila: ctk.CTkFrame):
+    for i, (_titulo, peso, minsize) in enumerate(_COLUMNAS):
+        fila.grid_columnconfigure(i, weight=peso, minsize=minsize, uniform="col" if peso == 0 else "")
 
 
 class PlaneacionListScreen(ctk.CTkScrollableFrame):
@@ -40,37 +47,73 @@ class PlaneacionListScreen(ctk.CTkScrollableFrame):
         on_volver: Callable[[], None] | None = None,
     ):
         # Sin `on_volver` va montada como pestaña de PlaneacionesScreen.
-        super().__init__(master, label_text="" if on_volver is None else "Mis planeaciones")
+        super().__init__(master, label_text="" if on_volver is None else "Mis planeaciones", fg_color="transparent")
         self.sesion = sesion
         self.on_editar = on_editar
 
         if on_volver is not None:
-            ctk.CTkButton(self, text="← Volver", width=90, command=on_volver).pack(anchor="w", pady=(0, 10))
+            ctk.CTkButton(
+                self, text="← Volver", width=90, fg_color="transparent", border_width=1,
+                text_color=tema.TEXTO_OSCURO, hover_color=tema.FONDO_TARJETA, command=on_volver,
+            ).pack(anchor="w", pady=(0, 12))
+
+        cabecera = ctk.CTkFrame(self, fg_color="transparent")
+        cabecera.pack(fill="x", pady=(0, 16))
+        ctk.CTkLabel(
+            cabecera, text="Mis planeaciones", font=tema.fuente(18, "bold"), anchor="w",
+        ).pack(side="left")
+        self.contador_label = ctk.CTkLabel(
+            cabecera, text="", font=tema.fuente(12, "bold"), text_color=tema.TEXTO_MUTED,
+            fg_color=tema.FONDO_CONTENIDO, corner_radius=999,
+        )
+        self.contador_label.pack(side="left", padx=(12, 0))
 
         # Chips de filtro por estado (client-side, sobre lo ya cargado —
         # el texto de búsqueda lo maneja el buscador del encabezado
         # superior de la app, ver `filtrar`).
-        filtros = ctk.CTkFrame(self, fg_color="transparent")
-        filtros.pack(anchor="w", pady=(0, 10))
+        filtros = ctk.CTkFrame(cabecera, fg_color="transparent")
+        filtros.pack(side="right")
         self._botones_filtro: dict[str, ctk.CTkButton] = {}
         for clave, etiqueta in (
             ("todas", "Todas"), ("aprobado", "Aprobadas"),
             ("pendiente", "Pendientes"), ("cerrado", "Mes cerrado"),
         ):
             boton = ctk.CTkButton(
-                filtros, text=etiqueta, width=100, corner_radius=999, height=30,
+                filtros, text=etiqueta, corner_radius=999, height=32,
                 fg_color="transparent", border_width=1, border_color=tema.BORDE_TARJETA,
                 text_color=tema.TEXTO_OSCURO, hover_color=tema.FONDO_TARJETA,
                 command=lambda c=clave: self._elegir_filtro(c),
             )
-            boton.pack(side="left", padx=(0, 8))
+            boton.pack(side="left", padx=(8, 0))
             self._botones_filtro[clave] = boton
 
-        self.error_label = ctk.CTkLabel(self, text="", text_color=ROJO, wraplength=560, justify="left")
-        self.error_label.pack(fill="x", pady=(0, 4))
+        self.error_label = ctk.CTkLabel(self, text="", text_color=tema.ROJO, wraplength=760, justify="left")
+        self.error_label.pack(fill="x", pady=(0, 8))
 
-        self.lista_contenedor = ctk.CTkFrame(self, fg_color="transparent")
+        self.tarjeta = ctk.CTkFrame(
+            self, fg_color=tema.FONDO_TARJETA, corner_radius=16,
+            border_width=1, border_color=tema.BORDE_TARJETA,
+        )
+        self.tarjeta.pack(fill="both", expand=True)
+
+        encabezado_tabla = ctk.CTkFrame(self.tarjeta, fg_color=tema.FONDO_CONTENIDO, corner_radius=0)
+        encabezado_tabla.pack(fill="x")
+        _configurar_columnas(encabezado_tabla)
+        for i, (titulo, _peso, _minsize) in enumerate(_COLUMNAS):
+            ctk.CTkLabel(
+                encabezado_tabla, text=titulo.upper(), font=tema.fuente(10, "bold"),
+                text_color=tema.TEXTO_MUTED, anchor="e" if titulo == "Acciones" else "w",
+            ).grid(row=0, column=i, sticky="ew", padx=(20 if i == 0 else 10, 10), pady=12)
+
+        self.lista_contenedor = ctk.CTkFrame(self.tarjeta, fg_color="transparent")
         self.lista_contenedor.pack(fill="both", expand=True)
+
+        self.aviso_cerrado_label = ctk.CTkLabel(
+            self.tarjeta, text="Las planeaciones de un mes cerrado no se pueden editar — "
+                               "pídale al equipo directivo que lo reabra.",
+            font=tema.fuente(11), text_color=tema.AMBAR, fg_color=tema.AMBAR_CHIP_BG,
+            anchor="w", wraplength=760, justify="left",
+        )
 
         # «Mis planeaciones» se recarga cada vez que se entra a la pestaña
         # (ver PlaneacionesScreen._al_cambiar_pestana): si dos cargas quedan
@@ -108,6 +151,7 @@ class PlaneacionListScreen(ctk.CTkScrollableFrame):
             boton.configure(
                 fg_color=tema.VERDE_OSCURO if activo else "transparent",
                 text_color=tema.BLANCO if activo else tema.TEXTO_OSCURO,
+                border_width=0 if activo else 1,
             )
 
     def _coincide_filtro(self, p: dict) -> bool:
@@ -142,17 +186,12 @@ class PlaneacionListScreen(ctk.CTkScrollableFrame):
                 return  # una carga más nueva ya arrancó; esta quedó vieja
             cargando.detener()
             cargando.destroy()
-            if not planeaciones:
-                ctk.CTkLabel(
-                    self.lista_contenedor,
-                    text="Todavía no registraste ninguna planeación.",
-                    text_color=GRIS,
-                ).pack(anchor="w", pady=10)
-                return
-
             planeaciones.sort(key=lambda p: p["fecha"], reverse=True)
             self._planeaciones = planeaciones
             self._mostrar_hasta = _TANDA
+            mes_actual = date_utils.hoy_iso()[:7]
+            este_mes = sum(1 for p in planeaciones if str(p.get("fecha", ""))[:7] == mes_actual)
+            self.contador_label.configure(text=f"  {este_mes} este mes  ")
             self._redibujar()
 
         def fallo(exc):
@@ -160,7 +199,7 @@ class PlaneacionListScreen(ctk.CTkScrollableFrame):
                 return
             cargando.detener()
             cargando.destroy()
-            self.error_label.configure(text=str(exc), text_color=ROJO)
+            self.error_label.configure(text=str(exc), text_color=tema.ROJO)
 
         en_segundo_plano(
             self,
@@ -176,13 +215,21 @@ class PlaneacionListScreen(ctk.CTkScrollableFrame):
         elegido antes de paginar."""
         for w in self.lista_contenedor.winfo_children():
             w.destroy()
+        self.aviso_cerrado_label.pack_forget()
+
+        if not self._planeaciones:
+            ctk.CTkLabel(
+                self.lista_contenedor, text="Todavía no registraste ninguna planeación.",
+                text_color=tema.TEXTO_MUTED,
+            ).pack(anchor="w", padx=20, pady=16)
+            return
 
         filtradas = [p for p in self._planeaciones if self._coincide_filtro(p)]
-        if not filtradas and self._planeaciones:
+        if not filtradas:
             ctk.CTkLabel(
                 self.lista_contenedor, text="Ninguna planeación coincide con la búsqueda.",
-                text_color=GRIS,
-            ).pack(anchor="w", pady=10)
+                text_color=tema.TEXTO_MUTED,
+            ).pack(anchor="w", padx=20, pady=16)
             return
 
         visibles = filtradas[: self._mostrar_hasta]
@@ -190,60 +237,72 @@ class PlaneacionListScreen(ctk.CTkScrollableFrame):
         for p in visibles:
             self._fila_planeacion(p)
 
+        if any(p.get("bloqueada") for p in visibles):
+            self.aviso_cerrado_label.pack(fill="x", padx=0, pady=0, ipady=12, ipadx=24)
+
         if restantes > 0:
             ctk.CTkButton(
                 self.lista_contenedor,
                 text=f"Cargar {min(restantes, _TANDA)} más ({restantes} sin mostrar)",
                 fg_color="transparent", border_width=1, command=self._cargar_mas,
-            ).pack(pady=10)
+            ).pack(pady=12)
 
     def _cargar_mas(self):
         self._mostrar_hasta += _TANDA
         self._redibujar()
 
     def _fila_planeacion(self, p: dict):
-        fila = ctk.CTkFrame(
-            self.lista_contenedor, fg_color=tema.FONDO_TARJETA, corner_radius=10,
-            border_width=1, border_color=tema.BORDE_TARJETA,
-        )
-        fila.pack(fill="x", pady=4)
-
-        info = ctk.CTkFrame(fila, fg_color="transparent")
-        info.pack(side="left", fill="both", expand=True, padx=10, pady=8)
+        fila = ctk.CTkFrame(self.lista_contenedor, fg_color="transparent")
+        fila.pack(fill="x")
+        _configurar_columnas(fila)
+        ctk.CTkFrame(self.lista_contenedor, fg_color=tema.DIVISOR, height=1).pack(fill="x")
 
         try:
-            fecha_legible = date_utils.a_fecha_larga(p["fecha"])
+            fecha_legible = date_utils.a_fecha_corta(p["fecha"])
         except ValueError:
             fecha_legible = p["fecha"]
 
         ctk.CTkLabel(
-            info, text=f"{fecha_legible} — {p['grupo']}", font=tema.fuente(peso="bold"), anchor="w"
-        ).pack(fill="x")
+            fila, text=fecha_legible, font=tema.fuente(12), text_color=tema.TEXTO_MUTED, anchor="w",
+        ).grid(row=0, column=0, sticky="w", padx=(20, 10), pady=14)
+        ctk.CTkLabel(
+            fila, text=p["grupo"], font=tema.fuente(13, "bold"), anchor="w", justify="left", wraplength=220,
+        ).grid(row=0, column=1, sticky="w", padx=10, pady=14)
         objetivo = str(p.get("objetivo", ""))
         ctk.CTkLabel(
-            info, text=objetivo[:120] + ("..." if len(objetivo) > 120 else ""),
-            text_color=GRIS, anchor="w", justify="left", wraplength=350,
-        ).pack(fill="x")
+            fila, text=objetivo[:140] + ("…" if len(objetivo) > 140 else ""),
+            font=tema.fuente(12), text_color=tema.TEXTO_MUTED, anchor="w", justify="left", wraplength=320,
+        ).grid(row=0, column=2, sticky="w", padx=10, pady=14)
 
-        if p.get("bloqueada"):
-            fila_bloqueada = ctk.CTkFrame(info, fg_color="transparent")
-            fila_bloqueada.pack(fill="x", pady=(6, 0))
-            chip(fila_bloqueada, "mes cerrado", GRIS)
-            ctk.CTkLabel(
-                fila_bloqueada, text="pídale al equipo directivo que lo reabra",
-                text_color=GRIS, anchor="w", font=tema.fuente(11),
-            ).pack(side="left")
-            return
+        bloqueada = bool(p.get("bloqueada"))
+        estado = p.get("estado", "pendiente")
+        if bloqueada:
+            estado_texto, estado_color, estado_fondo = "Mes cerrado", tema.TEXTO_MUTED, tema.FONDO_CONTENIDO
+        elif estado == "aprobado":
+            estado_texto, estado_color, estado_fondo = "Aprobada", tema.VERDE_CHIP_TEXTO, tema.VERDE_CHIP_BG
+        elif estado == "devuelto":
+            estado_texto, estado_color, estado_fondo = "Devuelta", tema.AMBAR, tema.AMBAR_CHIP_BG
+        else:
+            estado_texto, estado_color, estado_fondo = "Pendiente", tema.TEXTO_MUTED, tema.FONDO_CONTENIDO
+        pildora(fila, estado_texto, estado_color, estado_fondo).grid(row=0, column=3, sticky="w", padx=10)
 
         acciones = ctk.CTkFrame(fila, fg_color="transparent")
-        acciones.pack(side="right", padx=10)
+        acciones.grid(row=0, column=4, sticky="e", padx=(10, 20))
+        if bloqueada:
+            ctk.CTkLabel(
+                acciones, text="—", text_color=tema.TEXTO_MUTED, font=tema.fuente(12),
+            ).pack()
+            return
+
         ctk.CTkButton(
-            acciones, text="Eliminar", width=90, fg_color=ROJO, hover_color=tema.ROJO_HOVER,
+            acciones, text="Eliminar", width=80, fg_color=tema.ROJO, hover_color=tema.ROJO_HOVER,
             command=lambda: self._eliminar(p),
-        ).pack(pady=2)
+        ).pack(side="left", padx=(0, 6))
         ctk.CTkButton(
-            acciones, text="Editar", width=90, command=lambda: self.on_editar(p)
-        ).pack(pady=2)
+            acciones, text="Editar", width=80, fg_color="transparent", border_width=1,
+            border_color=tema.VERDE, text_color=tema.VERDE_CHIP_TEXTO, hover_color=tema.VERDE_CHIP_BG,
+            command=lambda: self.on_editar(p),
+        ).pack(side="left")
 
     def _eliminar(self, p: dict):
         """Borrar una planeación se lleva puesta la foto de la clase y la
@@ -264,11 +323,11 @@ class PlaneacionListScreen(ctk.CTkScrollableFrame):
         ):
             return
 
-        self.error_label.configure(text="Eliminando...", text_color=GRIS)
+        self.error_label.configure(text="Eliminando...", text_color=tema.TEXTO_MUTED)
 
         en_segundo_plano(
             self,
             lambda: api_client.eliminar_planeacion(self.sesion["token"], p["id"]),
             lambda _r: self._cargar(),
-            lambda exc: self.error_label.configure(text=str(exc), text_color=ROJO),
+            lambda exc: self.error_label.configure(text=str(exc), text_color=tema.ROJO),
         )

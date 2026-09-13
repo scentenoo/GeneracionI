@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import io
 import re
 import tkinter as tk
 from typing import Callable
@@ -141,6 +143,22 @@ def miniatura_ctk(ruta_archivo: str, tamano: int = 44) -> ctk.CTkImage | None:
         return None
 
 
+def imagen_desde_base64(base64_str: str, ancho_max: int, alto_max: int) -> ctk.CTkImage | None:
+    """Una foto traída del backend (base64), redimensionada para entrar en
+    un cuadro sin recortarla ni deformarla — a diferencia de `miniatura_ctk`,
+    que sí recorta a cuadrado para un ícono chico, acá se preserva la
+    proporción original de la foto real."""
+    try:
+        data = base64.b64decode(base64_str)
+        with Image.open(io.BytesIO(data)) as original:
+            copia = original.convert("RGB")
+            copia.thumbnail((ancho_max, alto_max))
+            copia.load()
+        return ctk.CTkImage(light_image=copia, dark_image=copia, size=copia.size)
+    except Exception:  # noqa: BLE001 — sin poder mostrarla, se avisa aparte
+        return None
+
+
 def contar_palabras(texto: str) -> int:
     return len([p for p in texto.split() if p])
 
@@ -216,20 +234,44 @@ class BarraDeSubida(ctk.CTkFrame):
 class CampoConContador(ctk.CTkFrame):
     """Textbox multilínea + contador de palabras en vivo que se pone verde
     a partir de MIN_PALABRAS (spec sección 6: "contador en vivo mientras el
-    docente escribe")."""
+    docente escribe").
 
-    def __init__(self, master, etiqueta: str, alto: int = 90, minimo: int = MIN_PALABRAS, **kwargs):
+    `pregunta=True` es para las etiquetas que en realidad son la pregunta
+    entera (observaciones, avances, informe mensual...): esas van en texto
+    normal envuelto en varias líneas, como venían — pasarlas por
+    `campo_label` (mayúscula, una sola línea) las volvería ilegibles. El
+    resto (Objetivo, "Qué pasó en este momento"...) son etiquetas cortas de
+    campo, como en el mockup: mayúscula chica y gris, con el contador a la
+    derecha en la misma fila en vez de debajo del cuadro de texto."""
+
+    def __init__(
+        self, master, etiqueta: str, alto: int = 90, minimo: int = MIN_PALABRAS,
+        pregunta: bool = False, **kwargs,
+    ):
         super().__init__(master, fg_color="transparent", **kwargs)
         self.minimo = minimo
+        self._pregunta = pregunta
 
-        ctk.CTkLabel(self, text=etiqueta, anchor="w").pack(fill="x")
+        if pregunta:
+            # Etiqueta larga (la pregunta entera): en su propia línea, texto
+            # normal envuelto — como venía. El contador va debajo del cuadro,
+            # que es donde entra sin achicarle el ancho a la pregunta.
+            ctk.CTkLabel(self, text=etiqueta, anchor="w", justify="left", wraplength=560).pack(fill="x")
+        else:
+            encabezado = ctk.CTkFrame(self, fg_color="transparent")
+            encabezado.pack(fill="x")
+            campo_label(encabezado, etiqueta).pack(side="left")
+            self.contador_label = ctk.CTkLabel(encabezado, text="", font=ctk.CTkFont(size=11))
+            self.contador_label.pack(side="right")
+
         self.textbox = ctk.CTkTextbox(self, height=alto)
-        self.textbox.pack(fill="x", pady=(2, 0))
+        self.textbox.pack(fill="x", pady=(4, 0))
         self.textbox.bind("<KeyRelease>", lambda _e: self._actualizar_contador())
         self._revisar_ortografia = aplicar_corrector_ortografico(self.textbox)
 
-        self.contador_label = ctk.CTkLabel(self, text="", anchor="e", font=ctk.CTkFont(size=11))
-        self.contador_label.pack(fill="x")
+        if pregunta:
+            self.contador_label = ctk.CTkLabel(self, text="", anchor="e", font=ctk.CTkFont(size=11))
+            self.contador_label.pack(fill="x")
 
         self._actualizar_contador()
 
@@ -366,6 +408,80 @@ def chip(padre, texto: str, color: str) -> ctk.CTkLabel:
     return etiqueta
 
 
+class PestanasPildora(ctk.CTkFrame):
+    """Barra de sub-pestañas en pastillas sueltas, como en el mockup
+    («Horas en sede / Mis planeaciones / Horas externas», «Planeaciones /
+    Informes / Dashboard mensual»): la activa es una pastilla verde oscuro
+    sólida con texto blanco, las inactivas son pastillas blancas con borde
+    y texto gris — muy distinto del CTkSegmentedButton de CTkTabview, que
+    dibuja los segmentos pegados entre sí en un solo bloque con el acento
+    dorado del menú lateral.
+
+    Misma superficie mínima que CTkTabview (`add`, `tab`, `get`, `set`,
+    `command`) para poder reemplazarlo sin rehacer cada pantalla que lo usa."""
+
+    def __init__(self, master, command: Callable[[str], None] | None = None):
+        super().__init__(master, fg_color="transparent")
+        self._command = command
+        self._botones: dict[str, ctk.CTkButton] = {}
+        self._tabs: dict[str, ctk.CTkFrame] = {}
+        self._actual = ""
+
+        self._fila_botones = ctk.CTkFrame(self, fg_color="transparent")
+        self._fila_botones.pack(fill="x")
+        self._contenedor = ctk.CTkFrame(self, fg_color="transparent")
+        self._contenedor.pack(fill="both", expand=True, pady=(14, 0))
+
+    def add(self, nombre: str) -> ctk.CTkFrame:
+        boton = ctk.CTkButton(
+            self._fila_botones, text=nombre, corner_radius=18, height=36,
+            fg_color=tema.FONDO_TARJETA, hover_color=tema.FONDO_CONTENIDO,
+            text_color=tema.TEXTO_MUTED, border_width=1, border_color=tema.BORDE_TARJETA,
+            font=tema.fuente(13, "bold"), command=lambda n=nombre: self._al_clicar(n),
+        )
+        boton.pack(side="left", padx=(0, 10))
+        self._botones[nombre] = boton
+        marco = ctk.CTkFrame(self._contenedor, fg_color="transparent")
+        self._tabs[nombre] = marco
+        if len(self._tabs) == 1:
+            self.set(nombre)  # CTkTabview deja la primera pestaña agregada activa de entrada
+        return marco
+
+    def tab(self, nombre: str) -> ctk.CTkFrame:
+        return self._tabs[nombre]
+
+    def get(self) -> str:
+        return self._actual
+
+    def set(self, nombre: str):
+        if nombre not in self._tabs or nombre == self._actual:
+            return
+        if self._actual in self._tabs:
+            self._tabs[self._actual].pack_forget()
+        self._tabs[nombre].pack(fill="both", expand=True)
+        self._actual = nombre
+        for otro, boton in self._botones.items():
+            activo = otro == nombre
+            boton.configure(
+                fg_color=tema.VERDE_OSCURO if activo else tema.FONDO_TARJETA,
+                hover_color=tema.VERDE_OSCURO_ACTIVO if activo else tema.FONDO_CONTENIDO,
+                text_color=tema.BLANCO if activo else tema.TEXTO_MUTED,
+                border_width=0 if activo else 1,
+            )
+
+    def _al_clicar(self, nombre: str):
+        # A diferencia de `set()` (para dejar todo armado en __init__ sin
+        # disparar el callback antes de que la pantalla dueña esté lista),
+        # un clic real sí avisa — como CTkTabview con su `command`, que se
+        # llama sin argumentos: quien lo escucha consulta `.get()` para
+        # saber cuál quedó activa (así están escritos todos los
+        # `_al_cambiar_pestana` que ya existían antes de este widget).
+        cambio = nombre != self._actual
+        self.set(nombre)
+        if cambio and self._command is not None:
+            self._command()
+
+
 class TarjetaResumen(ctk.CTkFrame):
     """Tarjeta de stat del dashboard (rediseño): ícono, número grande y
     etiqueta debajo, con un acento de color propio por tarjeta — como en
@@ -439,6 +555,7 @@ class Acordeon(ctk.CTkFrame):
         en_cambiar: Callable[[bool], None] | None = None,
         encabezado_extra: Callable[[ctk.CTkFrame], None] | None = None,
         prefijo: Callable[[ctk.CTkFrame], None] | None = None,
+        wraplength_titulo: int | None = None,
     ):
         super().__init__(
             master, fg_color=tema.FONDO_TARJETA, corner_radius=14,
@@ -457,8 +574,16 @@ class Acordeon(ctk.CTkFrame):
             # del margen izquierdo de 16px — si el título pusiera el suyo
             # además, quedarían los dos sumados.
             prefijo(self.encabezado)
+        # `wraplength_titulo`: sin esto, un título largo (una pregunta
+        # entera, no una etiqueta corta como "Momento inicial") le pide al
+        # packer su ancho natural completo en una sola línea — eso puede
+        # superar el ancho disponible y dejar sin espacio a la flecha y al
+        # `encabezado_extra` (el contador de palabras), que se arman
+        # DESPUÉS del título y quedan aplastados o cortados. Con
+        # wraplength el título envuelve en vez de exigir todo ese ancho.
         self.titulo_label = ctk.CTkLabel(
             self.encabezado, text=titulo, font=tema.fuente(14, "bold"), anchor="w",
+            justify="left", wraplength=wraplength_titulo or 0,
         )
         padx_titulo = (0, 8) if prefijo is not None else (16, 8)
         self.titulo_label.pack(side="left", fill="x", expand=True, padx=padx_titulo, pady=12)

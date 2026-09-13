@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import os
 import tempfile
-import webbrowser
 import zipfile
 from tkinter import filedialog
 from typing import Callable
@@ -24,21 +23,17 @@ from typing import Callable
 import customtkinter as ctk
 
 import api_client
-from services import date_utils, docx_generator, vista_previa
+from services import date_utils, docx_generator
 from ui import tema
 from ui.cargando import Cargando
 from ui.tareas import en_segundo_plano, en_segundo_plano_con_progreso
-from ui.widgets import chip
+from ui.widgets import pildora
 
 ROJO, VERDE, GRIS, AMBAR = tema.ROJO, tema.VERDE, tema.GRIS, tema.AMBAR
 
 # Lo que falta por decidir va primero; lo devuelto (a mitad de corregirse)
 # en el medio; lo ya aprobado, al final — es lo que menos hace falta mirar.
 _PRIORIDAD_ESTADO = {"pendiente": 0, "devuelto": 1, "aprobado": 2}
-
-
-def _url_drive(doc_id: str) -> str:
-    return f"https://drive.google.com/file/d/{doc_id}/view"
 
 
 def _contexto_y_docx(token, estado, mes, ruta):
@@ -69,35 +64,71 @@ class RevisarInformesScreen(ctk.CTkScrollableFrame):
         self._informes_gestion: list[dict] = []
         self._mes_cargado = ""
         self._filtro_texto = ""
+        self._NUCLEO_TODOS = "Todos los núcleos"
+        self._filtro_nucleo = self._NUCLEO_TODOS
 
         if on_volver is not None:
-            ctk.CTkButton(self, text="← Volver", width=90, command=on_volver).pack(anchor="w", pady=(0, 10))
+            ctk.CTkButton(
+                self, text="← Volver", width=90, fg_color="transparent", border_width=1,
+                text_color=tema.TEXTO_OSCURO, hover_color=tema.FONDO_CONTENIDO, command=on_volver,
+            ).pack(anchor="w", pady=(0, 12))
 
+        # Encabezado: título + píldoras de conteo a la izquierda, mes y ZIP
+        # a la derecha — como en el mockup.
         fila = ctk.CTkFrame(self, fg_color="transparent")
-        fila.pack(fill="x")
-        ctk.CTkLabel(fila, text="Mes").pack(side="left")
-        self.mes_entry = ctk.CTkEntry(fila, width=90)
-        self.mes_entry.insert(0, date_utils.hoy_iso()[:7])
-        self.mes_entry.pack(side="left", padx=8)
-        ctk.CTkButton(fila, text="Actualizar", width=100, command=self._cargar).pack(side="left")
-
-        self.resumen_label = ctk.CTkLabel(
-            self, text="", font=tema.fuente(15, "bold"), anchor="w"
+        fila.pack(fill="x", pady=(0, 20))
+        ctk.CTkLabel(
+            fila, text="Informes de curso", font=tema.fuente(18, "bold"), text_color=tema.TEXTO_OSCURO,
+        ).pack(side="left", padx=(0, 14))
+        self._pildora_entregados = pildora(fila, "0 entregados", tema.VERDE_CHIP_TEXTO, tema.VERDE_CHIP_BG)
+        self._pildora_entregados.pack(side="left", padx=(0, 8))
+        self._pildora_pendientes = pildora(
+            fila, "0 pendientes de revisar", AMBAR, tema.AMBAR_CHIP_BG
         )
-        self.resumen_label.pack(fill="x", pady=(14, 2))
+        self._pildora_pendientes.pack(side="left")
+
+        # height=1 a propósito: ver la nota en dashboard_screen.py — sin
+        # esto, el espaciador vacío pide 200px de alto por defecto e infla
+        # toda la fila, empujando "Mes"/"Actualizar"/ZIP bien abajo del resto.
+        ctk.CTkFrame(fila, fg_color="transparent", height=1).pack(side="left", fill="x", expand=True)
+
+        # Filtro por núcleo (spec: dirección revisa núcleo por núcleo, recién
+        # cuando ese núcleo completo entregó) — mismo patrón que
+        # dashboard_screen.py y revisar_planeaciones_screen.py. Los informes
+        # de gestión (directivos sin curso) no tienen núcleo, así que un
+        # filtro puntual los deja afuera — no pertenecen a ninguno.
+        self.nucleo_menu = ctk.CTkOptionMenu(
+            fila, values=[self._NUCLEO_TODOS], width=170, command=self._al_cambiar_nucleo,
+        )
+        self.nucleo_menu.pack(side="left", anchor="s", padx=(0, 10))
+
+        self.mes_entry = ctk.CTkEntry(fila, width=110, justify="center")
+        self.mes_entry.insert(0, date_utils.hoy_iso()[:7])
+        self.mes_entry.pack(side="left", anchor="s", padx=(0, 10))
+        ctk.CTkButton(
+            fila, text="Actualizar", width=100, fg_color=tema.VERDE, hover_color=tema.VERDE_HOVER,
+            command=self._cargar,
+        ).pack(side="left", anchor="s", padx=(0, 10))
+        self.todos_boton = ctk.CTkButton(
+            fila, text="Descargar todos (ZIP)", width=170, fg_color=tema.FONDO_TARJETA,
+            border_width=1, border_color=tema.VERDE, text_color=tema.VERDE_CHIP_TEXTO,
+            hover_color=tema.VERDE_CHIP_BG, command=self._descargar_todos, state="disabled",
+        )
+        self.todos_boton.pack(side="left", anchor="s")
+
+        self.resumen_label = ctk.CTkLabel(self, text="", text_color=tema.ROJO, anchor="w")
+        self.resumen_label.pack(fill="x", pady=(0, 8))
         self.color_normal = self.resumen_label.cget("text_color")
 
-        self.todos_boton = ctk.CTkButton(
-            self, text="Descargar todos (ZIP)", command=self._descargar_todos, state="disabled"
-        )
-        self.todos_boton.pack(anchor="w", pady=(2, 4))
-
-        self.progreso = ctk.CTkProgressBar(self)
+        self.progreso = ctk.CTkProgressBar(self, progress_color=tema.VERDE)
         self.progreso.set(0)
-        self.progreso_label = ctk.CTkLabel(self, text="", text_color=GRIS, anchor="w")
+        self.progreso_label = ctk.CTkLabel(self, text="", text_color=tema.TEXTO_MUTED, anchor="w")
 
+        # fill="x" y no "both"/expand: `self` es un CTkScrollableFrame, y un
+        # hijo directo suyo no puede "llenar" un alto disponible (ver la
+        # misma nota en cursos_screen.py).
         self.contenedor = ctk.CTkFrame(self, fg_color="transparent")
-        self.contenedor.pack(fill="both", expand=True, pady=(6, 0))
+        self.contenedor.pack(fill="x", pady=(10, 0))
 
         self._cargar()
 
@@ -130,6 +161,7 @@ class RevisarInformesScreen(ctk.CTkScrollableFrame):
         def listo(resultado):
             self._mes_cargado = mes
             self._informes_curso, self._informes_gestion = resultado
+            self._actualizar_opciones_nucleo()
             self._actualizar_resumen()
             self._redibujar()
 
@@ -149,7 +181,24 @@ class RevisarInformesScreen(ctk.CTkScrollableFrame):
         self._filtro_texto = texto.strip().lower()
         self._redibujar()
 
+    def _actualizar_opciones_nucleo(self):
+        # Solo los de curso tienen núcleo — los de gestión no pertenecen a
+        # ninguno (ver comentario en __init__).
+        nucleos = sorted(
+            {i.get("nucleo", "").strip() for i in self._informes_curso if i.get("nucleo", "").strip()}
+        )
+        self.nucleo_menu.configure(values=[self._NUCLEO_TODOS] + nucleos)
+        if self._filtro_nucleo not in ([self._NUCLEO_TODOS] + nucleos):
+            self._filtro_nucleo = self._NUCLEO_TODOS
+        self.nucleo_menu.set(self._filtro_nucleo)
+
+    def _al_cambiar_nucleo(self, valor: str):
+        self._filtro_nucleo = valor
+        self._redibujar()
+
     def _coincide_filtro(self, item: dict) -> bool:
+        if self._filtro_nucleo != self._NUCLEO_TODOS and item.get("nucleo", "").strip() != self._filtro_nucleo:
+            return False
         if not self._filtro_texto:
             return True
         texto = f"{item.get('curso', '')} {item.get('docente', '')}".lower()
@@ -184,68 +233,87 @@ class RevisarInformesScreen(ctk.CTkScrollableFrame):
             informes_curso.sort(
                 key=lambda i: _PRIORIDAD_ESTADO.get(i.get("estado", "pendiente"), 0)
             )
-            ctk.CTkLabel(
-                self.contenedor, text="Informes de curso", font=tema.fuente(peso="bold")
-            ).pack(anchor="w", pady=(6, 2))
-            for i in informes_curso:
-                self._fila_informe_curso(i)
+            if informes_gestion:
+                # El título "Informes de curso" solo hace falta cuando hay
+                # las dos secciones separadas — con una sola no aporta nada.
+                ctk.CTkLabel(
+                    self.contenedor, text="Informes de curso", font=tema.fuente(13, "bold"),
+                    text_color=tema.TEXTO_OSCURO, anchor="w",
+                ).pack(fill="x", pady=(0, 10))
+            grilla = ctk.CTkFrame(self.contenedor, fg_color="transparent")
+            grilla.pack(fill="x")
+            grilla.grid_columnconfigure((0, 1), weight=1, uniform="informes")
+            for indice, i in enumerate(informes_curso):
+                self._fila_informe_curso(grilla, indice, i)
 
         if informes_gestion:
             ctk.CTkLabel(
-                self.contenedor, text="Informes de gestión", font=tema.fuente(peso="bold")
-            ).pack(anchor="w", pady=(12, 2))
-            for d in informes_gestion:
-                self._fila_informe_gestion(d)
+                self.contenedor, text="Informes de gestión", font=tema.fuente(13, "bold"),
+                text_color=tema.TEXTO_OSCURO, anchor="w",
+            ).pack(fill="x", pady=(16, 10))
+            grilla_gestion = ctk.CTkFrame(self.contenedor, fg_color="transparent")
+            grilla_gestion.pack(fill="x")
+            grilla_gestion.grid_columnconfigure((0, 1), weight=1, uniform="informes")
+            for indice, d in enumerate(informes_gestion):
+                self._fila_informe_gestion(grilla_gestion, indice, d)
 
     def _actualizar_resumen(self):
         total = len(self._informes_curso) + len(self._informes_gestion)
         pendientes = sum(1 for i in self._informes_curso if i.get("estado", "pendiente") == "pendiente")
-        self.resumen_label.configure(
-            text=f"{total} informe(s) entregado(s)  ·  {pendientes} pendiente(s) de revisar  ·  {self._mes_cargado}",
-            text_color=self.color_normal if pendientes else VERDE,
-        )
+        self._pildora_entregados.configure(text=f"  {total} entregados  ")
+        self._pildora_pendientes.configure(text=f"  {pendientes} pendientes de revisar  ")
 
     # --- informes de curso: revisar + descargar ---------------------------
 
-    def _fila_informe_curso(self, i: dict):
+    def _fila_informe_curso(self, grilla: ctk.CTkFrame, indice: int, i: dict):
         marco = ctk.CTkFrame(
-            self.contenedor, fg_color=tema.FONDO_TARJETA, corner_radius=10,
+            grilla, fg_color=tema.FONDO_TARJETA, corner_radius=16,
             border_width=1, border_color=tema.BORDE_TARJETA,
         )
-        marco.pack(fill="x", pady=3)
-        cuerpo = ctk.CTkFrame(marco, fg_color="transparent")
-        cuerpo.pack(side="left", fill="both", expand=True, padx=12, pady=8)
+        marco.grid(
+            row=indice // 2, column=indice % 2, sticky="nsew",
+            padx=(0, 8) if indice % 2 == 0 else (8, 0), pady=8,
+        )
+        contenido = ctk.CTkFrame(marco, fg_color="transparent")
+        contenido.pack(fill="both", expand=True, padx=22, pady=20)
+
+        encabezado = ctk.CTkFrame(contenido, fg_color="transparent")
+        encabezado.pack(fill="x")
+        ctk.CTkFrame(
+            encabezado, width=40, height=40, corner_radius=11, fg_color=tema.FONDO_CONTENIDO,
+        ).pack(side="left", padx=(0, 14))
+        textos = ctk.CTkFrame(encabezado, fg_color="transparent")
+        textos.pack(side="left", fill="x", expand=True)
         ctk.CTkLabel(
-            cuerpo, text=f"Informe — {i['curso']}", font=tema.fuente(peso="bold"), anchor="w",
-            justify="left", wraplength=380,
+            textos, text=i["curso"], font=tema.fuente(15, "bold"), text_color=tema.TEXTO_OSCURO,
+            anchor="w", justify="left", wraplength=280,
         ).pack(fill="x")
-        ctk.CTkLabel(cuerpo, text=i.get("docente", ""), text_color=GRIS, anchor="w").pack(fill="x")
-        estado_fila = ctk.CTkFrame(cuerpo, fg_color="transparent")
-        estado_fila.pack(fill="x", pady=(4, 0))
+        ctk.CTkLabel(
+            textos, text=f"{i.get('docente', '')} · entregado {i.get('fecha', '')}",
+            text_color=tema.TEXTO_MUTED, font=tema.fuente(12), anchor="w",
+        ).pack(fill="x", pady=(3, 0))
+        estado_fila = ctk.CTkFrame(encabezado, fg_color="transparent")
+        estado_fila.pack(side="right")
         self._pintar_estado(estado_fila, i)
 
-        botones = ctk.CTkFrame(marco, fg_color="transparent")
-        botones.pack(side="right", padx=10)
-        abrir_boton = ctk.CTkButton(
-            botones, text="Abrir", width=90, fg_color="transparent", border_width=1,
-            command=lambda: self._abrir_informe(i, abrir_boton),
-        )
-        abrir_boton.pack(pady=2)
+        botones = ctk.CTkFrame(contenido, fg_color="transparent")
+        botones.pack(fill="x", pady=(14, 0))
+        ctk.CTkButton(
+            botones, text="Descargar", fg_color="transparent", border_width=1,
+            text_color=tema.TEXTO_OSCURO, hover_color=tema.FONDO_CONTENIDO,
+            command=lambda e=i, m=self._mes_cargado: self._descargar_uno(e, m),
+        ).pack(side="left", fill="x", expand=True, padx=(0, 6))
         aprobar_boton = ctk.CTkButton(
-            botones, text="Aprobar", width=90, fg_color=VERDE, hover_color=tema.VERDE_HOVER
+            botones, text="Aprobar", fg_color=VERDE, hover_color=tema.VERDE_HOVER
         )
-        aprobar_boton.pack(pady=2)
+        aprobar_boton.pack(side="left", fill="x", expand=True, padx=(0, 6))
         devolver_boton = ctk.CTkButton(
-            botones, text="Devolver", width=90, fg_color=AMBAR, hover_color=tema.AMBAR_HOVER
+            botones, text="Devolver", fg_color=AMBAR, hover_color=tema.AMBAR_HOVER
         )
-        devolver_boton.pack(pady=2)
+        devolver_boton.pack(side="left", fill="x", expand=True)
         botones_revision = (aprobar_boton, devolver_boton)
         aprobar_boton.configure(command=lambda: self._revisar(i, True, estado_fila, botones_revision))
         devolver_boton.configure(command=lambda: self._revisar(i, False, estado_fila, botones_revision))
-        ctk.CTkButton(
-            botones, text="Descargar", width=90,
-            command=lambda e=i, m=self._mes_cargado: self._descargar_uno(e, m),
-        ).pack(pady=2)
 
     def _pintar_estado(self, estado_fila: ctk.CTkFrame, i: dict):
         for w in estado_fila.winfo_children():
@@ -253,13 +321,15 @@ class RevisarInformesScreen(ctk.CTkScrollableFrame):
         estado = i.get("estado", "pendiente")
         motivo = i.get("motivo_devolucion", "")
         if estado == "aprobado":
-            chip(estado_fila, "Aprobado ✓", VERDE)
+            pildora(estado_fila, "Aprobado ✓", tema.VERDE_CHIP_TEXTO, tema.VERDE_CHIP_BG).pack(side="left")
         elif estado == "devuelto":
-            chip(estado_fila, "Devuelto", AMBAR)
+            pildora(estado_fila, "Devuelto", AMBAR, tema.AMBAR_CHIP_BG).pack(side="left")
             if motivo:
-                ctk.CTkLabel(estado_fila, text=motivo, text_color=GRIS, anchor="w").pack(side="left")
+                ctk.CTkLabel(
+                    estado_fila, text=motivo, text_color=tema.TEXTO_MUTED, font=tema.fuente(11), anchor="w",
+                ).pack(side="left", padx=(8, 0))
         else:
-            chip(estado_fila, "Pendiente de revisar", GRIS)
+            pildora(estado_fila, "Pendiente de revisar", tema.TEXTO_MUTED, tema.FONDO_CONTENIDO).pack(side="left")
 
     def _revisar(self, i: dict, aprobar: bool, estado_fila: ctk.CTkFrame, botones: tuple):
         motivo = ""
@@ -297,48 +367,35 @@ class RevisarInformesScreen(ctk.CTkScrollableFrame):
             fallo,
         )
 
-    def _abrir_informe(self, i: dict, boton: ctk.CTkButton):
-        """Abre el .docx archivado en Drive. Los informes entregados antes
-        de que esto se guardara en Drive no tienen doc_drive_id: para esos
-        se arma local con lo ya entregado, como respaldo."""
-        if i.get("doc_drive_id"):
-            webbrowser.open(_url_drive(i["doc_drive_id"]))
-            return
-
-        boton.configure(state="disabled", text="Generando...")
-
-        def trabajo():
-            contexto = api_client.generar_informe_mensual(self.sesion["token"], i["curso_id"], i["mes"])
-            return vista_previa.previsualizar_informe(contexto)
-
-        def listo(_resultado):
-            boton.configure(state="normal", text="Abrir")
-
-        def fallo(exc):
-            boton.configure(state="normal", text="Abrir")
-            self.resumen_label.configure(text=str(exc), text_color=ROJO)
-
-        en_segundo_plano(self, trabajo, listo, fallo)
-
     # --- informes de gestión: solo descargar -------------------------------
 
-    def _fila_informe_gestion(self, d: dict):
+    def _fila_informe_gestion(self, grilla: ctk.CTkFrame, indice: int, d: dict):
         marco = ctk.CTkFrame(
-            self.contenedor, fg_color=tema.FONDO_TARJETA, corner_radius=10,
+            grilla, fg_color=tema.FONDO_TARJETA, corner_radius=16,
             border_width=1, border_color=tema.BORDE_TARJETA,
         )
-        marco.pack(fill="x", pady=3)
-        cuerpo = ctk.CTkFrame(marco, fg_color="transparent")
-        cuerpo.pack(side="left", fill="both", expand=True, padx=12, pady=8)
+        marco.grid(
+            row=indice // 2, column=indice % 2, sticky="nsew",
+            padx=(0, 8) if indice % 2 == 0 else (8, 0), pady=8,
+        )
+        contenido = ctk.CTkFrame(marco, fg_color="transparent")
+        contenido.pack(fill="both", expand=True, padx=22, pady=20)
+
+        encabezado = ctk.CTkFrame(contenido, fg_color="transparent")
+        encabezado.pack(fill="x")
+        ctk.CTkFrame(
+            encabezado, width=40, height=40, corner_radius=11, fg_color=tema.FONDO_CONTENIDO,
+        ).pack(side="left", padx=(0, 14))
         ctk.CTkLabel(
-            cuerpo, text=d["curso"], font=tema.fuente(peso="bold"), anchor="w",
-            justify="left", wraplength=380,
-        ).pack(fill="x")
+            encabezado, text=d["curso"], font=tema.fuente(15, "bold"), text_color=tema.TEXTO_OSCURO,
+            anchor="w", justify="left", wraplength=280,
+        ).pack(side="left", fill="x", expand=True)
 
         ctk.CTkButton(
-            marco, text="Descargar", width=100,
+            contenido, text="Descargar", fg_color="transparent", border_width=1,
+            text_color=tema.TEXTO_OSCURO, hover_color=tema.FONDO_CONTENIDO,
             command=lambda e=d, m=self._mes_cargado: self._descargar_uno(e, m),
-        ).pack(side="right", padx=10)
+        ).pack(fill="x", pady=(14, 0))
 
     # --- descargas ---------------------------------------------------------
 

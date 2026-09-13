@@ -65,6 +65,15 @@ _SOLO_LECTURA = frozenset({
     "obtener_informe_mensual", "obtener_avance_sugerido", "obtener_dashboard_directivo",
     "generar_informe_gestion", "obtener_informe_gestion", "directivos_sin_curso_del_mes",
     "estado_cierre", "fecha_de_cierre",
+    # Se sumaron después y quedaron afuera de la lista por descuido — sin
+    # esto, cualquiera de estas fallaba duro con el primer bache de Apps
+    # Script en vez de reintentar sola como el resto de las de lectura.
+    "obtener_estado_nucleo", "obtener_resumen_docente", "generar_certificado_pago",
+    "obtener_horas_del_equipo", "obtener_foto_horas_externas", "obtener_mi_perfil",
+    # `batch` junta solo lecturas en este código (cache.precargar, avisos al
+    # entrar, Inicio) — reintentar todo el viaje ante un fallo transitorio
+    # es tan seguro como reintentar cualquiera de esas lecturas sueltas.
+    "batch",
 })
 
 
@@ -153,7 +162,14 @@ def _una_llamada(action: str, params, on_progress: Callable[[int, int], None] | 
             "El servidor tuvo un problema.\n\nIntente de nuevo en un momento."
         ))
     if resp.status_code != 200:
-        raise ApiError(f"El servidor respondió algo inesperado (código {resp.status_code}).")
+        # Comprobado a mano contra el backend real: pedido idéntico repetido
+        # 3 veces, la 1 y la 3 dieron 200 y la del medio un 404 con una
+        # página HTML de Google en vez de la respuesta — el mismo tipo de
+        # bache pasajero que el 500 de arriba, no un problema de verdad.
+        # Se reintenta igual (ver _SOLO_LECTURA en _call).
+        raise _RespuestaTransitoria(
+            SinConexion(f"El servidor respondió algo inesperado (código {resp.status_code}).\n\nIntente de nuevo en un momento.")
+        )
 
     try:
         body = resp.json()
@@ -174,7 +190,27 @@ def _una_llamada(action: str, params, on_progress: Callable[[int, int], None] | 
         if "sesión" in error.lower() or "sesion" in error.lower():
             raise SesionExpirada(error)
         raise ApiError(error)
-    return body.get("data")
+
+    data = body.get("data")
+    if action == "login" and not (isinstance(data, dict) and {"token", "rol", "nombre", "id"} <= data.keys()):
+        # Mismo bache de Apps Script que el 404 de más arriba, pero con
+        # forma válida: `ok: true` con el `data` de OTRA petición en vuelo
+        # (pasa bajo carga, con dos pedidos casi simultáneos — acá con más
+        # razón, porque login es justo lo primero que se reintenta solo).
+        # Sin este chequeo, una sesión incompleta pasaba entera y explotaba
+        # más adelante con un KeyError feo (`sesion["rol"]`) en vez de
+        # avisar acá y reintentar.
+        raise _RespuestaTransitoria(
+            ApiError("El servidor respondió algo inesperado al iniciar sesión.\n\nIntente de nuevo.")
+        )
+    if action == "obtener_foto_horas_externas" and not (isinstance(data, dict) and "base64" in data):
+        # Mismo cruce de respuestas que el de login: bajo carga, esto puede
+        # traer el `data` de OTRA petición en vuelo. Sin este chequeo
+        # explotaba más adelante con un KeyError feo al leer foto["base64"].
+        raise _RespuestaTransitoria(
+            ApiError("El servidor respondió algo inesperado al traer la foto.\n\nIntente de nuevo.")
+        )
+    return data
 
 
 def _call(action: str, *params, on_progress: Callable[[int, int], None] | None = None):
@@ -398,10 +434,17 @@ def obtener_horas_gestion(token: str, directivo_id: int | None = None) -> list[d
 
 
 def obtener_horas_del_equipo(token: str, mes: str) -> dict:
-    """Solo administrador. {resumen: [{directivo_id, nombre, rol, total_horas,
-    objetivo, cumple}], actividades: [{..., estado, revisado_por, motivo_devolucion}]}
-    de TODO el equipo directivo en ese mes, para Revisar → Horas externas."""
+    """Solo administrador. {resumen: [{persona_id, nombre, rol, total_horas,
+    objetivo, cumple}], actividades: [{tipo: 'gestion'|'actividad', ...,
+    estado, revisado_por, motivo_devolucion}]} de TODO el equipo (docentes y
+    directivos) en ese mes, para Revisar → Horas externas."""
     return _call("obtener_horas_del_equipo", token, mes)
+
+
+def obtener_foto_horas_externas(token: str, foto_drive_id: str) -> dict:
+    """Una foto puntual ({base64, mimeType}) de una hora externa, para
+    mostrarla adentro de la app en vez de abrir Drive. Solo administrador."""
+    return _call("obtener_foto_horas_externas", token, foto_drive_id)
 
 
 def revisar_hora_gestion(token: str, id_: int, aprobar: bool, motivo: str = "") -> dict:
@@ -582,6 +625,13 @@ def listar_usuarios(token: str) -> list[dict]:
     return _call("listar_usuarios", token)
 
 
+def obtener_mi_perfil(token: str) -> dict:
+    """El propio perfil (cédula, teléfono, formación, cuenta bancaria) —
+    cualquier usuario logueado puede pedir el suyo, no hace falta ser
+    directivo. Sirve para que un docente vea si ya le cargaron un dato."""
+    return _call("obtener_mi_perfil", token)
+
+
 def restablecer_password(token: str, usuario_id: int, password_nueva: str) -> dict:
     """Le pone una contraseña nueva a otro usuario, para cuando se le
     olvidó la suya.
@@ -640,6 +690,13 @@ def reabrir_mes(token: str, curso_id: int, mes: str, abierta: bool = True) -> di
 
 def obtener_dashboard_directivo(token: str, mes: str) -> list[dict]:
     return _call("obtener_dashboard_directivo", token, mes)
+
+
+def generar_certificado_pago(token: str, mes: str) -> dict:
+    """Certificado mensual de horas de docencia para pago (solo
+    administradores): una fila por docente y curso con el total de horas
+    de ese curso ese mes (de sede + externas, ya sumadas)."""
+    return _call("generar_certificado_pago", token, mes)
 
 
 def ejecutar_migracion(token: str, nombre: str) -> dict:

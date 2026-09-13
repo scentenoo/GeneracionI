@@ -23,7 +23,7 @@ from ui.editar_usuario_screen import EditarUsuarioScreen
 from ui.cargando import Cargando
 from ui.tareas import cache, en_segundo_plano
 from ui.usuario_screen import UsuarioScreen
-from ui.widgets import avatar_iniciales, chip
+from ui.widgets import PestanasPildora, avatar_iniciales, pildora
 
 ROJO, AMBAR, VERDE, GRIS = tema.ROJO, tema.AMBAR, tema.VERDE, tema.GRIS
 
@@ -53,14 +53,7 @@ class UsuariosScreen(ctk.CTkFrame):
             text_color=tema.TEXTO_OSCURO, hover_color=tema.FONDO_TARJETA, command=on_volver,
         ).pack(anchor="w", padx=12, pady=(12, 0))
 
-        self.tabview = ctk.CTkTabview(
-            self,
-            segmented_button_selected_color=tema.DORADO_ACENTO,
-            segmented_button_selected_hover_color=tema.DORADO_ACENTO_HOVER,
-            segmented_button_unselected_color=tema.FONDO_TARJETA,
-            text_color=tema.TEXTO_OSCURO,
-            command=self._al_cambiar_pestana,
-        )
+        self.tabview = PestanasPildora(self, command=self._al_cambiar_pestana)
         self.tabview.pack(fill="both", expand=True, padx=8, pady=8)
         for nombre in ("Lista", "Crear", "Editar"):
             self.tabview.add(nombre)
@@ -72,7 +65,8 @@ class UsuariosScreen(ctk.CTkFrame):
         self.crear.pack(fill="both", expand=True)
 
         self.lista = ListaUsuariosTab(
-            self.tabview.tab("Lista"), sesion, on_editar=self._ir_a_editar
+            self.tabview.tab("Lista"), sesion, on_editar=self._ir_a_editar,
+            on_crear=self._ir_a_crear,
         )
         self.lista.pack(fill="both", expand=True)
 
@@ -84,6 +78,10 @@ class UsuariosScreen(ctk.CTkFrame):
         self.editar.seleccionar(usuario["nombre"])
         self._al_cambiar_pestana()
 
+    def _ir_a_crear(self):
+        self.tabview.set("Crear")
+        self._al_cambiar_pestana()
+
     def _al_cambiar_pestana(self):
         if self.on_buscador is None:
             return
@@ -93,31 +91,54 @@ class UsuariosScreen(ctk.CTkFrame):
             self.on_buscador(None)
 
 
+_COLUMNAS = 3
+
+
 class ListaUsuariosTab(ctk.CTkScrollableFrame):
-    def __init__(self, master, sesion: dict, on_editar: Callable[[dict], None]):
-        super().__init__(master)
+    def __init__(
+        self, master, sesion: dict, on_editar: Callable[[dict], None],
+        on_crear: Callable[[], None] | None = None,
+    ):
+        super().__init__(master, fg_color="transparent")
         self.sesion = sesion
         self.on_editar = on_editar
+        self.on_crear = on_crear
 
         cabecera = ctk.CTkFrame(self, fg_color="transparent")
-        cabecera.pack(fill="x")
+        cabecera.pack(fill="x", pady=(4, 4))
+        bloque_resumen = ctk.CTkFrame(cabecera, fg_color="transparent")
+        bloque_resumen.pack(side="left")
         self.resumen_label = ctk.CTkLabel(
-            cabecera, text="Cargando...", font=tema.fuente(15, "bold"),
-            anchor="w", justify="left",
+            bloque_resumen, text="Cargando...", font=tema.fuente(17, "bold"),
+            text_color=tema.TEXTO_OSCURO, anchor="w", justify="left",
         )
         self.resumen_label.pack(side="left")
         # customtkinter no acepta text_color=None para "el del tema".
         self.color_normal = self.resumen_label.cget("text_color")
-        ctk.CTkButton(cabecera, text="Actualizar", width=90, command=self._recargar).pack(side="right")
+        self.detalle_label = ctk.CTkLabel(
+            bloque_resumen, text="", text_color=tema.TEXTO_MUTED, font=tema.fuente(12), anchor="w",
+        )
+        self.detalle_label.pack(side="left", padx=(12, 0))
 
-        self.detalle_label = ctk.CTkLabel(self, text="", text_color=GRIS, anchor="w", justify="left")
-        self.detalle_label.pack(fill="x", pady=(0, 10))
+        botones_cabecera = ctk.CTkFrame(cabecera, fg_color="transparent")
+        botones_cabecera.pack(side="right")
+        if self.on_crear is not None:
+            ctk.CTkButton(
+                botones_cabecera, text="+ Nuevo usuario", fg_color=tema.VERDE_OSCURO,
+                hover_color=tema.VERDE_OSCURO_ACTIVO, command=self.on_crear,
+            ).pack(side="right", padx=(8, 0))
+        ctk.CTkButton(
+            botones_cabecera, text="Actualizar", width=90, fg_color="transparent", border_width=1,
+            text_color=tema.TEXTO_OSCURO, hover_color=tema.FONDO_CONTENIDO, command=self._recargar,
+        ).pack(side="right")
 
-        self.aviso_label = ctk.CTkLabel(self, text="", wraplength=560, anchor="w", justify="left")
-        self.aviso_label.pack(fill="x")
+        self.aviso_label = ctk.CTkLabel(self, text="", wraplength=760, anchor="w", justify="left")
+        self.aviso_label.pack(fill="x", pady=(0, 8))
 
         self.tarjetas = ctk.CTkFrame(self, fg_color="transparent")
         self.tarjetas.pack(fill="both", expand=True)
+        for col in range(_COLUMNAS):
+            self.tarjetas.grid_columnconfigure(col, weight=1, uniform="usuarios")
 
         self._usuarios_cache: list[dict] = []
         self._filtro_texto = ""
@@ -137,8 +158,8 @@ class ListaUsuariosTab(ctk.CTkScrollableFrame):
     def _cargar(self):
         for w in self.tarjetas.winfo_children():
             w.destroy()
-        self.resumen_label.configure(text="", text_color=GRIS)
-        Cargando(self.tarjetas, texto="Cargando usuarios...").pack(pady=16)
+        self.resumen_label.configure(text="", text_color=self.color_normal)
+        Cargando(self.tarjetas, texto="Cargando usuarios...").grid(row=0, column=0, columnspan=_COLUMNAS, pady=16)
 
         def listo(usuarios):
             self._usuarios_cache = usuarios
@@ -177,11 +198,11 @@ class ListaUsuariosTab(ctk.CTkScrollableFrame):
             if not usuarios:
                 ctk.CTkLabel(
                     self.tarjetas, text="Ningún usuario coincide con la búsqueda.", text_color=GRIS,
-                ).pack(anchor="w", pady=10)
+                ).grid(row=0, column=0, columnspan=_COLUMNAS, sticky="w", pady=10)
                 return
 
-        for usuario in sorted(usuarios, key=lambda u: str(u.get("nombre", "")).lower()):
-            self._tarjeta(usuario)
+        for i, usuario in enumerate(sorted(usuarios, key=lambda u: str(u.get("nombre", "")).lower())):
+            self._tarjeta(usuario, i // _COLUMNAS, i % _COLUMNAS)
 
     def _puede_restablecer(self, usuario: dict) -> bool:
         """Misma regla que aplica el backend: un directivo restablece
@@ -194,61 +215,65 @@ class ListaUsuariosTab(ctk.CTkScrollableFrame):
             return True
         return bool(self.sesion.get("es_admin"))
 
-    def _tarjeta(self, usuario: dict):
+    def _tarjeta(self, usuario: dict, fila: int, columna: int):
         texto_acceso, dias = date_utils.hace_cuanto(usuario.get("ultimo_acceso"))
         if dias is None:
-            color = AMBAR
+            color, fondo_color = tema.AMBAR, tema.AMBAR_CHIP_BG
         elif dias <= DIAS_INACTIVO:
-            color = VERDE
+            color, fondo_color = tema.VERDE_CHIP_TEXTO, tema.VERDE_CHIP_BG
         else:
-            color = GRIS
+            color, fondo_color = tema.TEXTO_MUTED, tema.FONDO_CONTENIDO
 
         marco = ctk.CTkFrame(
-            self.tarjetas, fg_color=tema.FONDO_TARJETA, corner_radius=10,
+            self.tarjetas, fg_color=tema.FONDO_TARJETA, corner_radius=16,
             border_width=1, border_color=tema.BORDE_TARJETA,
         )
-        marco.pack(fill="x", pady=4)
+        marco.grid(row=fila, column=columna, sticky="nsew", padx=8, pady=8)
 
-        franja = ctk.CTkFrame(marco, width=5, fg_color=color, corner_radius=0)
-        franja.pack(side="left", fill="y")
-        franja.pack_propagate(False)
+        cuerpo = ctk.CTkFrame(marco, fg_color="transparent")
+        cuerpo.pack(fill="both", expand=True, padx=20, pady=18)
 
-        fila_superior = ctk.CTkFrame(marco, fg_color="transparent")
-        fila_superior.pack(side="left", fill="both", expand=True, padx=12, pady=10)
-
-        avatar_iniciales(fila_superior, texto(usuario.get("nombre")) or "?").pack(side="left")
-
-        cuerpo = ctk.CTkFrame(fila_superior, fg_color="transparent")
-        cuerpo.pack(side="left", fill="both", expand=True, padx=(10, 0))
-
+        fila_superior = ctk.CTkFrame(cuerpo, fg_color="transparent")
+        fila_superior.pack(fill="x")
+        avatar_iniciales(fila_superior, texto(usuario.get("nombre")) or "?", tamano=44).pack(side="left")
+        textos = ctk.CTkFrame(fila_superior, fg_color="transparent")
+        textos.pack(side="left", padx=(12, 0), fill="x", expand=True)
         ctk.CTkLabel(
-            cuerpo, text=texto(usuario.get("nombre")), font=tema.fuente(14, "bold"),
-            anchor="w", justify="left", wraplength=420,
+            textos, text=texto(usuario.get("nombre")), font=tema.fuente(14, "bold"),
+            text_color=tema.TEXTO_OSCURO, anchor="w", justify="left", wraplength=190,
         ).pack(fill="x")
         ctk.CTkLabel(
-            cuerpo, text=texto(usuario.get("usuario")), text_color=GRIS, anchor="w"
+            textos, text=texto(usuario.get("usuario")), text_color=tema.TEXTO_MUTED,
+            font=tema.fuente(11), anchor="w",
         ).pack(fill="x")
 
+        # Fila propia para el acceso: con rol + administrador, tres píldoras
+        # en una sola fila no entran en una tarjeta de este ancho (probado a
+        # ojo con la captura de la sesión — la tercera quedaba cortada).
         etiquetas_fila = ctk.CTkFrame(cuerpo, fg_color="transparent")
-        etiquetas_fila.pack(fill="x", pady=(4, 0))
+        etiquetas_fila.pack(fill="x", pady=(12, 0))
         rol = texto(usuario.get("rol"))
         if rol:
-            chip(etiquetas_fila, rol, tema.GRIS)
+            pildora(etiquetas_fila, rol, tema.TEXTO_MUTED, tema.FONDO_CONTENIDO).pack(side="left", padx=(0, 6))
         if usuario.get("es_admin"):
-            chip(etiquetas_fila, "administrador", tema.DORADO)
-        chip(etiquetas_fila, texto_acceso, color)
+            pildora(etiquetas_fila, "administrador", tema.AMBAR, tema.AMBAR_CHIP_BG).pack(side="left")
+
+        fila_acceso = ctk.CTkFrame(cuerpo, fg_color="transparent")
+        fila_acceso.pack(fill="x", pady=(6, 0))
+        pildora(fila_acceso, texto_acceso, color, fondo_color).pack(side="left")
 
         botones = ctk.CTkFrame(cuerpo, fg_color="transparent")
-        botones.pack(fill="x", pady=(8, 0))
+        botones.pack(fill="x", pady=(14, 0))
         ctk.CTkButton(
-            botones, text="Editar", width=80, command=lambda: self.on_editar(usuario)
-        ).pack(side="left", padx=(0, 6))
+            botones, text="Editar", fg_color=tema.VERDE, hover_color=tema.VERDE_HOVER,
+            command=lambda: self.on_editar(usuario),
+        ).pack(fill="x")
         if self._puede_restablecer(usuario):
             ctk.CTkButton(
-                botones, text="Restablecer contraseña", width=170,
-                fg_color="transparent", border_width=1,
+                botones, text="Restablecer contraseña", fg_color="transparent", border_width=1,
+                text_color=tema.TEXTO_MUTED,
                 command=lambda: self._restablecer(usuario),
-            ).pack(side="left")
+            ).pack(fill="x", pady=(6, 0))
 
     def _restablecer(self, usuario: dict):
         """No hay "ver la contraseña": el backend guarda un hash con salt,

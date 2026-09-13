@@ -107,8 +107,14 @@ class PlaneacionScreen(ctk.CTkFrame):
     def _separador(self):
         """Línea fina entre secciones de la tarjeta del formulario, como en
         el mockup — reemplaza el espaciado a puro `pady` de antes, cuando
-        cada sección todavía no vivía dentro de una sola tarjeta."""
-        ctk.CTkFrame(self._contenido_formulario, fg_color=tema.DIVISOR, height=1, corner_radius=0).pack(
+        cada sección todavía no vivía dentro de una sola tarjeta.
+
+        Con `tema.DIVISOR` (#EDEFED, pensado para separar renglones sutiles
+        adentro de una tarjeta chica) esta línea quedaba prácticamente
+        invisible sobre el blanco de la tarjeta grande del formulario — acá
+        se usa el mismo gris del borde de la tarjeta y de los campos
+        (`BORDE_TARJETA`/#E4E6E4), que sí se nota, como en el mockup."""
+        ctk.CTkFrame(self._contenido_formulario, fg_color=tema.BORDE_TARJETA, height=1, corner_radius=0).pack(
             fill="x", pady=(24, 18)
         )
 
@@ -137,23 +143,40 @@ class PlaneacionScreen(ctk.CTkFrame):
         # necesita todo el ancho del formulario) — antes iban apiladas.
         fila = ctk.CTkFrame(self._contenido_formulario, fg_color="transparent")
         fila.pack(fill="x")
-        columna_fecha = ctk.CTkFrame(fila, fg_color="transparent", width=180)
+        # Sin ancho fijo ni pack_propagate(False) en esta columna: CTkFrame
+        # pide 200px de alto por defecto, y con el ancho fijado y el
+        # propagate apagado ese alto de 200 queda pegado — como `fila`
+        # empaqueta por la altura del más alto, "Curso" (sin ancho fijo,
+        # alto real ~65px) terminaría centrado dentro de esos 200px en vez
+        # de arriba, corrido hacia abajo respecto a "Fecha" (ver
+        # horas_gestion_screen.py, mismo caso). El ancho angosto sale de
+        # limitar el CTkEntry mismo, no el frame que lo contiene.
+        columna_fecha = ctk.CTkFrame(fila, fg_color="transparent")
         columna_fecha.pack(side="left", padx=(0, 18))
-        columna_fecha.pack_propagate(False)
         columna_curso = ctk.CTkFrame(fila, fg_color="transparent")
         columna_curso.pack(side="left", fill="x", expand=True)
 
         campo_label(columna_fecha, "Fecha").pack(fill="x")
-        self.fecha_entry = ctk.CTkEntry(columna_fecha)
+        self.fecha_entry = ctk.CTkEntry(columna_fecha, width=180)
         self.fecha_entry.insert(0, date_utils.hoy_iso())
         self.fecha_entry.bind("<KeyRelease>", lambda _e: self._actualizar_checklist())
         self.fecha_entry.pack(fill="x", pady=(2, 0))
 
         campo_label(columna_curso, "Curso").pack(fill="x")
-        self.curso_menu = ctk.CTkOptionMenu(
-            columna_curso, values=["(cargando...)"], command=self._al_cambiar_curso
+        # CTkOptionMenu no tiene border_width/border_color propios (a
+        # diferencia de CTkEntry) — sin este marco quedaba sin ningún borde,
+        # a diferencia de "Fecha" al lado, que sí lo tiene.
+        marco_curso = ctk.CTkFrame(
+            columna_curso, corner_radius=10, border_width=1, border_color=tema.BORDE_TARJETA,
+            fg_color=tema.FONDO_TARJETA,
         )
-        self.curso_menu.pack(fill="x", pady=(2, 0))
+        marco_curso.pack(fill="x", pady=(2, 0))
+        self.curso_menu = ctk.CTkOptionMenu(
+            marco_curso, values=["(cargando...)"], command=self._al_cambiar_curso,
+            fg_color=tema.FONDO_TARJETA, button_color=tema.FONDO_TARJETA,
+            button_hover_color=tema.FONDO_CONTENIDO,
+        )
+        self.curso_menu.pack(fill="x", padx=2, pady=2)
 
         self.objetivo = CampoConContador(self._contenido_formulario, "Objetivo de la clase")
         self.objetivo.pack(fill="x", pady=(16, 4))
@@ -287,20 +310,20 @@ class PlaneacionScreen(ctk.CTkFrame):
 
     def _construir_columnas_clase(self):
         ctk.CTkLabel(
-            self._contenido_formulario, text="Sobre toda la clase", font=tema.fuente(16, "bold"),
+            self._contenido_formulario, text="Sobre toda la clase", font=tema.fuente(16, "bold"), anchor="w",
         ).pack(fill="x", pady=(0, 14))
         self.observaciones = CampoConContador(
             self._contenido_formulario,
             "Observaciones de clase que contribuyan a la fundamentación de Generación-I "
             "(pequeña reflexión pedagógica, incluye también lo disciplinar)",
-            alto=100,
+            alto=100, pregunta=True,
         )
         self.observaciones.pack(fill="x", pady=4)
         self.avances = CampoConContador(
             self._contenido_formulario,
             "Avances o retrocesos observados en clase "
             "(se puede nombrar al estudiante, tipo evaluación cualitativa)",
-            alto=100,
+            alto=100, pregunta=True,
         )
         self.avances.pack(fill="x", pady=4)
 
@@ -456,7 +479,8 @@ class PlaneacionScreen(ctk.CTkFrame):
         self._chequeos_contenedor.pack(fill="x", padx=16)
 
         self.error_label = ctk.CTkLabel(
-            tarjeta, text="", text_color=tema.ROJO, wraplength=ANCHO_PANEL_DERECHO - 32, justify="left",
+            tarjeta, text="", text_color=tema.ROJO, wraplength=ANCHO_PANEL_DERECHO - 32,
+            justify="left", anchor="w",
         )
         self.error_label.pack(fill="x", padx=16, pady=(8, 0))
 
@@ -469,7 +493,7 @@ class PlaneacionScreen(ctk.CTkFrame):
         ctk.CTkLabel(
             tarjeta, text="Revise la vista previa para poder guardar.",
             text_color=tema.TEXTO_MUTED, font=tema.fuente(11), wraplength=ANCHO_PANEL_DERECHO - 32,
-            justify="left",
+            justify="left", anchor="w",
         ).pack(fill="x", padx=16)
         self.barra_subida = BarraDeSubida(tarjeta)
         self.barra_subida.pack(fill="x", padx=16, pady=(4, 16))
@@ -572,8 +596,14 @@ class PlaneacionScreen(ctk.CTkFrame):
         n = max(esperadas, 1)
         for i in range(n):
             color = tema.VERDE if i < registradas else tema.BORDE_TARJETA
+            # width=1 a propósito: sin ancho explícito, CTkFrame pide 200px
+            # por defecto y con 3+ hermanos a expand=True customtkinter deja
+            # al tercero en adelante pegados en 1x1 en vez de repartir el
+            # espacio (probado a mano — un tk.Frame sin CTk sí lo reparte
+            # bien, así que es cosa de CTkFrame, no de pack). Cualquier
+            # ancho chico evita el bug; total, fill="x" lo estira después.
             segmento = ctk.CTkFrame(
-                self.este_mes_segmentos_fila, height=7, corner_radius=4, fg_color=color,
+                self.este_mes_segmentos_fila, width=1, height=7, corner_radius=4, fg_color=color,
             )
             segmento.pack(
                 side="left", fill="x", expand=True, padx=(0 if i == 0 else 5, 0),

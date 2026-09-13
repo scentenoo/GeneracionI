@@ -15,12 +15,19 @@ import api_client
 from ui import tema
 from ui.cargando import Cargando
 from ui.tareas import cache, en_segundo_plano
+from ui.widgets import pildora
+
+_GRIS_TEXTO_TABLA = "#5A665F"
+_FONDO_SELECTOR_CURSO = "#F8FAF8"
+_ANCHO_PANEL_DERECHO = 380
 
 
 class GrupoScreen(ctk.CTkScrollableFrame):
     def __init__(self, master, sesion: dict, on_volver: Callable[[], None] | None = None):
         # Sin `on_volver` va montada como pestaña de CursosHubScreen.
-        super().__init__(master, label_text="" if on_volver is None else "Estudiantes de un curso")
+        super().__init__(
+            master, label_text="" if on_volver is None else "Estudiantes de un curso", fg_color="transparent",
+        )
         self.sesion = sesion
         self.on_volver = on_volver
         self._cursos_por_etiqueta: dict[str, dict] = {}
@@ -29,40 +36,132 @@ class GrupoScreen(ctk.CTkScrollableFrame):
         self._filtro_texto = ""
 
         if on_volver is not None:
-            ctk.CTkButton(self, text="← Volver", width=90, command=on_volver).pack(anchor="w", pady=(0, 10))
+            ctk.CTkButton(
+                self, text="← Volver", width=90, fg_color="transparent", border_width=1,
+                text_color=tema.TEXTO_OSCURO, hover_color=tema.FONDO_CONTENIDO, command=on_volver,
+            ).pack(anchor="w", pady=(0, 12))
 
-        ctk.CTkLabel(self, text="Curso").pack(anchor="w")
-        self.curso_menu = ctk.CTkOptionMenu(self, values=["(cargando...)"], command=lambda _v: self._cargar())
-        self.curso_menu.pack(fill="x", pady=(2, 10))
+        # Dos columnas como en el mockup: el panel de estudiantes ocupa el
+        # resto, "Agregar uno" / "Importar lista" quedan a la derecha con
+        # ancho fijo.
+        #
+        # Todo acá abajo usa fill="x" (nunca "both"/expand vertical): `self`
+        # es un CTkScrollableFrame, y un hijo directo suyo no puede
+        # "llenar" un alto disponible —esa región mide lo que el contenido
+        # pida, no al revés—. Pedir expand=True acá no solo no estiraba la
+        # columna: además dejaba con tamaño degenerado 1x1 a los widgets
+        # que vinieran después del 4º o 5º (visto a mano con
+        # winfo_height() — ver la misma nota en cursos_screen.py).
+        cuerpo = ctk.CTkFrame(self, fg_color="transparent")
+        cuerpo.pack(fill="x")
 
-        fila_import = ctk.CTkFrame(self, fg_color="transparent")
-        fila_import.pack(fill="x", pady=(10, 4))
-        ctk.CTkButton(fila_import, text="Importar CSV...", command=self._importar_csv).pack(side="left")
-        ctk.CTkLabel(
-            fila_import, text="  (columna 'nombre', una fila por estudiante)", text_color=tema.GRIS
-        ).pack(side="left")
+        columna_izquierda = ctk.CTkFrame(cuerpo, fg_color="transparent")
+        columna_izquierda.pack(side="left", fill="x", expand=True, padx=(0, 22), anchor="n")
 
-        fila_agregar = ctk.CTkFrame(self, fg_color="transparent")
-        fila_agregar.pack(fill="x", pady=4)
-        self.nuevo_nombre_entry = ctk.CTkEntry(fila_agregar, placeholder_text="Nombre del estudiante")
-        self.nuevo_nombre_entry.pack(side="left", fill="x", expand=True)
-        self.agregar_boton = ctk.CTkButton(fila_agregar, text="+ Agregar", width=90, command=self._agregar_uno)
-        self.agregar_boton.pack(side="left", padx=6)
-
-        self.error_label = ctk.CTkLabel(self, text="", text_color=tema.ROJO, wraplength=450, justify="left")
-        self.error_label.pack(fill="x", pady=(10, 4))
-
-        ctk.CTkLabel(self, text="Estudiantes actuales", font=tema.fuente(peso="bold")).pack(
-            anchor="w", pady=(16, 4)
+        tarjeta = ctk.CTkFrame(
+            columna_izquierda, fg_color=tema.FONDO_TARJETA, corner_radius=16,
+            border_width=1, border_color=tema.BORDE_TARJETA,
         )
-        self.lista_contenedor = ctk.CTkFrame(self, fg_color="transparent")
-        self.lista_contenedor.pack(fill="both", expand=True)
+        tarjeta.pack(fill="x")
+        contenido = ctk.CTkFrame(tarjeta, fg_color="transparent")
+        contenido.pack(fill="x", padx=24, pady=22)
+
+        encabezado = ctk.CTkFrame(contenido, fg_color="transparent")
+        encabezado.pack(fill="x", pady=(0, 18))
+        ctk.CTkLabel(
+            encabezado, text="Estudiantes actuales", font=tema.fuente(16, "bold"), text_color=tema.TEXTO_OSCURO,
+        ).pack(side="left", padx=(0, 12))
+        self._pildora_cantidad = pildora(encabezado, "0 en el curso", _GRIS_TEXTO_TABLA, tema.FONDO_CONTENIDO)
+        self._pildora_cantidad.pack(side="left")
+
+        marco_curso = ctk.CTkFrame(
+            contenido, corner_radius=10, border_width=1, border_color=tema.BORDE_TARJETA,
+            fg_color=_FONDO_SELECTOR_CURSO,
+        )
+        marco_curso.pack(fill="x", pady=(0, 18))
+        self.curso_menu = ctk.CTkOptionMenu(
+            marco_curso, values=["(cargando...)"], command=lambda _v: self._cargar(),
+            fg_color=_FONDO_SELECTOR_CURSO, button_color=_FONDO_SELECTOR_CURSO,
+            button_hover_color=tema.FONDO_CONTENIDO,
+        )
+        self.curso_menu.pack(fill="x", padx=2, pady=2)
+
+        self.lista_contenedor = ctk.CTkFrame(contenido, fg_color="transparent")
+        self.lista_contenedor.pack(fill="x")
+        self.lista_contenedor.grid_columnconfigure((0, 1), weight=1, uniform="estudiantes")
+
+        self.error_label = ctk.CTkLabel(
+            contenido, text="", text_color=tema.ROJO, wraplength=700, justify="left", anchor="w",
+        )
+        self.error_label.pack(fill="x", pady=(14, 0))
 
         self.quitar_boton = ctk.CTkButton(
-            self, text="Quitar seleccionados", fg_color=tema.ROJO, hover_color=tema.ROJO_HOVER,
+            contenido, text="Quitar seleccionados", fg_color="transparent", border_width=1,
+            border_color="#F0D2CE", text_color=tema.ROJO, hover_color=tema.ROJO_CHIP_BG,
             command=self._quitar_seleccionados,
         )
-        self.quitar_boton.pack(pady=10)
+        self.quitar_boton.pack(anchor="e", pady=(14, 0))
+
+        # Columna derecha: agregar de a uno + importar CSV, cada una en su
+        # propia tarjeta — como en el mockup.
+        #
+        # width Y height explícitos a propósito (no solo width): ver la
+        # misma nota en cursos_screen.py — sin los dos, pack_propagate(False)
+        # deja el ancho fijo pero el alto por defecto de CTkFrame (200)
+        # recorta el resto. 700 es de sobra para las dos tarjetas de acá.
+        columna_derecha = ctk.CTkFrame(cuerpo, fg_color="transparent", width=_ANCHO_PANEL_DERECHO, height=700)
+        columna_derecha.pack(side="left", anchor="n")
+        columna_derecha.pack_propagate(False)
+
+        tarjeta_agregar = ctk.CTkFrame(
+            columna_derecha, fg_color=tema.FONDO_TARJETA, corner_radius=16,
+            border_width=1, border_color=tema.BORDE_TARJETA,
+        )
+        tarjeta_agregar.pack(fill="x", pady=(0, 16))
+        contenido_agregar = ctk.CTkFrame(tarjeta_agregar, fg_color="transparent")
+        contenido_agregar.pack(fill="x", padx=22, pady=22)
+        ctk.CTkLabel(
+            contenido_agregar, text="Agregar uno", font=tema.fuente(15, "bold"), text_color=tema.TEXTO_OSCURO,
+            anchor="w",
+        ).pack(fill="x", pady=(0, 14))
+        self.nuevo_nombre_entry = ctk.CTkEntry(contenido_agregar, placeholder_text="Nombre del estudiante")
+        self.nuevo_nombre_entry.pack(fill="x")
+        self.agregar_boton = ctk.CTkButton(
+            contenido_agregar, text="+ Agregar", fg_color=tema.VERDE, hover_color=tema.VERDE_HOVER,
+            command=self._agregar_uno,
+        )
+        self.agregar_boton.pack(fill="x", pady=(10, 0))
+
+        tarjeta_importar = ctk.CTkFrame(
+            columna_derecha, fg_color=tema.FONDO_TARJETA, corner_radius=16,
+            border_width=1, border_color=tema.BORDE_TARJETA,
+        )
+        tarjeta_importar.pack(fill="x")
+        contenido_importar = ctk.CTkFrame(tarjeta_importar, fg_color="transparent")
+        contenido_importar.pack(fill="x", padx=22, pady=22)
+        ctk.CTkLabel(
+            contenido_importar, text="Importar lista", font=tema.fuente(15, "bold"), text_color=tema.TEXTO_OSCURO,
+            anchor="w",
+        ).pack(fill="x", pady=(0, 6))
+        ctk.CTkLabel(
+            contenido_importar,
+            text="Archivo CSV con una columna nombre y una fila por estudiante.",
+            font=tema.fuente(12), text_color=tema.TEXTO_MUTED, anchor="w", justify="left", wraplength=300,
+        ).pack(fill="x", pady=(0, 14))
+        zona_csv = ctk.CTkFrame(
+            contenido_importar, corner_radius=12, fg_color="#FAFBFA",
+            border_width=2, border_color=tema.BORDE_TARJETA,
+        )
+        zona_csv.pack(fill="x")
+        contenido_zona = ctk.CTkFrame(zona_csv, fg_color="transparent")
+        contenido_zona.pack(pady=22)
+        ctk.CTkFrame(
+            contenido_zona, width=44, height=44, corner_radius=11, fg_color=tema.FONDO_CONTENIDO,
+        ).pack(pady=(0, 12))
+        ctk.CTkButton(
+            contenido_zona, text="Importar CSV…", fg_color="transparent", border_width=1,
+            text_color=tema.TEXTO_OSCURO, hover_color=tema.FONDO_CONTENIDO, command=self._importar_csv,
+        ).pack()
 
         self._cargar_cursos()
 
@@ -71,7 +170,7 @@ class GrupoScreen(ctk.CTkScrollableFrame):
     def _trabajando(self, texto: str):
         """Deja claro que la llamada está en curso, en vez de dejar fijo el
         mensaje de la operación anterior."""
-        self.error_label.configure(text=texto, text_color=tema.GRIS)
+        self.error_label.configure(text=texto, text_color=tema.TEXTO_MUTED)
         self.update_idletasks()
 
     # --- carga ------------------------------------------------------------
@@ -148,6 +247,7 @@ class GrupoScreen(ctk.CTkScrollableFrame):
         self._checkboxes.clear()
 
         estudiantes = self._estudiantes_cache
+        self._pildora_cantidad.configure(text=f"  {len(estudiantes)} en el curso  ")
         if self._filtro_texto:
             estudiantes = [e for e in estudiantes if self._filtro_texto in str(e["nombre"]).lower()]
 
@@ -156,19 +256,38 @@ class GrupoScreen(ctk.CTkScrollableFrame):
                 "Ningún estudiante coincide con la búsqueda." if self._filtro_texto
                 else "Todavía no hay estudiantes."
             )
-            ctk.CTkLabel(self.lista_contenedor, text=mensaje, text_color=tema.GRIS).pack(anchor="w")
+            ctk.CTkLabel(self.lista_contenedor, text=mensaje, text_color=tema.TEXTO_MUTED).grid(
+                row=0, column=0, columnspan=2, sticky="w", pady=6
+            )
             return
 
-        for est in estudiantes:
+        # Grilla de 2 columnas, como en el mockup (antes: una sola columna
+        # de filas apiladas).
+        for indice, est in enumerate(estudiantes):
             var = ctk.BooleanVar(value=False)
             # Quien está en otro curso sigue inscrito ahí si lo sacás de
             # este: conviene verlo antes de marcarlo.
             otros = est.get("otros_cursos", 0)
-            etiqueta = str(est["nombre"])
+            fila = ctk.CTkFrame(
+                self.lista_contenedor, fg_color="transparent", corner_radius=11,
+                border_width=1, border_color=tema.DIVISOR,
+            )
+            fila.grid(
+                row=indice // 2, column=indice % 2, sticky="nsew",
+                padx=(0, 5) if indice % 2 == 0 else (5, 0), pady=4,
+            )
+            contenido_fila = ctk.CTkFrame(fila, fg_color="transparent")
+            contenido_fila.pack(fill="x", padx=14, pady=10)
+            cb = ctk.CTkCheckBox(
+                contenido_fila, text=str(est["nombre"]), variable=var, text_color=tema.TEXTO_OSCURO,
+                fg_color=tema.VERDE_OSCURO, hover_color=tema.VERDE_OSCURO_ACTIVO,
+            )
+            cb.pack(side="left")
             if otros:
-                etiqueta += f"   (también en {otros} curso{'s' if otros > 1 else ''})"
-            cb = ctk.CTkCheckBox(self.lista_contenedor, text=etiqueta, variable=var)
-            cb.pack(anchor="w", pady=2)
+                ctk.CTkLabel(
+                    contenido_fila, text=f"también en {otros} curso{'s' if otros > 1 else ''}",
+                    text_color=tema.TEXTO_MUTED, font=tema.fuente(11), anchor="e",
+                ).pack(side="right")
             self._checkboxes[est["id"]] = (cb, var)
 
     # --- acciones ---------------------------------------------------------

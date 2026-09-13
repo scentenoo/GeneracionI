@@ -31,10 +31,21 @@ _WEB_Y_DIRECCION = (
     "www.sanpedrodelosmilagros-antioquia.gov.co / Carrera 49A No.49-36 "
     "Parque principal - PBX. 8687039"
 )
-_CORREO_Y_CODIGO_POSTAL = (
-    "E-mail: secgobierno@sanpedrodelosmilagros-antioquia.gov.co "
-    "/ Código Postal 051010 / Página "
-)
+_CORREO_GOBIERNO = "secgobierno@sanpedrodelosmilagros-antioquia.gov.co"
+# El certificado de pago (Secretaría de Educación) usa un correo distinto
+# al del resto de trámites (Secretaría de Gobierno) — así sale en el
+# certificado real que pasó el equipo directivo.
+_CORREO_EDUCACION = "seceducacion@sanpedrodelosmilagros-antioquia.gov.co"
+
+# El nombre de la institución y el pie de página son el mismo membrete
+# físico en CUALQUIER trámite del municipio, así que van siempre en esta
+# fuente — no en la que use el cuerpo de cada documento (Calibri en
+# planeación, Arial en el certificado, etc.). Comparado contra el
+# certificado real que pasó el equipo directivo: "ADMINISTRACIÓN
+# MUNICIPAL" y el pie salen en Century Gothic ahí, aunque el resto del
+# certificado sea Arial. Los `_fijar_fuente` de cada construir_plantilla_*
+# respetan esto: solo tocan runs que todavía no tienen una fuente propia.
+_FUENTE_INSTITUCION = "Century Gothic"
 
 
 def agregar_campo_word_(paragraph, codigo_campo):
@@ -53,13 +64,15 @@ def agregar_campo_word_(paragraph, codigo_campo):
     run._r.append(fin)
 
 
-def armar_membrete_(doc, titulo_documento, codigo_tramite=None, version_tramite=None):
+def armar_membrete_(doc, titulo_documento, codigo_tramite=None, version_tramite=None, correo=_CORREO_GOBIERNO):
     """Encabezado (escudo, título del documento, código/versión si el
     trámite tiene uno) y pie de página (web, dirección, correo, número de
     página) — igual al formato oficial que usa el programa.
 
     Sin `codigo_tramite`, la columna de código/versión no se dibuja: mejor
-    dejarla afuera que inventar un número que no existe.
+    dejarla afuera que inventar un número que no existe. `correo` por
+    defecto es el de Secretaría de Gobierno (todos los trámites docentes);
+    el certificado de pago pasa `_CORREO_EDUCACION` en su lugar.
     """
     seccion = doc.sections[0]
 
@@ -86,11 +99,13 @@ def armar_membrete_(doc, titulo_documento, codigo_tramite=None, version_tramite=
     celda_institucion.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
     p1 = celda_institucion.paragraphs[0]
     p1.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    p1.add_run("ADMINISTRACIÓN MUNICIPAL")
+    r1 = p1.add_run("ADMINISTRACIÓN MUNICIPAL")
+    r1.font.name = _FUENTE_INSTITUCION
     p2 = celda_institucion.add_paragraph()
     p2.alignment = WD_ALIGN_PARAGRAPH.CENTER
     r2 = p2.add_run("Secretaria de Educación y Desarrollo Social")
     r2.font.size = Pt(9)
+    r2.font.name = _FUENTE_INSTITUCION
 
     celda_titulo = tabla.cell(0, 1).merge(tabla.cell(2, 1))
     celda_titulo.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
@@ -129,13 +144,15 @@ def armar_membrete_(doc, titulo_documento, codigo_tramite=None, version_tramite=
     p_web = pie.paragraphs[0]
     p_web.alignment = WD_ALIGN_PARAGRAPH.CENTER
     r_web = p_web.add_run(_WEB_Y_DIRECCION)
-    r_web.font.size = Pt(8)
+    r_web.font.size = Pt(9)
+    r_web.font.name = _FUENTE_INSTITUCION
 
     p_mail = pie.add_paragraph()
     p_mail.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    p_mail.add_run(_CORREO_Y_CODIGO_POSTAL)
+    p_mail.add_run(f"E-mail: {correo} / Código Postal 051010 / Página ")
     agregar_campo_word_(p_mail, "PAGE")
     p_mail.add_run(" de ")
     agregar_campo_word_(p_mail, "NUMPAGES")
     for r in p_mail.runs:
-        r.font.size = Pt(8)
+        r.font.size = Pt(9)
+        r.font.name = _FUENTE_INSTITUCION

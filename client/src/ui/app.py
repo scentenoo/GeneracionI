@@ -38,11 +38,23 @@ class App(ctk.CTk):
         ctk_parches.reparar_copiar_pegar(self)
         # Los equipos de la sede son viejos, así que hay que contar con
         # pantallas de 1366x768: descontando barra de tareas y título quedan
-        # unos 696 px de alto útiles, y 720 se salía por abajo.
+        # unos 696 px de alto útiles, y 720 se salía por abajo. Ese tamaño
+        # queda como el que recupera la ventana si alguien la "restaura"
+        # (botón de maximizar) — abre maximizada de entrada porque así se
+        # pidió, no reemplaza el tamaño mínimo de abajo.
         self.geometry("700x670")
         self.minsize(560, 480)
+        # "zoomed" (no "-fullscreen"): maximizada como con el botón de la
+        # ventana —conserva título, bordes y la barra de tareas—, no en
+        # modo kiosco sin decoración.
+        self.state("zoomed")
 
         self.sesion: dict | None = None
+        # Claves de las devoluciones que ya se le avisaron a este usuario en
+        # esta sesión (login o chequeo periódico) — ver
+        # _chequear_devoluciones_periodico: sin esto, cada chequeo volvería a
+        # mostrar el mismo aviso de algo que ya se le avisó antes.
+        self._devoluciones_notificadas: set[tuple] = set()
         # customtkinter (CTkScrollableFrame en particular) no siempre queda
         # accesible recorriendo winfo_children(), así que guardamos la
         # pantalla activa acá para poder referenciarla directo.
@@ -174,7 +186,7 @@ class App(ctk.CTk):
             secciones.append(("horas_gestion", "Horas de gestión", self._mostrar_horas_gestion))
             secciones.append(("usuarios", "Usuarios", self._mostrar_usuarios))
 
-        secciones.append(("password", "Cambiar contraseña", self._mostrar_password))
+        secciones.append(("password", "Mi cuenta", self._mostrar_password))
         # Publicar una versión bloquea a quien no la tenga, y reasignar
         # revisores cambia quién aprueba el trabajo de todos: las dos van
         # detrás del administrador único y no del rol directivo.
@@ -334,21 +346,37 @@ class App(ctk.CTk):
         )
 
     def _datos_aviso(self, sesion: dict) -> dict:
-        """Junta en un solo viaje lo que se muestra al entrar."""
+        """Junta en un solo viaje lo que se muestra al entrar — antes eran
+        dos llamadas seguidas (el doble de espera, y justo al entrar es
+        cuando más otras llamadas hay en vuelo: cache.precargar, Inicio)."""
         from services import date_utils
 
-        devoluciones = api_client.mis_devoluciones(sesion["token"])
-        cierre = api_client.fecha_de_cierre(sesion["token"], date_utils.hoy_iso()[:7])
-        return {"devoluciones": devoluciones, "cierre": cierre}
+        token = sesion["token"]
+        devoluciones, cierre = api_client.batch([
+            ("mis_devoluciones", [token]),
+            ("fecha_de_cierre", [token, date_utils.hoy_iso()[:7]]),
+        ])
+        return {
+            "devoluciones": [] if isinstance(devoluciones, api_client.ApiError) else devoluciones,
+            "cierre": {} if isinstance(cierre, api_client.ApiError) else cierre,
+        }
 
     def _avisos_al_entrar(self, datos: dict):
         """Aviso al entrar: lo devuelto para corregir (con motivo) y, si está
-        cerca, cuándo se cierra el mes. Si no hay nada que decir, no molesta."""
+        cerca, cuándo se cierra el mes. Si no hay nada que decir, no molesta.
+
+        De acá también arranca el chequeo periódico de devoluciones (ver
+        _chequear_devoluciones_periodico): lo que ya se avisó acá queda
+        marcado como notificado, para que el primer chequeo periódico no
+        repita el mismo aviso."""
         from services import date_utils
         from services.avisos import texto_devoluciones
 
         devoluciones = datos.get("devoluciones") or []
         cierre = datos.get("cierre") or {}
+
+        self._devoluciones_notificadas = {self._clave_devolucion(d) for d in devoluciones}
+        self._programar_chequeo_devoluciones()
 
         partes = []
         texto = texto_devoluciones(devoluciones)
@@ -379,6 +407,54 @@ class App(ctk.CTk):
         except (ValueError, TypeError):
             return None
         return (objetivo - datetime.date.today()).days
+
+    # --- chequeo periódico de devoluciones -------------------------------
+    # El aviso al entrar (_avisos_al_entrar) solo se ve una vez, al loguear:
+    # si un revisor devuelve algo mientras el docente ya está trabajando en
+    # otra pantalla, antes no se enteraba hasta la próxima vez que abriera
+    # la app o pasara por Inicio (donde está la campanita). Este chequeo
+    # repite cada pocos minutos mientras la sesión siga abierta, en
+    # cualquier pantalla en la que esté, y solo avisa de lo que sea NUEVO
+    # (ver _devoluciones_notificadas) para no repetir lo que ya vio.
+    _INTERVALO_DEVOLUCIONES_MS = 5 * 60 * 1000  # 5 minutos
+
+    @staticmethod
+    def _clave_devolucion(d: dict) -> tuple:
+        """Identifica una devolución para no volver a avisarla: una
+        planeación por su id, un informe por curso+mes (no tiene id propio
+        en mis_devoluciones)."""
+        if d.get("tipo") == "informe":
+            return ("informe", d.get("curso_id"), d.get("mes"))
+        return ("planeacion", d.get("id"))
+
+    def _programar_chequeo_devoluciones(self):
+        self.after(self._INTERVALO_DEVOLUCIONES_MS, self._chequear_devoluciones_periodico)
+
+    def _chequear_devoluciones_periodico(self):
+        # Cerró sesión mientras tanto: sin sesión no hay a quién avisarle,
+        # y no se reprograma más — el próximo login arranca la cadena de
+        # nuevo desde _avisos_al_entrar.
+        if not self.sesion:
+            return
+        en_segundo_plano(
+            self,
+            lambda: api_client.mis_devoluciones(self.sesion["token"]),
+            self._al_chequear_devoluciones,
+            # Un chequeo silencioso: un fallo de red puntual no tiene que
+            # interrumpir al docente ni cortar la cadena de chequeos.
+            lambda _exc: self._programar_chequeo_devoluciones(),
+            mostrar_overlay=False,
+        )
+
+    def _al_chequear_devoluciones(self, devoluciones: list[dict]):
+        from services.avisos import texto_devoluciones
+
+        devoluciones = devoluciones or []
+        nuevas = [d for d in devoluciones if self._clave_devolucion(d) not in self._devoluciones_notificadas]
+        self._devoluciones_notificadas |= {self._clave_devolucion(d) for d in devoluciones}
+        if nuevas:
+            messagebox.showwarning("Le devolvieron algo nuevo", texto_devoluciones(nuevas))
+        self._programar_chequeo_devoluciones()
 
     def _mostrar_home(self):
         self._limpiar_contenido()
@@ -513,7 +589,7 @@ class App(ctk.CTk):
     def _mostrar_password(self):
         self._limpiar_contenido()
         self._sidebar.marcar_activo("password")
-        self._encabezado.configurar_titulo("Cambiar contraseña")
+        self._encabezado.configurar_titulo("Mi cuenta")
         self._encabezado.configurar_buscador(None)
         self.pantalla_actual = PasswordScreen(self._content, self.sesion, on_volver=self._mostrar_home)
         self.pantalla_actual.pack(fill="both", expand=True)
