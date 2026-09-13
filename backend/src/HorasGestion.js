@@ -82,17 +82,26 @@ function obtener_horas_gestion(token, directivo_id) {
 }
 
 /**
- * Vista de supervisión: horas de gestión (evidencia con foto+entregable)
- * de TODO el equipo directivo en un mes, para Revisar → Horas externas.
- * Solo el administrador — es una vista de supervisión, no de
- * autoservicio, igual que obtener_revisores/fijar_revisores en
- * Revisiones.js.
+ * Vista de supervisión de TODAS las horas externas del equipo en un mes,
+ * para Revisar → Horas externas — solo el administrador, es una vista de
+ * supervisión, no de autoservicio, igual que
+ * obtener_revisores/fijar_revisores en Revisiones.js.
+ *
+ * Junta DOS fuentes que antes vivían separadas — el banner de esta pantalla
+ * ya decía "cada docente y directivo debe cumplir 8 horas externas al mes",
+ * pero solo se leían las horas de gestión de los directivos, nunca las
+ * horas_externas que cargan los docentes en sus actividades (reuniones,
+ * claustros) de un curso:
+ *   - Horas de gestión (directivos): un ítem revisable, con evidencia
+ *     (foto+entregable) — se aprueba o devuelve una por una acá mismo.
+ *   - horas_externas de Actividades (docentes): informativas nada más —
+ *     ya se revisan como parte del informe mensual completo de ese curso,
+ *     no una por una acá, así que no llevan aprobar/devolver.
+ * horas_sede de Actividades queda afuera a propósito: esa no es "externa",
+ * ya se cuenta en la cuenta de cobro / certificado de pago por su lado.
  *
  * Mismo patrón que Usuarios.js#obtener_dashboard_directivo: una lectura
  * de cada hoja, agrupado en memoria, en vez de una llamada por persona.
- * Devuelve el resumen por persona (total contra HORAS_OBJETIVO_MENSUAL,
- * para la barra de progreso) y el detalle de actividades (para aprobar o
- * devolver una por una desde el panel de la derecha).
  */
 function obtener_horas_del_equipo(token, mes) {
   const sesion = requireSession_(token);
@@ -103,22 +112,73 @@ function obtener_horas_del_equipo(token, mes) {
     usuarioPorId[String(u.id)] = u;
   });
 
-  const filasDelMes = readAllRows_(SHEET_NAMES.HORAS_GESTION).filter(
-    (h) => mesDeFecha_(h.fecha) === mes
-  );
-
-  const totalPorDirectivo = {};
-  filasDelMes.forEach((h) => {
-    const clave = String(h.directivo_id);
-    totalPorDirectivo[clave] = (totalPorDirectivo[clave] || 0) + Number(h.horas_sede || 0);
+  const cursoPorId = {};
+  readAllRows_(SHEET_NAMES.CURSOS).forEach((c) => {
+    cursoPorId[String(c.id)] = c;
   });
 
-  const resumen = Object.keys(totalPorDirectivo).map((directivoId) => {
-    const usuario = usuarioPorId[directivoId];
-    const total = totalPorDirectivo[directivoId];
+  const totalPorPersona = {};
+  const items = [];
+
+  readAllRows_(SHEET_NAMES.HORAS_GESTION)
+    .filter((h) => mesDeFecha_(h.fecha) === mes)
+    .forEach((h) => {
+      const clave = String(h.directivo_id);
+      const horas = Number(h.horas_sede) || 0;
+      totalPorPersona[clave] = (totalPorPersona[clave] || 0) + horas;
+      const usuario = usuarioPorId[clave];
+      items.push({
+        tipo: 'gestion',
+        id: h.id,
+        persona_id: h.directivo_id,
+        persona: usuario ? usuario.nombre : `id ${h.directivo_id}`,
+        fecha: fechaISO_(h.fecha),
+        actividad: h.actividad,
+        curso: '',
+        horas: horas,
+        entregable: h.entregable,
+        link_soporte: h.link_soporte || '',
+        foto_drive_id: h.foto_drive_id || '',
+        estado: h.estado || ESTADO_PENDIENTE,
+        revisado_por: h.revisado_por || '',
+        revisado_en: h.revisado_en || '',
+        motivo_devolucion: h.motivo_devolucion || '',
+      });
+    });
+
+  readAllRows_(SHEET_NAMES.ACTIVIDADES)
+    .filter((a) => mesDeFecha_(a.fecha) === mes && Number(a.horas_externas) > 0)
+    .forEach((a) => {
+      const clave = String(a.usuario_id);
+      const horas = Number(a.horas_externas) || 0;
+      totalPorPersona[clave] = (totalPorPersona[clave] || 0) + horas;
+      const usuario = usuarioPorId[clave];
+      const curso = cursoPorId[String(a.curso_id)];
+      items.push({
+        tipo: 'actividad',
+        id: a.id,
+        persona_id: a.usuario_id,
+        persona: usuario ? usuario.nombre : `id ${a.usuario_id}`,
+        fecha: fechaISO_(a.fecha),
+        actividad: a.descripcion,
+        curso: curso ? curso.nombre : '',
+        horas: horas,
+        entregable: '',
+        link_soporte: '',
+        foto_drive_id: a.foto_drive_id || '',
+        estado: '',
+        revisado_por: '',
+        revisado_en: '',
+        motivo_devolucion: '',
+      });
+    });
+
+  const resumen = Object.keys(totalPorPersona).map((personaId) => {
+    const usuario = usuarioPorId[personaId];
+    const total = totalPorPersona[personaId];
     return {
-      directivo_id: Number(directivoId),
-      nombre: usuario ? usuario.nombre : `id ${directivoId}`,
+      persona_id: Number(personaId),
+      nombre: usuario ? usuario.nombre : `id ${personaId}`,
       rol: usuario ? usuario.rol : '',
       total_horas: total,
       objetivo: HORAS_OBJETIVO_MENSUAL,
@@ -126,26 +186,23 @@ function obtener_horas_del_equipo(token, mes) {
     };
   });
 
-  const actividades = filasDelMes.map((h) => {
-    const usuario = usuarioPorId[String(h.directivo_id)];
-    return {
-      id: h.id,
-      directivo_id: h.directivo_id,
-      directivo: usuario ? usuario.nombre : `id ${h.directivo_id}`,
-      fecha: fechaISO_(h.fecha),
-      actividad: h.actividad,
-      horas_sede: h.horas_sede,
-      entregable: h.entregable,
-      link_soporte: h.link_soporte || '',
-      foto_drive_id: h.foto_drive_id || '',
-      estado: h.estado || ESTADO_PENDIENTE,
-      revisado_por: h.revisado_por || '',
-      revisado_en: h.revisado_en || '',
-      motivo_devolucion: h.motivo_devolucion || '',
-    };
-  });
+  return { resumen: resumen, actividades: items };
+}
 
-  return { resumen: resumen, actividades: actividades };
+/**
+ * Una foto puntual de una hora externa (de gestión o de actividad de
+ * docente), para verla adentro de la app en vez de abrir Drive — misma
+ * vista de supervisión que obtener_horas_del_equipo, así que el mismo
+ * permiso. `archivoABase64_` vive en Informes.js, es genérico para
+ * cualquier archivo de Drive por id.
+ */
+function obtener_foto_horas_externas(token, foto_drive_id) {
+  const sesion = requireSession_(token);
+  requireAdministrador_(sesion);
+  if (!foto_drive_id) throw new Error('Sin foto para mostrar');
+  const foto = archivoABase64_(foto_drive_id);
+  if (!foto) throw new Error('No se encontró la foto en Drive');
+  return { base64: foto.base64, mimeType: foto.mimeType };
 }
 
 const CAMPOS_EDITABLES_GESTION_ = ['fecha', 'actividad', 'horas_sede', 'entregable', 'link_soporte'];

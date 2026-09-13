@@ -90,7 +90,10 @@ function listar_todos_los_cursos(token) {
   return readAllRows_(SHEET_NAMES.CURSOS);
 }
 
-const CAMPOS_EDITABLES_CURSO_ = ['nombre', 'nucleo', 'edad_desde', 'edad_hasta', 'docente_id', 'activo', 'color'];
+const CAMPOS_EDITABLES_CURSO_ = [
+  'nombre', 'nucleo', 'edad_desde', 'edad_hasta', 'docente_id', 'activo', 'color',
+  'excluido_certificado',
+];
 
 function editar_curso(token, curso_id, cambios) {
   const sesion = requireSession_(token);

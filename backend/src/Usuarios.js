@@ -40,6 +40,10 @@ function crear_usuario(token, datos) {
     valor_hora_docente: datos.valor_hora_docente || '',
     valor_hora_directivo: datos.valor_hora_directivo || '',
     cedula: datos.cedula || '',
+    telefono: datos.telefono || '',
+    // Título/profesión: lo pide el certificado de pago mensual (columna
+    // FORMACIÓN), no se usa en ningún otro documento.
+    formacion: datos.formacion || '',
     // curso/nucleo/edades ya no viven acá: se cargan por separado con crear_curso.
     numero_cuenta: datos.numero_cuenta || '',
     tipo_cuenta: datos.tipo_cuenta || '',
@@ -51,7 +55,7 @@ function crear_usuario(token, datos) {
 }
 
 const CAMPOS_EDITABLES_USUARIO_ = [
-  'nombre', 'rol', 'valor_hora_docente', 'valor_hora_directivo', 'cedula',
+  'nombre', 'rol', 'valor_hora_docente', 'valor_hora_directivo', 'cedula', 'telefono', 'formacion',
   'numero_cuenta', 'tipo_cuenta', 'entidad_bancaria',
 ];
 
@@ -78,6 +82,31 @@ function editar_usuario(token, usuario_id, cambios) {
 
   const cambiosReales = updateRowById_(SHEET_NAMES.USUARIOS, usuario_id, cambiosFiltrados);
   return { ok: true, cambios: cambiosReales.length };
+}
+
+/**
+ * El propio perfil — para que cada quien vea lo que dirección ya le cargó
+ * (cédula, teléfono, formación, cuenta bancaria) sin tener que pedírselo:
+ * antes esto solo se veía desde "Usuarios", una pantalla de
+ * directivo/administrador, así que un docente no tenía forma de chequear
+ * si ya le habían cargado un dato. Cualquier usuario logueado puede
+ * pedir el suyo — no hace falta ser directivo para leer los propios datos.
+ */
+function obtener_mi_perfil(token) {
+  const sesion = requireSession_(token);
+  const fila = findRowById_(SHEET_NAMES.USUARIOS, sesion.id);
+  if (!fila) throw new Error('Usuario no encontrado');
+  return {
+    nombre: fila.nombre,
+    usuario: fila.usuario,
+    rol: fila.rol,
+    cedula: fila.cedula || '',
+    telefono: fila.telefono || '',
+    formacion: fila.formacion || '',
+    numero_cuenta: fila.numero_cuenta || '',
+    tipo_cuenta: fila.tipo_cuenta || '',
+    entidad_bancaria: fila.entidad_bancaria || '',
+  };
 }
 
 /**
@@ -354,6 +383,17 @@ function obtener_dashboard_directivo(token, mes) {
     informePorCurso[String(i.curso_id)] = i;
   });
 
+  // Mismo cálculo que Certificados.js#generar_certificado_pago: horas
+  // externas del mes por curso (Actividades.horas_externas), para saber
+  // acá mismo si el docente ya cumplió las 8 h sin tener que ir a Revisar
+  // → Horas externas a buscarlo.
+  const horasExternasPorCurso = {};
+  readAllRows_(SHEET_NAMES.ACTIVIDADES).forEach((a) => {
+    if (mesDeFecha_(a.fecha) !== mes) return;
+    const clave = String(a.curso_id);
+    horasExternasPorCurso[clave] = (horasExternasPorCurso[clave] || 0) + (Number(a.horas_externas) || 0);
+  });
+
   // Las reaperturas se leen una vez y no por curso: mesCerrado_ relee la
   // pestaña entera cada vez que se lo llama.
   const reabierto = {};
@@ -367,6 +407,7 @@ function obtener_dashboard_directivo(token, mes) {
     const registradas = clasesPorCurso[String(curso.id)] || 0;
     const informe = informePorCurso[String(curso.id)];
     const abierto = !!reabierto[String(curso.id)];
+    const horasExternas = horasExternasPorCurso[String(curso.id)] || 0;
     return {
       cerrado: yaPasoElCorte && !abierto,
       reabierto: abierto,
@@ -374,6 +415,7 @@ function obtener_dashboard_directivo(token, mes) {
       fecha_cierre: fechaCierre,
       curso_id: curso.id,
       curso: curso.nombre,
+      nucleo: curso.nucleo || '',
       docente_id: curso.docente_id,
       docente: nombrePorId[String(curso.docente_id)] || `id ${curso.docente_id}`,
       mes: mes,
@@ -384,6 +426,9 @@ function obtener_dashboard_directivo(token, mes) {
       faltantes: Math.max(0, CLASES_MINIMAS_POR_MES - registradas),
       informe_entregado: !!informe,
       informe_actualizado_en: informe ? informe.actualizado_en : '',
+      horas_externas: horasExternas,
+      objetivo_horas_externas: HORAS_OBJETIVO_MENSUAL,
+      cumple_horas_externas: horasExternas >= HORAS_OBJETIVO_MENSUAL,
     };
   });
 }

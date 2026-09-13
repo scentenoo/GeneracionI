@@ -41,7 +41,10 @@ const ESQUEMA_SHEETS_ = {
   // misma persona puede tener varios cursos con distinto núcleo y edades.
   [SHEET_NAMES.USUARIOS]: [
     'id', 'nombre', 'usuario', 'password_hash', 'rol', 'es_admin',
-    'valor_hora_docente', 'valor_hora_directivo', 'cedula',
+    'valor_hora_docente', 'valor_hora_directivo', 'cedula', 'telefono',
+    // Título/profesión: la pide el certificado de pago mensual (columna
+    // FORMACIÓN); no se usa en ningún otro documento.
+    'formacion',
     'numero_cuenta', 'tipo_cuenta', 'entidad_bancaria', 'firma_drive_id',
     'ultimo_acceso',
   ],
@@ -50,6 +53,11 @@ const ESQUEMA_SHEETS_ = {
     // Color de revisión: 'verde' lo revisa Mariangel, 'morado' Lorena
     // (ver Config revisor_verde / revisor_morado).
     'color',
+    // Un curso activo cuyo docente no cobra esas horas por esta vía (caso
+    // real: Alejandro Sánchez) — sin esto, el certificado de pago lo
+    // certificaba igual apenas cargara alguna clase. Distinto de `activo`:
+    // el curso sigue andando normal, solo se lo saca de ESE documento.
+    'excluido_certificado',
   ],
   [SHEET_NAMES.PLANEACIONES]: [
     'id', 'docente_id', 'curso_id', 'fecha', 'grupo', 'objetivo', 'temas_vistos',

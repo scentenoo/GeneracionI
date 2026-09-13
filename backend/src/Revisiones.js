@@ -304,6 +304,7 @@ function revision_del_mes(token, mes) {
   ).map((p) => ({
     id: p.id,
     curso: idsCurso[String(p.curso_id)].nombre,
+    nucleo: idsCurso[String(p.curso_id)].nucleo || '',
     docente: nombrePorId[String(p.docente_id)] || '',
     fecha: fechaISO_(p.fecha),
     objetivo: p.objetivo,
@@ -319,6 +320,7 @@ function revision_del_mes(token, mes) {
     curso_id: i.curso_id,
     mes: mes,
     curso: idsCurso[String(i.curso_id)].nombre,
+    nucleo: idsCurso[String(i.curso_id)].nucleo || '',
     docente: nombrePorId[String(i.docente_id)] || '',
     doc_drive_id: i.doc_drive_id || '',
     estado: i.estado || ESTADO_PENDIENTE,
