@@ -69,6 +69,7 @@ _SOLO_LECTURA = frozenset({
     # esto, cualquiera de estas fallaba duro con el primer bache de Apps
     # Script en vez de reintentar sola como el resto de las de lectura.
     "obtener_estado_nucleo", "obtener_resumen_docente", "generar_certificado_pago",
+    "generar_informe_asistencia", "generar_reporte_inasistencias",
     "obtener_horas_del_equipo", "obtener_foto_horas_externas", "obtener_mi_perfil",
     # `batch` junta solo lecturas en este código (cache.precargar, avisos al
     # entrar, Inicio) — reintentar todo el viaje ante un fallo transitorio
@@ -697,6 +698,22 @@ def generar_certificado_pago(token: str, mes: str) -> dict:
     administradores): una fila por docente y curso con el total de horas
     de ese curso ese mes (de sede + externas, ya sumadas)."""
     return _call("generar_certificado_pago", token, mes)
+
+
+def generar_informe_asistencia(token: str, mes: str) -> dict:
+    """Informe consolidado de asistencia de todos los cursos de un mes
+    (solo administradores), para mandar a la Secretaría de Educación: por
+    curso, qué estudiantes asistieron/faltaron en cada clase y el total del
+    mes."""
+    return _call("generar_informe_asistencia", token, mes)
+
+
+def generar_reporte_inasistencias(token: str) -> dict:
+    """Inasistencias acumuladas por curso activo (desde que cada estudiante
+    se inscribió, no de un mes puntual) más cuántos cursos activos tiene
+    cada estudiante del programa — solo administradores, para exportar a
+    Excel."""
+    return _call("generar_reporte_inasistencias", token)
 
 
 def ejecutar_migracion(token: str, nombre: str) -> dict:

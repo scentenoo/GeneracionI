@@ -47,7 +47,14 @@ class App(ctk.CTk):
         # "zoomed" (no "-fullscreen"): maximizada como con el botón de la
         # ventana —conserva título, bordes y la barra de tareas—, no en
         # modo kiosco sin decoración.
-        self.state("zoomed")
+        #
+        # Pedida acá mismo, en __init__, a veces no se sostenía: Windows
+        # todavía no había terminado de mapear la ventana con el tamaño de
+        # geometry() de arriba, así que el estado "zoomed" se aplicaba y
+        # enseguida quedaba pisado por esa geometría pendiente — se veía
+        # como un flash maximizado que "saltaba" al rectángulo chico. Con
+        # after(10, ...) se pide ya con la ventana mapeada, y se sostiene.
+        self.after(10, lambda: self.state("zoomed"))
 
         self.sesion: dict | None = None
         # Claves de las devoluciones que ya se le avisaron a este usuario en

@@ -12,6 +12,7 @@ import customtkinter as ctk
 from ui import tema
 from ui.certificado_pago_screen import CertificadoPagoScreen
 from ui.dashboard_screen import DashboardScreen
+from ui.informe_asistencia_screen import InformeAsistenciaScreen
 from ui.revisar_horas_screen import RevisarHorasScreen
 from ui.revisar_informes_screen import RevisarInformesScreen
 from ui.revisar_planeaciones_screen import RevisarPlaneacionesScreen
@@ -33,6 +34,11 @@ class RevisarHubScreen(ctk.CTkFrame):
         # (rol "docente", sin ser admin) esa pestaña les daría siempre
         # "no tiene permiso".
         self._puede_horas = self._es_admin or sesion.get("rol") in ("directivo", "ambos")
+        # Informe de asistencia: mismo criterio que horas externas — equipo
+        # directivo y administrador, nunca un docente puro (ver
+        # Asistencia.js: generar_informe_asistencia/generar_reporte_inasistencias
+        # ahora piden requireSupervisor_, no requireAdministrador_).
+        self._puede_asistencia = self._puede_horas
 
         ctk.CTkButton(
             self, text="← Volver", width=90, fg_color="transparent", border_width=1,
@@ -47,6 +53,8 @@ class RevisarHubScreen(ctk.CTkFrame):
         nombres.append("Dashboard mensual")
         if self._es_admin:
             nombres.append("Certificado de pago")
+        if self._puede_asistencia:
+            nombres.append("Informe de asistencia")
         for nombre in nombres:
             self.tabview.add(nombre)
 
@@ -69,6 +77,11 @@ class RevisarHubScreen(ctk.CTkFrame):
             self.certificado = CertificadoPagoScreen(self.tabview.tab("Certificado de pago"), sesion)
             self.certificado.pack(fill="both", expand=True)
 
+        self.asistencia: InformeAsistenciaScreen | None = None
+        if self._puede_asistencia:
+            self.asistencia = InformeAsistenciaScreen(self.tabview.tab("Informe de asistencia"), sesion)
+            self.asistencia.pack(fill="both", expand=True)
+
         self._al_cambiar_pestana()
 
     def _al_cambiar_pestana(self):
@@ -84,6 +97,6 @@ class RevisarHubScreen(ctk.CTkFrame):
         elif pestana == "Dashboard mensual":
             self.on_buscador(self.dashboard.filtrar, "Buscar curso o docente...")
         else:
-            # "Certificado de pago" no filtra nada: es un solo documento por
-            # mes, no una lista para buscar en ella.
+            # "Certificado de pago" e "Informe de asistencia" no filtran nada:
+            # son un solo documento por mes, no una lista para buscar en ella.
             self.on_buscador(None)

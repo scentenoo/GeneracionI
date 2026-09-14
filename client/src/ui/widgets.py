@@ -709,9 +709,15 @@ class Tabla(ctk.CTkFrame):
 
         self._fila_siguiente = 1
 
-    def agregar_fila(self, valores: list[str], estado: tuple[str, str] | None = None):
+    def agregar_fila(
+        self, valores: list[str], estado: tuple[str, str] | None = None,
+        boton: tuple[str, Callable[[], None]] | None = None,
+    ):
         """`estado` es (texto, color): si se pasa, la ÚLTIMA columna se
-        pinta como chip en vez de texto plano."""
+        pinta como chip en vez de texto plano. `boton` es (texto, comando):
+        si se pasa, agrega UNA celda más al final de la fila con un botón
+        —la tabla tiene que haberse creado con una columna (aunque sea con
+        título vacío) de más para que quede alineado con el resto."""
         n = len(valores)
         for i, valor in enumerate(valores):
             celda = ctk.CTkFrame(self, fg_color="transparent")
@@ -722,4 +728,13 @@ class Tabla(ctk.CTkFrame):
                 ctk.CTkLabel(
                     celda, text=str(valor), font=tema.fuente(12), text_color=tema.TEXTO_OSCURO,
                 ).pack(anchor="w")
+        if boton is not None:
+            texto, comando = boton
+            celda = ctk.CTkFrame(self, fg_color="transparent")
+            celda.grid(row=self._fila_siguiente, column=n, sticky="w", padx=12, pady=6)
+            ctk.CTkButton(
+                celda, text=texto, command=comando, width=90, height=26,
+                fg_color="transparent", border_width=1, text_color=tema.TEXTO_OSCURO,
+                hover_color=tema.FONDO_CONTENIDO, font=tema.fuente(11),
+            ).pack(anchor="w")
         self._fila_siguiente += 1

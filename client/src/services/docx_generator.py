@@ -26,6 +26,8 @@ PLANEACION_TEMPLATE = TEMPLATES_DIR / "planeacion_individual.docx"
 INFORME_TEMPLATE = TEMPLATES_DIR / "informe_mensual.docx"
 INFORME_GESTION_TEMPLATE = TEMPLATES_DIR / "informe_gestion.docx"
 CERTIFICADO_PAGO_TEMPLATE = TEMPLATES_DIR / "certificado_pago.docx"
+INFORME_ASISTENCIA_TEMPLATE = TEMPLATES_DIR / "informe_asistencia.docx"
+INFORME_ASISTENCIA_CURSO_TEMPLATE = TEMPLATES_DIR / "informe_asistencia_curso.docx"
 
 _IMG_WIDTH_GRANDE_MM = 90
 _IMG_WIDTH_CHICA_MM = 55
@@ -171,6 +173,36 @@ def generar_certificado_pago_docx(contexto: dict, ruta_salida: str | Path) -> Pa
     historial de revisión: no es un documento que se apruebe o devuelva."""
     tpl = DocxTemplate(str(CERTIFICADO_PAGO_TEMPLATE))
     tpl.render(dict(contexto))
+
+    ruta_salida = Path(ruta_salida)
+    tpl.save(str(ruta_salida))
+    return ruta_salida
+
+
+def generar_informe_asistencia_docx(contexto: dict, ruta_salida: str | Path) -> Path:
+    """Informe consolidado de asistencia de todos los cursos de un mes (ver
+    Asistencia.js#generar_informe_asistencia) — solo administradores, para
+    mandar a la Secretaría de Educación. Sin historial de revisión: es un
+    reporte, no un documento que se aprueba o se devuelve."""
+    tpl = DocxTemplate(str(INFORME_ASISTENCIA_TEMPLATE))
+    tpl.render(dict(contexto))
+
+    ruta_salida = Path(ruta_salida)
+    tpl.save(str(ruta_salida))
+    return ruta_salida
+
+
+def generar_informe_asistencia_curso_docx(
+    mes_nombre: str, anio: str, fecha_emision: str, curso: dict, ruta_salida: str | Path
+) -> Path:
+    """Igual que generar_informe_asistencia_docx pero para UN SOLO curso
+    (ver Asistencia.js: cada elemento de `cursos`), con espacio de firma
+    para el docente y la coordinadora de área — para descargar/firmar por
+    separado en vez del documento consolidado de todos los cursos."""
+    tpl = DocxTemplate(str(INFORME_ASISTENCIA_CURSO_TEMPLATE))
+    tpl.render({
+        "mes_nombre": mes_nombre, "anio": anio, "fecha_emision": fecha_emision, "curso": curso,
+    })
 
     ruta_salida = Path(ruta_salida)
     tpl.save(str(ruta_salida))

@@ -75,6 +75,8 @@ const ACCIONES_PERMITIDAS_ = {
   subir_firma,
   obtener_dashboard_directivo,
   generar_certificado_pago,
+  generar_informe_asistencia,
+  generar_reporte_inasistencias,
   ejecutar_migracion,
   version_actual,
   fijar_version,
