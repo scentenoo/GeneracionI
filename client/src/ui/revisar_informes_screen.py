@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import os
 import tempfile
+import webbrowser
 import zipfile
 from tkinter import filedialog
 from typing import Callable
@@ -53,6 +54,10 @@ def _nombre_archivo(curso: str, mes: str) -> str:
     base = f"informe_{curso}_{mes}"
     limpio = "".join(c if c.isalnum() or c in "-_" else "_" for c in base)
     return f"{limpio}.docx"
+
+
+def _url_drive(doc_id: str) -> str:
+    return f"https://drive.google.com/file/d/{doc_id}/view"
 
 
 class RevisarInformesScreen(ctk.CTkScrollableFrame):
@@ -298,6 +303,12 @@ class RevisarInformesScreen(ctk.CTkScrollableFrame):
 
         botones = ctk.CTkFrame(contenido, fg_color="transparent")
         botones.pack(fill="x", pady=(14, 0))
+        if i.get("doc_drive_id"):
+            ctk.CTkButton(
+                botones, text="Abrir", fg_color="transparent", border_width=1,
+                text_color=tema.TEXTO_OSCURO, hover_color=tema.FONDO_CONTENIDO,
+                command=lambda e=i: webbrowser.open(_url_drive(e["doc_drive_id"])),
+            ).pack(side="left", fill="x", expand=True, padx=(0, 6))
         ctk.CTkButton(
             botones, text="Descargar", fg_color="transparent", border_width=1,
             text_color=tema.TEXTO_OSCURO, hover_color=tema.FONDO_CONTENIDO,

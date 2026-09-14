@@ -8,7 +8,8 @@
  * documento diciendo cosas distintas.
  *
  * El corte es un día del mes siguiente, que fijan los directivos: con
- * dia_de_corte = 5, todo lo de agosto se cierra el 5 de septiembre.
+ * dia_de_corte = 5, todo lo de agosto se puede seguir tocando hasta el 5 de
+ * septiembre inclusive (todo ese día), y cierra recién el 6.
  *
  * No es una pared: un directivo puede volver a abrir un curso y un mes
  * puntuales cuando haga falta, y cerrarlos de nuevo. Los directivos nunca
@@ -59,7 +60,10 @@ function reaperturaDe_(curso_id, mes) {
 function mesCerrado_(curso_id, mes) {
   const reapertura = reaperturaDe_(curso_id, mes);
   if (reapertura && reapertura.abierta === true) return false;
-  return fechaISO_(new Date()) >= fechaDeCierre_(mes);
+  // La fecha de cierre es el último día en que SÍ se puede trabajar (hasta
+  // las 23:59:59 de ese día): recién cierra a partir del día siguiente, por
+  // eso `>` y no `>=`.
+  return fechaISO_(new Date()) > fechaDeCierre_(mes);
 }
 
 /**
@@ -71,7 +75,7 @@ function requireMesAbierto_(sesion, curso_id, mes) {
   if (esDirectivo_(sesion)) return;
   if (!mesCerrado_(curso_id, mes)) return;
   throw new Error(
-    `El mes ${mes} ya está cerrado (cerró el ${fechaCorta_(fechaDeCierre_(mes))}). ` +
+    `El mes ${mes} ya está cerrado (se podía trabajar hasta el ${fechaCorta_(fechaDeCierre_(mes))}). ` +
     'Pídale al equipo directivo que lo vuelva a abrir si necesita cambiar algo.'
   );
 }
@@ -92,7 +96,9 @@ function calculadorDeCierre_(sesion) {
 
   return function (curso_id, mes) {
     if (abiertas[`${curso_id}|${mes}`]) return false;
-    return hoy >= fechaDeCierre_(mes);
+    // Mismo criterio que mesCerrado_: la fecha de cierre incluye todo ese
+    // día, cierra recién al siguiente.
+    return hoy > fechaDeCierre_(mes);
   };
 }
 

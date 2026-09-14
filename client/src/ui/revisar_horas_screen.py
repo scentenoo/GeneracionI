@@ -1,6 +1,7 @@
-"""Revisar horas externas de TODO el equipo (solo administrador): junta
-las horas de gestión de los directivos y las horas_externas que cargan
-los docentes en sus actividades (reuniones, claustros de un curso).
+"""Revisar horas externas de TODO el equipo (directivo, ambos, o el
+administrador): junta las horas de gestión de los directivos y las
+horas_externas que cargan los docentes en sus actividades (reuniones,
+claustros de un curso).
 
 Son dos fuentes con dos flujos distintos (ver obtener_horas_del_equipo en
 el backend): las de gestión llevan evidencia propia (foto+entregable) y

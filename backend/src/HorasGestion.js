@@ -83,9 +83,9 @@ function obtener_horas_gestion(token, directivo_id) {
 
 /**
  * Vista de supervisión de TODAS las horas externas del equipo en un mes,
- * para Revisar → Horas externas — solo el administrador, es una vista de
- * supervisión, no de autoservicio, igual que
- * obtener_revisores/fijar_revisores en Revisiones.js.
+ * para Revisar → Horas externas — todo el equipo directivo (rol directivo,
+ * ambos, o el administrador), es una vista de supervisión, no de
+ * autoservicio.
  *
  * Junta DOS fuentes que antes vivían separadas — el banner de esta pantalla
  * ya decía "cada docente y directivo debe cumplir 8 horas externas al mes",
@@ -105,7 +105,7 @@ function obtener_horas_gestion(token, directivo_id) {
  */
 function obtener_horas_del_equipo(token, mes) {
   const sesion = requireSession_(token);
-  requireAdministrador_(sesion);
+  requireSupervisor_(sesion);
 
   const usuarioPorId = {};
   readAllRows_(SHEET_NAMES.USUARIOS).forEach((u) => {
@@ -198,7 +198,7 @@ function obtener_horas_del_equipo(token, mes) {
  */
 function obtener_foto_horas_externas(token, foto_drive_id) {
   const sesion = requireSession_(token);
-  requireAdministrador_(sesion);
+  requireSupervisor_(sesion);
   if (!foto_drive_id) throw new Error('Sin foto para mostrar');
   const foto = archivoABase64_(foto_drive_id);
   if (!foto) throw new Error('No se encontró la foto en Drive');

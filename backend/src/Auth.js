@@ -134,3 +134,10 @@ function esDirectivo_(sesion) {
 function puedeSupervisar_(sesion) {
   return esDirectivo_(sesion) || sesion.es_admin === true;
 }
+
+/** Como requireAdministrador_, pero deja pasar también a todo el equipo directivo (rol directivo o ambos). */
+function requireSupervisor_(sesion) {
+  if (!puedeSupervisar_(sesion)) {
+    throw new Error('Esta acción requiere rol directivo, ambos, o ser el administrador');
+  }
+}

@@ -118,11 +118,33 @@ function revisorDeCurso_(curso) {
   return id ? Number(id) : null;
 }
 
-/** El administrador revisa cualquiera; si no, solo el revisor asignado por color. */
+/**
+ * true si a esta persona le asignaron por Config algún color a revisar
+ * (revisor_verde o revisor_morado) — hoy Mariangel y Lorena. Son las únicas
+ * dos a quienes la revisión SÍ les queda segmentada por color; cualquier
+ * otro directivo/ambos no tiene ese recorte (ver puedeRevisarCurso_).
+ */
+function esRevisorAsignado_(sesion) {
+  const verde = leerConfig_('revisor_verde');
+  const morado = leerConfig_('revisor_morado');
+  return (verde && String(verde) === String(sesion.id)) ||
+    (morado && String(morado) === String(sesion.id));
+}
+
+/**
+ * El administrador revisa cualquiera. A quien Config le asignó un color
+ * (Mariangel/Lorena) le queda segmentado: solo lo de su color. El resto del
+ * equipo directivo (rol directivo o ambos, sin color asignado) revisa
+ * cualquier curso, tenga color o no — igual que ya hace el Dashboard
+ * mensual, que no segmenta por color.
+ */
 function puedeRevisarCurso_(sesion, curso) {
   if (esAdministrador_(sesion.id)) return true;
-  const revisor = revisorDeCurso_(curso);
-  return revisor !== null && String(revisor) === String(sesion.id);
+  if (esRevisorAsignado_(sesion)) {
+    const revisor = revisorDeCurso_(curso);
+    return revisor !== null && String(revisor) === String(sesion.id);
+  }
+  return esDirectivo_(sesion);
 }
 
 function registrarRevision_(tipo, ref, accion, motivo, autor) {
@@ -250,15 +272,15 @@ function revisar_informe(token, curso_id, mes, aprobar, motivo) {
 }
 
 /**
- * Aprobar/devolver una hora de gestión externa del equipo directivo. Solo
- * el administrador: a diferencia de planeaciones e informes (que reparte
- * el color del curso entre revisores), acá no hay color/curso de por
- * medio — es horas de un directivo, y quien las revisa es siempre el
- * administrador (ver obtener_horas_del_equipo en HorasGestion.js).
+ * Aprobar/devolver una hora de gestión externa del equipo directivo. A
+ * diferencia de planeaciones e informes (que reparte el color del curso
+ * entre revisores), acá no hay color/curso de por medio — la revisa
+ * cualquiera del equipo directivo (rol directivo, ambos, o el
+ * administrador), ver obtener_horas_del_equipo en HorasGestion.js.
  */
 function revisar_hora_gestion(token, id, aprobar, motivo) {
   const sesion = requireSession_(token);
-  requireAdministrador_(sesion);
+  requireSupervisor_(sesion);
 
   const fila = findRowById_(SHEET_NAMES.HORAS_GESTION, id);
   if (!fila) throw new Error('No se encontró esa hora de gestión');

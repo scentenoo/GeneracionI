@@ -34,8 +34,17 @@ _COLUMNAS = [("Fecha", 0, 100), ("Curso", 3, 0), ("Objetivo", 4, 0), ("Estado", 
 
 
 def _configurar_columnas(fila: ctk.CTkFrame):
+    # Cada columna con su PROPIO `uniform` (col0..4), no uno compartido
+    # entre varias — mismo motivo que revisar_planeaciones_screen.py: cada
+    # fila es su propio frame con su propia grid, así que `uniform` es lo
+    # que sincroniza el ancho de una columna entre encabezado y filas. Con
+    # un solo "col" compartido entre Fecha/Estado/Acciones (antes), Tk las
+    # fuerza a las tres al mismo ancho ENTRE SÍ en vez de solo consigo
+    # mismas entre filas — y con "" (sin uniform) en Curso/Objetivo, esas
+    # dos columnas no se sincronizaban en absoluto entre filas, quedando
+    # cada una con el ancho que le pedía el contenido de esa fila puntual.
     for i, (_titulo, peso, minsize) in enumerate(_COLUMNAS):
-        fila.grid_columnconfigure(i, weight=peso, minsize=minsize, uniform="col" if peso == 0 else "")
+        fila.grid_columnconfigure(i, weight=peso, minsize=minsize, uniform=f"mp_col{i}")
 
 
 class PlaneacionListScreen(ctk.CTkScrollableFrame):

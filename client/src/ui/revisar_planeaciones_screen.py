@@ -43,6 +43,66 @@ _ANCHO_DOCENTE = 160
 _ANCHO_ESTADO = 140
 _ANCHO_REVISION = 280
 
+# (título, peso, ancho mínimo) de cada columna — mismo patrón que
+# planeacion_list_screen.py: cada FILA es su propio frame con su propia
+# grid_columnconfigure, en vez de una sola grid compartida por header y
+# filas. Con una sola grid para toda la tabla, las columnas que dependen
+# de "weight" (sin minsize) quedaban congeladas en ancho cero la primera
+# vez que se armaba — Curso/fecha, Objetivo y Revisión directamente no se
+# veían — porque esa grid se calcula una única vez, con el ancho que el
+# contenedor tenía en ese instante (adentro de una pestaña, no siempre es
+# el ancho final). Repitiendo la configuración en cada fila, cada una se
+# ajusta con el ancho real que tiene al momento de armarse.
+#
+# Cada columna lleva su PROPIO `uniform` (revpl_col0..4), no uno compartido
+# entre varias: `uniform` sincroniza el ancho entre grids de widgets
+# distintos que usen el mismo valor —es justo lo que hace falta para que
+# "Curso y fecha"/"Objetivo" midan lo mismo en todas las filas, ya que cada
+# fila es un frame con su propia grid—, pero si dos columnas DISTINTAS
+# comparten el mismo valor (p. ej. todas las de ancho fijo con "col"),
+# Tk las fuerza a las tres al mismo ancho entre sí, no solo consigo mismas
+# entre filas. Con un valor único por índice de columna, cada una se
+# sincroniza solo con su propia columna en las demás filas.
+_COLUMNAS = [
+    ("Curso y fecha", 10, 0),
+    ("Docente", 0, _ANCHO_DOCENTE),
+    ("Objetivo", 14, 0),
+    ("Estado", 0, _ANCHO_ESTADO),
+    ("Revisión", 0, _ANCHO_REVISION),
+]
+
+
+def _configurar_columnas(frame: ctk.CTkFrame):
+    for i, (_titulo, peso, minsize) in enumerate(_COLUMNAS):
+        frame.grid_columnconfigure(i, weight=peso, minsize=minsize, uniform=f"revpl_col{i}")
+
+
+# padx (izquierda, derecha) de cada columna, tal como se le pasa a cada
+# .grid() en _fila_planeacion — hace falta repetirlo acá para poder
+# calcular a mano cuánto le toca en píxeles a "Curso y fecha"/"Objetivo".
+_PADX_COLUMNAS = [(24, 9), (9, 9), (9, 9), (9, 9), (9, 24)]
+
+
+def _anchos_columnas_peso(ancho_fila: int) -> dict[int, int]:
+    """Cuántos píxeles le tocan a cada columna de PESO (weight>0, sin
+    minsize) dado el ancho real de la fila — a mano, en vez de leerlo de
+    `grid_bbox()`. `grid_bbox()` de una columna de peso depende de cuánto
+    pida su propio contenido (sin wraplength todavía, el texto entero sin
+    envolver), así que usarlo para fijar el wraplength de ESE MISMO
+    contenido arma un círculo: se angosta -> grid_bbox() vuelve a medir más
+    chico -> se angosta más -> termina en una letra por línea. Con esta
+    cuenta, en cambio, todo sale del ancho de la FILA (que lo pone el
+    contenedor de afuera, `pack(fill="x")`, no el contenido de las
+    celdas) — no hay ciclo posible."""
+    fijo = sum(minsize for _t, peso, minsize in _COLUMNAS if peso == 0)
+    fijo += sum(izq + der for izq, der in _PADX_COLUMNAS)
+    peso_total = sum(peso for _t, peso, _m in _COLUMNAS if peso > 0)
+    disponible = max(ancho_fila - fijo, 0)
+    return {
+        i: int(disponible * peso / peso_total)
+        for i, (_t, peso, _m) in enumerate(_COLUMNAS) if peso > 0
+    }
+
 # Cuántas filas se muestran de entrada, con un botón "Cargar más" para el
 # resto. CTkScrollableFrame tiene un bug de fondo, sin arreglo, de Tk en
 # Windows: con listas largas el repintado durante el scroll se corrompe
@@ -228,31 +288,32 @@ class RevisarPlaneacionesScreen(ctk.CTkScrollableFrame):
         visibles = filtradas[: self._mostrar_hasta]
         restantes = len(filtradas) - len(visibles)
 
-        # Tabla real (mismo grid compartido entre encabezado y filas, para
-        # que las columnas queden alineadas) — como en el mockup: cabecera
-        # gris clara mayúscula, filas separadas por una línea fina, columnas
-        # fijas para docente/estado/revisión y el resto repartido.
-        tabla = ctk.CTkFrame(
+        # Tarjeta que envuelve la tabla — como en el mockup: cabecera gris
+        # clara mayúscula, filas separadas por una línea fina, columnas
+        # fijas para docente/estado/revisión y el resto repartido. Cada fila
+        # es su propio frame con su propia grid_columnconfigure (mismo
+        # patrón que planeacion_list_screen.py) en vez de una sola grid
+        # compartida entre encabezado y filas — ver el porqué en el
+        # comentario de _COLUMNAS, arriba del todo.
+        tarjeta = ctk.CTkFrame(
             self.contenedor, fg_color=tema.FONDO_TARJETA, corner_radius=16,
             border_width=1, border_color=tema.BORDE_TARJETA,
         )
-        tabla.pack(fill="x")
-        tabla.grid_columnconfigure(0, weight=10)
-        tabla.grid_columnconfigure(1, weight=0, minsize=_ANCHO_DOCENTE)
-        tabla.grid_columnconfigure(2, weight=14)
-        tabla.grid_columnconfigure(3, weight=0, minsize=_ANCHO_ESTADO)
-        tabla.grid_columnconfigure(4, weight=0, minsize=_ANCHO_REVISION)
+        tarjeta.pack(fill="x")
 
-        for col, texto in enumerate(("Curso y fecha", "Docente", "Objetivo", "Estado", "Revisión")):
+        encabezado_tabla = ctk.CTkFrame(tarjeta, fg_color="transparent")
+        encabezado_tabla.pack(fill="x")
+        _configurar_columnas(encabezado_tabla)
+        for col, (titulo, _peso, _minsize) in enumerate(_COLUMNAS):
             ctk.CTkLabel(
-                tabla, text=texto.upper(), font=tema.fuente(11, "bold"), text_color=tema.TEXTO_MUTED,
+                encabezado_tabla, text=titulo.upper(), font=tema.fuente(11, "bold"), text_color=tema.TEXTO_MUTED,
                 fg_color=_FONDO_ENCABEZADO_TABLA, anchor="e" if col == 4 else "w",
             ).grid(row=0, column=col, sticky="nsew", padx=(24 if col == 0 else 9, 9), pady=15)
 
-        fila_grid = 1
+        filas_contenedor = ctk.CTkFrame(tarjeta, fg_color="transparent")
+        filas_contenedor.pack(fill="x")
         for p in visibles:
-            self._fila_planeacion(tabla, fila_grid, p, es_ultima=(p is visibles[-1]))
-            fila_grid += 1
+            self._fila_planeacion(filas_contenedor, p, es_ultima=(p is visibles[-1]))
 
         if restantes > 0:
             ctk.CTkButton(
@@ -274,35 +335,67 @@ class RevisarPlaneacionesScreen(ctk.CTkScrollableFrame):
         self._kpi_aprobadas.configure(text=str(aprobadas))
         self.resumen_label.configure(text="")
 
-    def _fila_planeacion(self, tabla: ctk.CTkFrame, fila: int, p: dict, es_ultima: bool):
+    def _fila_planeacion(self, contenedor: ctk.CTkFrame, p: dict, es_ultima: bool):
         pady_fila = (14, 20 if es_ultima else 14)
 
-        celda_curso = ctk.CTkFrame(tabla, fg_color="transparent")
-        celda_curso.grid(row=fila, column=0, sticky="nsew", padx=(24, 9), pady=pady_fila)
-        ctk.CTkLabel(
+        fila = ctk.CTkFrame(contenedor, fg_color="transparent")
+        fila.pack(fill="x")
+        _configurar_columnas(fila)
+
+        # sticky solo "n_w"/"n_e" (sin la "s"): estas celdas no necesitan
+        # estirarse verticalmente para llenar la fila, solo quedar ancladas
+        # arriba — con "nsw"/"nse" el widget SÍ se estira a la altura de la
+        # fila más alta (la del Objetivo más largo), y como pack()/anchor="w"
+        # centran verticalmente dentro de ese espacio de más, Docente/Estado/
+        # Revisión terminaban "corridos" hacia abajo respecto a Curso/fecha.
+        # "Curso y fecha" y "Objetivo" son columnas de PESO (ver _COLUMNAS),
+        # no de ancho fijo: cuánto miden en píxeles depende del ancho de la
+        # ventana. Un `wraplength` fijo (320/340, lo que medían "de
+        # costumbre") se quedaba corto o largo según ese ancho real — con un
+        # curso largo en una ventana angosta, el texto no envolvía a tiempo
+        # y se metía encima de Docente/Objetivo. El wraplength de cada label
+        # se recalcula en cada resize de la FILA (ver _anchos_columnas_peso
+        # arriba del todo — importante que sea del ancho de la fila, no del
+        # propio frame de la celda, para no armar un círculo).
+        celda_curso = ctk.CTkFrame(fila, fg_color="transparent")
+        celda_curso.grid(row=0, column=0, sticky="new", padx=(24, 9), pady=pady_fila)
+        curso_label = ctk.CTkLabel(
             celda_curso, text=p["curso"], font=tema.fuente(14, "bold"), text_color=tema.TEXTO_OSCURO,
-            anchor="w", justify="left", wraplength=320,
-        ).pack(fill="x")
+            anchor="w", justify="left",
+        )
+        curso_label.pack(fill="x")
         ctk.CTkLabel(
             celda_curso, text=p["fecha"], text_color=tema.TEXTO_MUTED, font=tema.fuente(12), anchor="w",
         ).pack(fill="x", pady=(2, 0))
 
         ctk.CTkLabel(
-            tabla, text=p["docente"], text_color=_GRIS_TEXTO_DOCENTE, font=tema.fuente(13), anchor="w",
+            fila, text=p["docente"], text_color=_GRIS_TEXTO_DOCENTE, font=tema.fuente(13), anchor="nw",
             wraplength=_ANCHO_DOCENTE - 10, justify="left",
-        ).grid(row=fila, column=1, sticky="nsw", padx=9, pady=pady_fila)
+        ).grid(row=0, column=1, sticky="nw", padx=9, pady=pady_fila)
 
-        ctk.CTkLabel(
-            tabla, text=str(p.get("objetivo", "")), text_color=_GRIS_TEXTO_TABLA, font=tema.fuente(13),
-            anchor="w", justify="left", wraplength=340,
-        ).grid(row=fila, column=2, sticky="nsw", padx=9, pady=pady_fila)
+        celda_objetivo = ctk.CTkFrame(fila, fg_color="transparent")
+        celda_objetivo.grid(row=0, column=2, sticky="new", padx=9, pady=pady_fila)
+        objetivo_label = ctk.CTkLabel(
+            celda_objetivo, text=str(p.get("objetivo", "")), text_color=_GRIS_TEXTO_TABLA, font=tema.fuente(13),
+            anchor="w", justify="left",
+        )
+        objetivo_label.pack(fill="x")
 
-        celda_estado = ctk.CTkFrame(tabla, fg_color="transparent")
-        celda_estado.grid(row=fila, column=3, sticky="nsw", padx=9, pady=pady_fila)
+        def _actualizar_wraplength(_evento=None, _fila=fila, _curso=curso_label, _objetivo=objetivo_label):
+            anchos = _anchos_columnas_peso(_fila.winfo_width())
+            if anchos.get(0, 0) > 1:
+                _curso.configure(wraplength=anchos[0])
+            if anchos.get(2, 0) > 1:
+                _objetivo.configure(wraplength=anchos[2])
+
+        fila.bind("<Configure>", _actualizar_wraplength)
+
+        celda_estado = ctk.CTkFrame(fila, fg_color="transparent")
+        celda_estado.grid(row=0, column=3, sticky="nw", padx=9, pady=pady_fila)
         self._pintar_estado(celda_estado, p)
 
-        botones = ctk.CTkFrame(tabla, fg_color="transparent")
-        botones.grid(row=fila, column=4, sticky="nse", padx=(9, 24), pady=pady_fila)
+        botones = ctk.CTkFrame(fila, fg_color="transparent")
+        botones.grid(row=0, column=4, sticky="ne", padx=(9, 24), pady=pady_fila)
         if p.get("doc_drive_id"):
             ctk.CTkButton(
                 botones, text="Abrir", width=70, fg_color="transparent", border_width=1,
@@ -322,9 +415,7 @@ class RevisarPlaneacionesScreen(ctk.CTkScrollableFrame):
         devolver_boton.configure(command=lambda: self._revisar(p, False, celda_estado, botones_revision))
 
         if not es_ultima:
-            ctk.CTkFrame(tabla, fg_color=_DIVISOR_FILA, height=1).grid(
-                row=fila, column=0, columnspan=5, sticky="sew", padx=0,
-            )
+            ctk.CTkFrame(contenedor, fg_color=_DIVISOR_FILA, height=1).pack(fill="x")
 
     def _pintar_estado(self, estado_fila: ctk.CTkFrame, p: dict):
         for w in estado_fila.winfo_children():
@@ -334,11 +425,18 @@ class RevisarPlaneacionesScreen(ctk.CTkScrollableFrame):
         if estado == "aprobado":
             pildora(estado_fila, "Aprobada ✓", tema.VERDE_CHIP_TEXTO, tema.VERDE_CHIP_BG).pack(side="left")
         elif estado == "devuelto":
-            pildora(estado_fila, "Devuelta", AMBAR, tema.AMBAR_CHIP_BG).pack(side="left")
+            pildora(estado_fila, "Devuelta", AMBAR, tema.AMBAR_CHIP_BG).pack(anchor="w")
             if motivo:
+                # Debajo de la píldora, no al lado (pack "left"): la Estado
+                # es una columna de ANCHO FIJO (_ANCHO_ESTADO) y un motivo
+                # largo sin wraplength empujaba esa columna mucho más ancha
+                # de lo que le corresponde, corriendo Revisión y descolocando
+                # toda la fila. Envuelto dentro de ese mismo ancho fijo, en
+                # cambio, se queda adentro de su columna.
                 ctk.CTkLabel(
-                    estado_fila, text=motivo, text_color=tema.TEXTO_MUTED, font=tema.fuente(11), anchor="w",
-                ).pack(side="left", padx=(8, 0))
+                    estado_fila, text=motivo, text_color=tema.TEXTO_MUTED, font=tema.fuente(11),
+                    anchor="w", justify="left", wraplength=_ANCHO_ESTADO - 10,
+                ).pack(anchor="w", pady=(4, 0))
         else:
             pildora(estado_fila, "Pendiente de revisar", tema.TEXTO_MUTED, tema.FONDO_CONTENIDO).pack(side="left")
 
