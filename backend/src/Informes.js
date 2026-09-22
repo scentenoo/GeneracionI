@@ -100,6 +100,7 @@ function guardar_informe_mensual(token, curso_id, mes, narrativa, gestionNarrati
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
+  invalidarCacheHojas_();
   try {
     const existente = buscarInforme_(curso_id, mes);
     if (existente) {
@@ -133,8 +134,18 @@ function guardar_documento_informe(token, curso_id, mes, archivo) {
   }
   if (!archivo || !archivo.base64) throw new Error('Falta el documento');
 
+  // Ver la nota equivalente en guardar_documento_planeacion.
+  const mimeDocx = archivo.mimeType || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  if (archivo.en_sitio === true) {
+    const previo = buscarInforme_(curso_id, mes);
+    if (previo && actualizarContenidoEnSitio_(previo.doc_drive_id, archivo.base64, mimeDocx)) {
+      return { ok: true, id: previo.doc_drive_id, link: urlDeArchivo_(previo.doc_drive_id), en_sitio: true };
+    }
+  }
+
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
+  invalidarCacheHojas_();
   try {
     const fila = buscarInforme_(curso_id, mes);
     if (!fila) throw new Error('Todavía no se entregó el informe de ese mes para este curso');
@@ -147,10 +158,29 @@ function guardar_documento_informe(token, curso_id, mes, archivo) {
       nombreDeInforme_(curso.nombre, mes)
     );
     updateRowById_(SHEET_NAMES.INFORMES, fila.id, { doc_drive_id: id });
-    return { ok: true, link: urlDeArchivo_(id) };
+    return { ok: true, id: id, link: urlDeArchivo_(id) };
   } finally {
     lock.releaseLock();
   }
+}
+
+/**
+ * El .docx ya archivado de un informe, en base64 — para que quien aprueba
+ * o devuelve le actualice solo la hoja de historial (mismo criterio que
+ * obtener_documento_planeacion). null si todavía no tiene documento.
+ */
+function obtener_documento_informe(token, curso_id, mes) {
+  const sesion = requireSession_(token);
+
+  const curso = findRowById_(SHEET_NAMES.CURSOS, curso_id);
+  if (!curso) throw new Error('Curso no encontrado');
+  if (String(curso.docente_id) !== String(sesion.id) && !puedeSupervisar_(sesion)) {
+    throw new Error('No tiene permiso para ver ese informe');
+  }
+
+  const fila = buscarInforme_(curso_id, mes);
+  if (!fila) return null;
+  return archivoABase64_(fila.doc_drive_id);
 }
 
 /** Las respuestas ya guardadas, para reabrir el informe y seguir editándolo. */

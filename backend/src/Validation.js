@@ -52,7 +52,7 @@ function sumarMinutosBloques_(bloques) {
 }
 
 const MOMENTOS_PLANEACION = ['inicial', 'desarrollo', 'final'];
-const NOMBRE_MOMENTO = { inicial: 'Momento inicial', desarrollo: 'Momento de desarrollo', final: 'Momento final' };
+const NOMBRE_MOMENTO = { inicial: 'Momento inicial', desarrollo: 'Momento de desarrollo', final: 'Momento de cierre' };
 
 function sumarMinutosMomentos_(momentos) {
   return MOMENTOS_PLANEACION.reduce(
@@ -61,12 +61,11 @@ function sumarMinutosMomentos_(momentos) {
 }
 
 /**
- * Formato "Diario Pedagógico" del programa. La clase se describe en tres
- * momentos —inicial, desarrollo y final— cada uno con su texto y sus
- * minutos, y con un mínimo de palabras distinto (el desarrollo es el
- * grueso). Las dos columnas de al lado —la reflexión pedagógica
- * (observaciones) y los avances/retrocesos— son de TODA la clase, una sola
- * vez, no por momento.
+ * Formato "Diario Pedagógico" del programa (PC-PA-003-F03). La clase se
+ * describe en tres momentos —inicial, desarrollo y final— cada uno con su
+ * texto y sus minutos, y con un mínimo de palabras distinto (el desarrollo
+ * es el grueso). La evaluación de la clase (observaciones) es de TODA la
+ * clase, una sola vez, no por momento.
  *
  * `esDirectivo` afecta una sola regla: solo un directivo puede guardar una
  * planeación sin ningún estudiante presente. Los temas vistos son una lista
@@ -95,8 +94,7 @@ function validarPlaneacion_(datos, fotos, esDirectivo) {
     );
   }
 
-  requireMinPalabras_(datos.observaciones, 'Observaciones de clase (reflexión pedagógica)');
-  requireMinPalabras_(datos.avances, 'Avances o retrocesos observados');
+  requireMinPalabras_(datos.observaciones, 'Observaciones del desempeño de los estudiantes');
 
   const presentes = (datos.asistencia || []).filter((a) => a.presente).length;
   if (presentes === 0 && !esDirectivo) {

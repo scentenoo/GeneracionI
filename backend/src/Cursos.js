@@ -139,6 +139,7 @@ function eliminar_curso_definitivo(token, curso_id) {
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
+  invalidarCacheHojas_();
   try {
     const borradas = {};
 
@@ -185,7 +186,7 @@ function eliminar_curso_definitivo(token, curso_id) {
     // queda huérfana solo si no le queda ninguna inscripción.
     borradas[SHEET_NAMES.ESTUDIANTES] = eliminarEstudiantesSinInscripcion_();
 
-    getSheet_(SHEET_NAMES.CURSOS).deleteRow(curso._row);
+    eliminarFila_(SHEET_NAMES.CURSOS, curso);
     borradas[SHEET_NAMES.CURSOS] = 1;
 
     return { ok: true, curso: curso.nombre, borradas: borradas };

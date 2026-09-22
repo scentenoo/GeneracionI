@@ -17,6 +17,7 @@ function guardar_planeacion(token, datos, fotos) {
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
+  invalidarCacheHojas_();
   try {
     // Una clase es única por curso y fecha: no hay dos clases del mismo
     // curso el mismo día (son 4 semanales al mes). Si ya existe una, se
@@ -55,12 +56,11 @@ function guardar_planeacion(token, datos, fotos) {
       grupo: curso.nombre,
       objetivo: datos.objetivo,
       temas_vistos: JSON.stringify(datos.temas_vistos || []),
-      // Formato Diario Pedagógico: los tres momentos y las dos columnas de
+      // Formato Diario Pedagógico: los tres momentos y la evaluación de
       // toda la clase. `bloques` queda vacío (era el formato viejo).
       bloques: '[]',
       momentos: JSON.stringify(datos.momentos || {}),
       observaciones: datos.observaciones || '',
-      avances: datos.avances || '',
       // La primera queda también en foto_clase_drive_id -- de ahí la toma
       // el informe mensual (una sola foto por clase) y así una planeación
       // vieja, guardada antes de este campo, se sigue leyendo igual.
@@ -113,8 +113,17 @@ function guardar_documento_planeacion(token, planeacion_id, archivo) {
   }
   if (!archivo || !archivo.base64) throw new Error('Falta el documento');
 
+  // Solo cambió el contenido (p.ej. la hoja de historial al aprobar o
+  // devolver): se pisa el mismo archivo, sin candado —no toca la Sheet— y
+  // sin recrearlo ni volver a compartirlo. Ver actualizarContenidoEnSitio_.
+  const mimeDocx = archivo.mimeType || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  if (archivo.en_sitio === true && actualizarContenidoEnSitio_(fila.doc_drive_id, archivo.base64, mimeDocx)) {
+    return { ok: true, id: fila.doc_drive_id, link: urlDeArchivo_(fila.doc_drive_id), en_sitio: true };
+  }
+
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
+  invalidarCacheHojas_();
   try {
     const id = reemplazarArchivo_(
       ['Planeaciones', fila.grupo, nombreCarpetaMes_(fila.fecha), 'Documentos'],
@@ -124,7 +133,13 @@ function guardar_documento_planeacion(token, planeacion_id, archivo) {
       nombreDeDocumento_(fila.grupo, fila.fecha)
     );
     updateRowById_(SHEET_NAMES.PLANEACIONES, planeacion_id, { doc_drive_id: id });
-    return { ok: true, link: urlDeArchivo_(id) };
+    // `id` viaja además de `link` para que quien vuelve a subir el
+    // documento (p.ej. al aprobar/devolver, ver
+    // RevisarPlaneacionesScreen._actualizar_historial_documento) pueda
+    // actualizar el doc_drive_id que tiene en memoria — reemplazarArchivo_
+    // manda el archivo viejo a la papelera, así que el botón "Abrir" con
+    // el id de antes llevaría a un archivo ya borrado.
+    return { ok: true, id, link: urlDeArchivo_(id) };
   } finally {
     lock.releaseLock();
   }
@@ -163,6 +178,24 @@ function obtener_foto_planeacion(token, id) {
     .map((driveId) => archivoABase64_(driveId))
     .filter(Boolean)
     .map((foto) => ({ base64: foto.base64, mimeType: foto.mimeType }));
+}
+
+/**
+ * El .docx ya archivado de una planeación, en base64 — para que quien
+ * aprueba o devuelve pueda actualizarle solo la hoja de historial (ver
+ * docx_generator.actualizar_historial_planeacion_docx) sin tener que
+ * volver a armar todo el documento ni bajar las fotos de nuevo. null si
+ * todavía no tiene documento archivado (no debería pasar en el flujo
+ * normal, pero por si acaso).
+ */
+function obtener_documento_planeacion(token, id) {
+  const sesion = requireSession_(token);
+  const fila = findRowById_(SHEET_NAMES.PLANEACIONES, id);
+  if (!fila) throw new Error(`No se encontró la planeación ${id}`);
+  if (String(fila.docente_id) !== String(sesion.id) && !puedeSupervisar_(sesion)) {
+    throw new Error('No tiene permiso para ver esa planeación');
+  }
+  return archivoABase64_(fila.doc_drive_id);
 }
 
 /**
@@ -240,7 +273,6 @@ function parsePlaneacionRow_(p) {
     bloques: JSON.parse(p.bloques || '[]'),
     momentos: JSON.parse(p.momentos || '{}'),
     observaciones: p.observaciones || '',
-    avances: p.avances || '',
     asistencia: JSON.parse(p.asistencia || '[]'),
   });
 }
@@ -269,6 +301,7 @@ function editar_planeacion(token, id, cambios, fotos) {
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
+  invalidarCacheHojas_();
   try {
     // A diferencia de guardar_planeacion, acá no hay "actualizar en vez de
     // duplicar": esto edita una fila puntual por id. Si el cambio de fecha
@@ -358,10 +391,11 @@ function eliminar_planeacion(token, id) {
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
+  invalidarCacheHojas_();
   try {
     fotosClaseDriveIds_(fila).forEach(trasharSiExiste_);
     trasharSiExiste_(fila.doc_drive_id);
-    getSheet_(SHEET_NAMES.PLANEACIONES).deleteRow(fila._row);
+    eliminarFila_(SHEET_NAMES.PLANEACIONES, fila);
     // Los ids se reusan, así que el historial de esta planeación no puede
     // quedar suelto para que lo herede la próxima con el mismo id.
     borrarRevisiones_('planeacion', String(id));

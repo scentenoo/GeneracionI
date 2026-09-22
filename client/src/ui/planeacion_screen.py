@@ -3,9 +3,9 @@ programa (spec sección 8 + ajuste del piloto).
 
 La clase se describe en tres momentos —inicial, desarrollo y final—, cada
 uno con su texto y sus minutos, y con un mínimo de palabras distinto
-(inicial 80, desarrollo 100, final 70). Las dos columnas de al lado —la
-reflexión pedagógica (observaciones) y los avances/retrocesos— son de toda
-la clase, una sola vez.
+(inicial 80, desarrollo 100, final 70). La evaluación de la clase
+(observaciones del desempeño de los estudiantes) es de toda la clase, una
+sola vez.
 
 El curso sale de un desplegable con los cursos de ese docente; al cambiar
 de curso se recarga la asistencia, que es por curso.
@@ -46,7 +46,7 @@ ANCHO_PANEL_DERECHO = 300
 MOMENTOS = [
     ("inicial", "Momento inicial", 80, 60),
     ("desarrollo", "Momento de desarrollo", 100, 40),
-    ("final", "Momento final", 70, 20),
+    ("final", "Momento de cierre", 70, 20),
 ]
 
 
@@ -218,7 +218,7 @@ class PlaneacionScreen(ctk.CTkFrame):
         return self._cursos_por_nombre.get(self.curso_menu.get())
 
     def _construir_temas_vistos(self):
-        campo_label(self._contenido_formulario, "Temas vistos (uno por renglón)").pack(fill="x", pady=(10, 0))
+        campo_label(self._contenido_formulario, "Temas de la clase (uno por renglón)").pack(fill="x", pady=(10, 0))
         self.temas_lista = ListaDinamica(self._contenido_formulario, placeholder="Tema visto")
         self.temas_lista.pack(fill="x", pady=(2, 0))
 
@@ -310,22 +310,14 @@ class PlaneacionScreen(ctk.CTkFrame):
 
     def _construir_columnas_clase(self):
         ctk.CTkLabel(
-            self._contenido_formulario, text="Sobre toda la clase", font=tema.fuente(16, "bold"), anchor="w",
+            self._contenido_formulario, text="Evaluación de la clase", font=tema.fuente(16, "bold"), anchor="w",
         ).pack(fill="x", pady=(0, 14))
         self.observaciones = CampoConContador(
             self._contenido_formulario,
-            "Observaciones de clase que contribuyan a la fundamentación de Generación-I "
-            "(pequeña reflexión pedagógica, incluye también lo disciplinar)",
+            "Observaciones del desempeño de los estudiantes",
             alto=100, pregunta=True,
         )
         self.observaciones.pack(fill="x", pady=4)
-        self.avances = CampoConContador(
-            self._contenido_formulario,
-            "Avances o retrocesos observados en clase "
-            "(se puede nombrar al estudiante, tipo evaluación cualitativa)",
-            alto=100, pregunta=True,
-        )
-        self.avances.pack(fill="x", pady=4)
 
     def _construir_foto(self):
         encabezado = ctk.CTkFrame(self._contenido_formulario, fg_color="transparent")
@@ -683,7 +675,6 @@ class PlaneacionScreen(ctk.CTkFrame):
             "momento_final_min": str(m["final"]["minutos"]),
             "momento_final_texto": m["final"]["texto"],
             "observaciones": self.observaciones.get(),
-            "avances": self.avances.get(),
             "asistencia": [
                 {"nombre": nombre, "presente": "Sí" if var.get() else "No"}
                 for nombre, var in self.asistencia_vars.items()
@@ -757,8 +748,6 @@ class PlaneacionScreen(ctk.CTkFrame):
             return f"Los momentos suman {total} min y la clase necesita al menos {MINUTOS_MINIMOS}"
         if not self.observaciones.es_valido():
             return f"Las observaciones de clase necesitan mínimo {MIN_PALABRAS} palabras"
-        if not self.avances.es_valido():
-            return f"Los avances necesitan mínimo {MIN_PALABRAS} palabras"
         if not self.foto_paths:
             return "Falta al menos una foto de la clase"
 
@@ -823,7 +812,6 @@ class PlaneacionScreen(ctk.CTkFrame):
             "temas_vistos": self.temas_lista.valores(),
             "momentos": self._momentos_datos(),
             "observaciones": self.observaciones.get(),
-            "avances": self.avances.get(),
             "asistencia": [
                 {"nombre": nombre, "presente": var.get()} for nombre, var in self.asistencia_vars.items()
             ],
@@ -906,7 +894,6 @@ class PlaneacionScreen(ctk.CTkFrame):
             self.momentos[clave]["minutos"].delete(0, "end")
             self.momentos[clave]["minutos"].insert(0, str(sug))
         self.observaciones.set("")
-        self.avances.set("")
         self._actualizar_minutos()
 
         self.foto_paths = []

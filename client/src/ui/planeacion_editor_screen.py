@@ -37,7 +37,7 @@ MAX_FOTOS_CLASE = 3
 MOMENTOS = [
     ("inicial", "Momento inicial", 80, 60),
     ("desarrollo", "Momento de desarrollo", 100, 40),
-    ("final", "Momento final", 70, 20),
+    ("final", "Momento de cierre", 70, 20),
 ]
 
 
@@ -65,7 +65,7 @@ class PlaneacionEditorScreen(ctk.CTkScrollableFrame):
         self.objetivo.set(planeacion.get("objetivo", ""))
         self.objetivo.pack(fill="x", pady=(2, 8))
 
-        campo_label(self, "Temas vistos").pack(fill="x", pady=(8, 0))
+        campo_label(self, "Temas de la clase").pack(fill="x", pady=(8, 0))
         self.temas_lista = ListaDinamica(self, placeholder="Tema visto")
         temas = planeacion.get("temas_vistos") or []
         if temas:
@@ -104,17 +104,14 @@ class PlaneacionEditorScreen(ctk.CTkScrollableFrame):
             self.momentos[clave] = {"minutos": minutos_entry, "texto": texto}
             self.momentos_acordeones[clave] = acordeon
 
-        ctk.CTkLabel(self, text="Sobre toda la clase", font=tema.fuente(peso="bold")).pack(
+        ctk.CTkLabel(self, text="Evaluación de la clase", font=tema.fuente(peso="bold")).pack(
             fill="x", pady=(16, 0)
         )
         self.observaciones = CampoConContador(
-            self, "Observaciones de clase (reflexión pedagógica)", alto=100
+            self, "Observaciones del desempeño de los estudiantes", alto=100
         )
         self.observaciones.set(planeacion.get("observaciones", ""))
         self.observaciones.pack(fill="x", pady=4)
-        self.avances = CampoConContador(self, "Avances o retrocesos observados", alto=100)
-        self.avances.set(planeacion.get("avances", ""))
-        self.avances.pack(fill="x", pady=4)
 
         self._construir_fotos()
 
@@ -269,8 +266,6 @@ class PlaneacionEditorScreen(ctk.CTkScrollableFrame):
             return f"Los momentos suman {total} min y la clase necesita al menos {MINUTOS_MINIMOS}"
         if not self.observaciones.es_valido():
             return f"Las observaciones necesitan mínimo {MIN_PALABRAS} palabras"
-        if not self.avances.es_valido():
-            return f"Los avances necesitan mínimo {MIN_PALABRAS} palabras"
         return None
 
     def _momentos_cambios(self) -> dict:
@@ -299,7 +294,6 @@ class PlaneacionEditorScreen(ctk.CTkScrollableFrame):
             "momento_final_min": str(m["final"]["minutos"]),
             "momento_final_texto": m["final"]["texto"],
             "observaciones": self.observaciones.get(),
-            "avances": self.avances.get(),
             "asistencia": asistencia,
             "historial": historial or [],
         }
@@ -317,7 +311,6 @@ class PlaneacionEditorScreen(ctk.CTkScrollableFrame):
             "temas_vistos": self.temas_lista.valores(),
             "momentos": self._momentos_cambios(),
             "observaciones": self.observaciones.get(),
-            "avances": self.avances.get(),
         }
 
         self.guardar_boton.configure(state="disabled", text="Guardando...")

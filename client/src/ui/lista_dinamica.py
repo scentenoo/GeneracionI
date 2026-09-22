@@ -1,5 +1,5 @@
 """Lista de renglones de texto simples con botón "+ Agregar" — se usa para
-Temas vistos (una idea por línea)."""
+Temas de la clase (una idea por línea)."""
 
 from __future__ import annotations
 

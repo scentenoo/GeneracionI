@@ -222,6 +222,7 @@ function transferir_administrador(token, nuevo_admin_id) {
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
+  invalidarCacheHojas_();
   try {
     updateRowById_(SHEET_NAMES.USUARIOS, sesion.id, { es_admin: false });
     updateRowById_(SHEET_NAMES.USUARIOS, nuevo_admin_id, { es_admin: true });
@@ -265,8 +266,9 @@ function eliminar_usuario(token, usuario_id) {
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
+  invalidarCacheHojas_();
   try {
-    getSheet_(SHEET_NAMES.USUARIOS).deleteRow(fila._row);
+    eliminarFila_(SHEET_NAMES.USUARIOS, fila);
     return { ok: true };
   } finally {
     lock.releaseLock();
@@ -337,6 +339,7 @@ function subir_firma(token, usuario_id, imagen) {
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
+  invalidarCacheHojas_();
   try {
     const nuevoId = reemplazarArchivo_(
       ['Firmas'],

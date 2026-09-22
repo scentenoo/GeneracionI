@@ -62,6 +62,7 @@ function eliminarColumnas_(sheetName, nombres) {
 function migrarACursos() {
   const lock = LockService.getScriptLock();
   lock.waitLock(60000);
+  invalidarCacheHojas_();
   try {
     const usuarios = readAllRows_(SHEET_NAMES.USUARIOS);
     const cursosExistentes = readAllRows_(SHEET_NAMES.CURSOS);
@@ -182,6 +183,7 @@ function eliminarHistorial() {
 function migrarAInscripciones() {
   const lock = LockService.getScriptLock();
   lock.waitLock(60000);
+  invalidarCacheHojas_();
   try {
     const filas = readAllRows_(SHEET_NAMES.ESTUDIANTES);
     const inscripciones = readAllRows_(SHEET_NAMES.INSCRIPCIONES);
@@ -208,7 +210,7 @@ function migrarAInscripciones() {
 
     // De abajo hacia arriba, si no se corren los índices de fila.
     aBorrar.sort((a, b) => b._row - a._row).forEach((e) => {
-      getSheet_(SHEET_NAMES.ESTUDIANTES).deleteRow(e._row);
+      eliminarFila_(SHEET_NAMES.ESTUDIANTES, e);
       Logger.log('Ficha repetida borrada: %s (id %s)', e.nombre, e.id);
     });
 

@@ -54,6 +54,7 @@ function guardar_informe_gestion(token, mes, gestionNarrativa) {
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
+  invalidarCacheHojas_();
   try {
     const existente = buscarInforme_(clave, mes);
     if (existente) {

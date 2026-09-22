@@ -15,6 +15,7 @@ const ACCIONES_PERMITIDAS_ = {
   obtener_planeaciones,
   obtener_planeacion,
   obtener_foto_planeacion,
+  obtener_documento_planeacion,
   editar_planeacion,
   eliminar_planeacion,
   obtener_estado_mes,
@@ -56,6 +57,7 @@ const ACCIONES_PERMITIDAS_ = {
   generar_informe_mensual,
   guardar_informe_mensual,
   guardar_documento_informe,
+  obtener_documento_informe,
   obtener_informe_mensual,
   guardar_informe_gestion,
   obtener_informe_gestion,
@@ -80,6 +82,7 @@ const ACCIONES_PERMITIDAS_ = {
   ejecutar_migracion,
   version_actual,
   fijar_version,
+  renovar_licencia,
 };
 
 /**
@@ -116,6 +119,20 @@ function doPost(e) {
 
   const { action, params } = body;
 
+  // Vigencia de licencia (ver Licencia.js): corre antes que cualquier otra
+  // cosa, incluido login y version_actual, para que el bloqueo sea global de
+  // verdad y no dependa de qué acción haya pedido el cliente. `licencia_
+  // expirada` aparte del mensaje es lo que el cliente usa para distinguir
+  // esto de cualquier otro error y mostrar el aviso fijo en vez del típico
+  // cartel rojo de una pantalla cualquiera.
+  //
+  // renovar_licencia queda afuera de este bloqueo a propósito: si no,
+  // apenas venciera una vez, no habría forma de volver a renovarla nunca
+  // más — la única puerta que necesita es su propia VENDOR_API_KEY.
+  if (action !== 'renovar_licencia' && !licenciaVigente_()) {
+    return jsonResponse_({ ok: false, error: MENSAJE_LICENCIA_EXPIRADA_, licencia_expirada: true });
+  }
+
   if (action === 'batch') {
     try {
       return jsonResponse_({ ok: true, data: batch((params || [])[0]) });
@@ -139,6 +156,9 @@ function doPost(e) {
 
 /** version_actual() no necesita sesión — el cliente la consulta antes de loguear, al abrir la app. */
 function doGet() {
+  if (!licenciaVigente_()) {
+    return jsonResponse_({ ok: false, error: MENSAJE_LICENCIA_EXPIRADA_, licencia_expirada: true });
+  }
   return jsonResponse_({ ok: true, data: version_actual() });
 }
 

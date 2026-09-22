@@ -77,6 +77,12 @@ class App(ctk.CTk):
         # foto de la clase: no tienen por qué sobrevivir a la sesión.
         self.protocol("WM_DELETE_WINDOW", self._al_cerrar)
 
+        # Bloqueo global de licencia (ver ui/tareas.py): cualquier llamada al
+        # backend, desde cualquier pantalla, puede toparse con la licencia
+        # vencida — se registra acá una sola vez para que todas caigan en el
+        # mismo aviso fijo en vez de que cada pantalla lo muestre distinto.
+        tareas.registrar_bloqueo_licencia(self._licencia_expirada)
+
         self._telon_mostrado_en: float | None = None
         self._mostrar_telon()
 
@@ -334,6 +340,14 @@ class App(ctk.CTk):
 
         self.pantalla_actual = aviso
 
+    def _licencia_expirada(self, exc: Exception):
+        """El backend avisó que el periodo de servicio pactado terminó (ver
+        Licencia.js). Sin `al_reintentar`: no es un problema de conexión que
+        un reintento pueda resolver, así que no tiene sentido ofrecer uno —
+        el aviso queda fijo, como pide la especificación de vigencia."""
+        self.sesion = None
+        self.bloquear(str(exc), titulo="Servicio no disponible")
+
     def _on_login_exitoso(self, sesion: dict):
         self.sesion = sesion
         self._armar_shell()
@@ -379,7 +393,7 @@ class App(ctk.CTk):
         from services import date_utils
         from services.avisos import texto_devoluciones
 
-        devoluciones = datos.get("devoluciones") or []
+        devoluciones = [d for d in (datos.get("devoluciones") or []) if isinstance(d, dict)]
         cierre = datos.get("cierre") or {}
 
         self._devoluciones_notificadas = {self._clave_devolucion(d) for d in devoluciones}
@@ -456,12 +470,17 @@ class App(ctk.CTk):
     def _al_chequear_devoluciones(self, devoluciones: list[dict]):
         from services.avisos import texto_devoluciones
 
-        devoluciones = devoluciones or []
-        nuevas = [d for d in devoluciones if self._clave_devolucion(d) not in self._devoluciones_notificadas]
-        self._devoluciones_notificadas |= {self._clave_devolucion(d) for d in devoluciones}
-        if nuevas:
-            messagebox.showwarning("Le devolvieron algo nuevo", texto_devoluciones(nuevas))
-        self._programar_chequeo_devoluciones()
+        # Reprogramar va en `finally`: si algo de acá adentro falla, la
+        # cadena de chequeos no puede cortarse en silencio (ya pasó, y el
+        # docente dejaba de enterarse de las devoluciones nuevas).
+        try:
+            devoluciones = [d for d in (devoluciones or []) if isinstance(d, dict)]
+            nuevas = [d for d in devoluciones if self._clave_devolucion(d) not in self._devoluciones_notificadas]
+            self._devoluciones_notificadas |= {self._clave_devolucion(d) for d in devoluciones}
+            if nuevas:
+                messagebox.showwarning("Le devolvieron algo nuevo", texto_devoluciones(nuevas))
+        finally:
+            self._programar_chequeo_devoluciones()
 
     def _mostrar_home(self):
         self._limpiar_contenido()

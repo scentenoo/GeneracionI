@@ -1,10 +1,18 @@
 
 from __future__ import annotations
 
+import datetime
+
 import customtkinter as ctk
 
 import api_client
-from config import APP_VERSION, TEMA_JSON, comparar_versiones
+from config import (
+    APP_VERSION,
+    FECHA_EXPIRACION_LICENCIA,
+    MENSAJE_LICENCIA_EXPIRADA,
+    TEMA_JSON,
+    comparar_versiones,
+)
 from services import ortografia
 from ui import ctk_parches
 from ui.app import App
@@ -32,6 +40,16 @@ def main():
     app = App()
 
     def verificar():
+        # Atajo de vigencia de licencia: si el reloj de esta computadora ya
+        # pasó la fecha límite, la respuesta del backend ya se sabe y no
+        # vale la pena el viaje. La fuente de verdad sigue siendo el backend
+        # (Licencia.js, ver ui/tareas.py) — si alguien atrasa el reloj local
+        # para saltarse esto, el primer viaje real igual vuelve bloqueado
+        # desde ahí, con el mismo aviso.
+        if datetime.datetime.now() > FECHA_EXPIRACION_LICENCIA:
+            app.bloquear(MENSAJE_LICENCIA_EXPIRADA, titulo="Servicio no disponible")
+            return
+
         # Sin overlay: el telón (ver App._mostrar_telon) ya cubre esta
         # espera. Mostrar el overlay genérico encima solo duplicaba trabajo
         # de construcción justo al abrir, sin agregar nada que el telón no

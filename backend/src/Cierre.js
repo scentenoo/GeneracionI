@@ -175,6 +175,7 @@ function reabrir_mes(token, curso_id, mes, abierta) {
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
+  invalidarCacheHojas_();
   try {
     const existente = reaperturaDe_(curso_id, mes);
     if (existente) {

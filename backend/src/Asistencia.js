@@ -9,10 +9,13 @@
  * {nombre, presente} (ver Planeaciones.js#guardar_planeacion) — no está
  * ligada a estudiante_id, solo al nombre tal como se escribió ese día. Acá
  * se cruza contra el roster real (Inscripciones + Estudiantes) con
- * nombreNormalizado_ para no fallar por mayúsculas/tildes/espacios; lo que
- * ni así matchea no se descarta en silencio, queda listado en
- * `no_identificados` para que quien lo genere lo revise antes de mandar
- * el PDF.
+ * nombreNormalizado_ para no fallar por mayúsculas/tildes/espacios.
+ *
+ * Las filas de cada curso son los inscritos de hoy MÁS quien aparezca en la
+ * asistencia de alguna clase de ese mes aunque ya lo hayan retirado (sale
+ * con `retirado: true`; las clases en que ya no estaba van con la marca
+ * "Retirado" y no cuentan como falta). Quitar a alguien del curso borra su inscripción, así
+ * que sin esto su asistencia real del mes desaparecía del informe.
  */
 
 function generar_informe_asistencia(token, mes) {
@@ -53,7 +56,6 @@ function generar_informe_asistencia(token, mes) {
     (planeacionesPorCurso[clave] = planeacionesPorCurso[clave] || []).push(p);
   });
 
-  const noIdentificados = [];
   const cursosDelInforme = [];
 
   Object.keys(planeacionesPorCurso).forEach((cursoId) => {
@@ -66,24 +68,32 @@ function generar_informe_asistencia(token, mes) {
 
     const roster = estudiantesPorCurso[cursoId] || [];
 
-    // Por clase: qué normalizados quedaron marcados presente, y cuáles no
-    // matchearon a nadie del roster (van a no_identificados).
-    const presentesPorClase = clasesDelMes.map((p, i) => {
-      const presentesNorm = {};
+    // Snapshot de cada clase: nombre normalizado -> si estuvo presente.
+    // Trae a TODOS los que estaban inscritos ese día, presentes y ausentes.
+    const snapshotPorClase = clasesDelMes.map((p) => {
+      const snapshot = new Map();
       (p.asistencia || []).forEach((a) => {
-        if (!a.presente) return;
         const norm = nombreNormalizado_(a.nombre);
-        presentesNorm[norm] = true;
-        if (!roster.some((e) => e.normalizado === norm)) {
-          noIdentificados.push({
-            curso: curso.nombre,
-            nombre: a.nombre,
-            fecha: fechaCorta_(p.fecha),
-            clase: `Clase ${i + 1}`,
-          });
-        }
+        if (!norm) return;
+        snapshot.set(norm, snapshot.get(norm) === true || !!a.presente);
       });
-      return presentesNorm;
+      return snapshot;
+    });
+
+    // Filas del informe: los inscritos de hoy MÁS quienes figuran en la
+    // asistencia de alguna clase del mes pero ya fueron retirados del curso.
+    // Un retirado que asistió (o faltó) a una clase de este mes tiene que
+    // seguir saliendo en el informe de este mes; recién desaparece de los
+    // de los meses siguientes, cuando ya no está en ningún snapshot.
+    const filas = roster.map((e) => ({ nombre: e.nombre, norm: e.normalizado, retirado: false }));
+    const yaEnFilas = new Set(roster.map((e) => e.normalizado));
+    clasesDelMes.forEach((p) => {
+      (p.asistencia || []).forEach((a) => {
+        const norm = nombreNormalizado_(a.nombre);
+        if (!norm || yaEnFilas.has(norm)) return;
+        yaEnFilas.add(norm);
+        filas.push({ nombre: String(a.nombre).trim(), norm: norm, retirado: true });
+      });
     });
 
     const clases = clasesDelMes.map((p, i) => ({
@@ -91,22 +101,31 @@ function generar_informe_asistencia(token, mes) {
       fecha: fechaCorta_(p.fecha),
     }));
 
-    const estudiantes = roster
-      .slice()
+    const estudiantes = filas
       .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
-      .map((est) => {
-        const marcas = presentesPorClase.map((presentes) => !!presentes[est.normalizado]);
-        const totalAsistio = marcas.filter(Boolean).length;
+      .map((fila) => {
+        const marcas = snapshotPorClase.map((snapshot) => {
+          if (snapshot.has(fila.norm)) return snapshot.get(fila.norm) ? 'Asistió' : 'Faltó';
+          // No figura en esa clase: si ya lo retiraron, en ese momento no
+          // era del curso y no cuenta como falta. Un inscrito actual que no
+          // figura mantiene el criterio de siempre (Faltó).
+          return fila.retirado ? 'Retirado' : 'Faltó';
+        });
+        const totalAsistio = marcas.filter((m) => m === 'Asistió').length;
+        const totalFalto = marcas.filter((m) => m === 'Faltó').length;
         return {
-          nombre: est.nombre,
-          marcas: marcas.map((presente) => (presente ? 'Asistió' : 'Faltó')),
+          nombre: fila.nombre,
+          retirado: fila.retirado,
+          marcas: marcas,
           total_asistio: totalAsistio,
-          total_falto: clases.length - totalAsistio,
+          total_falto: totalFalto,
         };
       });
 
-    const totalPosible = estudiantes.length * clases.length;
+    // El denominador son las celdas que cuentan (Asistió + Faltó), no
+    // estudiantes × clases: los "Retirado" no son ni una ni otra.
     const totalAsistidoCurso = estudiantes.reduce((sum, e) => sum + e.total_asistio, 0);
+    const totalPosible = estudiantes.reduce((sum, e) => sum + e.total_asistio + e.total_falto, 0);
     const porcentaje = totalPosible > 0 ? Math.round((totalAsistidoCurso / totalPosible) * 100) : 0;
 
     const docente = usuarioPorId[String(curso.docente_id)] || {};
@@ -148,7 +167,10 @@ function generar_informe_asistencia(token, mes) {
     fecha_emision: Utilities.formatDate(new Date(), 'America/Bogota', 'dd/MM/yyyy'),
     cursos: cursosDelInforme,
     cursos_sin_clases: cursosSinClases,
-    no_identificados: noIdentificados,
+    // Ya no se calcula (los nombres que no están inscritos hoy son
+    // retirados y salen en su curso); queda vacío porque el cliente y la
+    // plantilla todavía leen esta clave.
+    no_identificados: [],
   };
 }
 

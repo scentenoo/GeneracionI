@@ -1,3 +1,4 @@
+
 # Los formatos reales del programa
 
 Las plantillas de `templates/` se construyeron a partir de los formatos que

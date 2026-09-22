@@ -21,13 +21,12 @@ from docx.oxml.ns import qn
 from docx.shared import Mm, Pt, RGBColor
 
 from config import TEMPLATES_DIR
+from services import informe_asistencia_docx
 
 PLANEACION_TEMPLATE = TEMPLATES_DIR / "planeacion_individual.docx"
 INFORME_TEMPLATE = TEMPLATES_DIR / "informe_mensual.docx"
 INFORME_GESTION_TEMPLATE = TEMPLATES_DIR / "informe_gestion.docx"
 CERTIFICADO_PAGO_TEMPLATE = TEMPLATES_DIR / "certificado_pago.docx"
-INFORME_ASISTENCIA_TEMPLATE = TEMPLATES_DIR / "informe_asistencia.docx"
-INFORME_ASISTENCIA_CURSO_TEMPLATE = TEMPLATES_DIR / "informe_asistencia_curso.docx"
 
 _IMG_WIDTH_GRANDE_MM = 90
 _IMG_WIDTH_CHICA_MM = 55
@@ -65,20 +64,22 @@ def _agregar_bordes_tabla(tabla) -> None:
     tblPr.append(bordes)
 
 
-def _anexar_historial(ruta_salida: Path, historial: list | None) -> None:
-    """Agrega al final del documento la hoja de auditoría —quién lo
-    entregó, quién lo devolvió y por qué, quién lo aprobó y cuándo—, pedida
-    por dirección para que quede en TODOS los documentos (no solo los que
-    se devolvieron alguna vez): un registro completo de principio a fin,
-    aunque se haya aprobado a la primera."""
+_TITULO_HISTORIAL = "Historial de revisión"
+
+
+def _anexar_historial_a_doc(doc: Document, historial: list | None) -> None:
+    """Agrega al final del documento (ya abierto) la hoja de auditoría
+    —quién lo entregó, quién lo devolvió y por qué, quién lo aprobó y
+    cuándo—, pedida por dirección para que quede en TODOS los documentos
+    (no solo los que se devolvieron alguna vez): un registro completo de
+    principio a fin, aunque se haya aprobado a la primera."""
     if not historial:
         return
 
-    doc = Document(str(ruta_salida))
     doc.add_page_break()
 
     titulo = doc.add_paragraph()
-    run = titulo.add_run("Historial de revisión")
+    run = titulo.add_run(_TITULO_HISTORIAL)
     run.bold = True
     run.font.size = Pt(14)
 
@@ -105,7 +106,112 @@ def _anexar_historial(ruta_salida: Path, historial: list | None) -> None:
         fila[2].text = str(e.get("autor", ""))
         fila[3].text = str(e.get("motivo", ""))
 
+
+def _quitar_historial_previo(doc: Document) -> None:
+    """Si el documento ya traía una hoja de historial de una versión
+    anterior, la saca antes de agregar la actualizada — para que
+    `actualizar_historial_docx` reemplace la hoja en vez de apilar una
+    nueva encima de la vieja cada vez que se aprueba o se devuelve.
+
+    Busca el párrafo "Historial de revisión" y borra, en orden: el salto
+    de página que `_anexar_historial_a_doc` pone justo antes, y todo lo que
+    viene después (subtítulo y tabla) sin tocar el `sectPr` final del
+    cuerpo — ese define el tamaño de página y hay que dejarlo donde está."""
+    body = doc.element.body
+    for p in doc.paragraphs:
+        if p.text != _TITULO_HISTORIAL:
+            continue
+        encabezado_el = p._p
+        anterior = encabezado_el.getprevious()
+        if anterior is not None:
+            body.remove(anterior)
+        siguiente = encabezado_el.getnext()
+        while siguiente is not None and siguiente.tag != qn("w:sectPr"):
+            actual, siguiente = siguiente, siguiente.getnext()
+            body.remove(actual)
+        body.remove(encabezado_el)
+        return
+
+
+def _anexar_historial(ruta_salida: Path, historial: list | None) -> None:
+    """Como `_anexar_historial_a_doc`, pero abre y guarda el .docx por su
+    ruta — lo que usan `generar_*_docx` después de que docxtpl ya
+    renderizó el resto del documento."""
+    if not historial:
+        return
+    doc = Document(str(ruta_salida))
+    _anexar_historial_a_doc(doc, historial)
     doc.save(str(ruta_salida))
+
+
+# Cuántas líneas de texto entran en la hoja de historial sin desbordar a una
+# segunda página. Una hoja tiene unas 40; se deja un colchón grande porque
+# esto se ESTIMA a ojo (sin Word no hay cómo medir), y equivocarse hacia
+# arriba solo cuesta un recuento de páginas de más — hacia abajo, dejar un
+# "2 de 1" en el pie.
+_LINEAS_MAX_HOJA_HISTORIAL = 28
+# Cada columna de la tabla mide ~1/4 del ancho útil: de ahí ~14 caracteres
+# por línea, contando con que una palabra larga corta antes.
+_CARACTERES_POR_LINEA = 14
+
+
+def _lineas_de_fila(celdas) -> int:
+    """Líneas que ocupa una fila de la tabla de historial: la de su celda
+    más larga, más una de aire entre filas."""
+    return 1 + max(
+        max(1, -(-len(str(c)) // _CARACTERES_POR_LINEA)) for c in celdas
+    )
+
+
+def _lineas_historial(historial: list) -> int:
+    """Estimación de cuántas líneas ocupa la hoja recién armada por
+    `_anexar_historial_a_doc` (encabezado de la tabla incluido)."""
+    lineas = _lineas_de_fila(["Fecha", "Acción", "Responsable", "Motivo"])
+    for e in historial:
+        lineas += _lineas_de_fila((
+            str(e.get("fecha", "")).replace("T", " ")[:16],
+            _ACCIONES.get(e.get("accion", ""), e.get("accion", "")),
+            e.get("autor", ""),
+            e.get("motivo", ""),
+        ))
+    return lineas
+
+
+def _lineas_historial_en_doc(doc: Document) -> int | None:
+    """Lo mismo pero sobre la hoja que el documento ya trae. None si no
+    tiene hoja de historial (documento anterior a que existiera)."""
+    if not any(p.text == _TITULO_HISTORIAL for p in doc.paragraphs) or not doc.tables:
+        return None
+    # La del historial es siempre la última tabla del cuerpo: se agrega al final.
+    return sum(_lineas_de_fila([c.text for c in fila.cells]) for fila in doc.tables[-1].rows)
+
+
+def actualizar_historial_docx(entrada, historial: list, ruta_salida: str | Path) -> bool:
+    """Reemplaza SOLO la hoja de "Historial de revisión" de un .docx que
+    ya existe, sin volver a renderizar el resto del documento — para que
+    aprobar o devolver una planeación (o un informe) sea rápido: no hace
+    falta re-descargar fotos ni rellenar la plantilla de nuevo, solo
+    cambia la última página.
+
+    `entrada`: ruta o objeto tipo archivo (p.ej. io.BytesIO) con el .docx
+    ya archivado. `historial` no puede venir vacío — si el documento no
+    tiene por qué llevar hoja de historial, no hay nada que actualizar.
+
+    Devuelve True si hay que volver a contar las páginas del documento
+    (ver pdf_converter.recalcular_campos) porque el total pudo haber
+    cambiado; False si se puede asegurar que la hoja sigue ocupando una
+    sola página, antes y después, y el "Página X de Y" queda tal cual —
+    que es lo normal, y evita arrancar Word (~6 s) por cada revisión."""
+    doc = Document(entrada)
+    antes = _lineas_historial_en_doc(doc)
+    _quitar_historial_previo(doc)
+    _anexar_historial_a_doc(doc, historial)
+    doc.save(str(Path(ruta_salida)))
+    return (
+        antes is None
+        or antes > _LINEAS_MAX_HOJA_HISTORIAL
+        or _lineas_historial(historial) > _LINEAS_MAX_HOJA_HISTORIAL
+    )
 
 
 def _imagen_desde_base64(tpl: DocxTemplate, base64_str: str | None, ancho_mm: int) -> InlineImage | str:
@@ -121,9 +227,9 @@ def generar_planeacion_docx(
     contexto: dict, fotos_clase_paths: list[str], ruta_salida: str | Path
 ) -> Path:
     """contexto: fecha, grupo, objetivo, temas_vistos[], los tres momentos
-    (momento_*_min/texto), observaciones, avances, asistencia[].
-    fotos_clase_paths: 1 a 3 rutas locales a fotos ya comprimidas (ver
-    image_utils.py)."""
+    (momento_*_min/texto), observaciones (evaluación de la clase),
+    asistencia[]. fotos_clase_paths: 1 a 3 rutas locales a fotos ya
+    comprimidas (ver image_utils.py)."""
     tpl = DocxTemplate(str(PLANEACION_TEMPLATE))
     ctx = dict(contexto)
     ancho = _ANCHO_FOTO_CLASE_MM.get(len(fotos_clase_paths), _IMG_WIDTH_CHICA_MM)
@@ -183,30 +289,21 @@ def generar_informe_asistencia_docx(contexto: dict, ruta_salida: str | Path) -> 
     """Informe consolidado de asistencia de todos los cursos de un mes (ver
     Asistencia.js#generar_informe_asistencia) — solo administradores, para
     mandar a la Secretaría de Educación. Sin historial de revisión: es un
-    reporte, no un documento que se aprueba o se devuelve."""
-    tpl = DocxTemplate(str(INFORME_ASISTENCIA_TEMPLATE))
-    tpl.render(dict(contexto))
+    reporte, no un documento que se aprueba o se devuelve.
 
-    ruta_salida = Path(ruta_salida)
-    tpl.save(str(ruta_salida))
-    return ruta_salida
+    No usa plantilla: el documento se arma en informe_asistencia_docx (una
+    página por curso, con firmas)."""
+    return informe_asistencia_docx.generar(contexto, ruta_salida)
 
 
 def generar_informe_asistencia_curso_docx(
     mes_nombre: str, anio: str, fecha_emision: str, curso: dict, ruta_salida: str | Path
 ) -> Path:
     """Igual que generar_informe_asistencia_docx pero para UN SOLO curso
-    (ver Asistencia.js: cada elemento de `cursos`), con espacio de firma
-    para el docente y la coordinadora de área — para descargar/firmar por
-    separado en vez del documento consolidado de todos los cursos."""
-    tpl = DocxTemplate(str(INFORME_ASISTENCIA_CURSO_TEMPLATE))
-    tpl.render({
-        "mes_nombre": mes_nombre, "anio": anio, "fecha_emision": fecha_emision, "curso": curso,
-    })
-
-    ruta_salida = Path(ruta_salida)
-    tpl.save(str(ruta_salida))
-    return ruta_salida
+    (ver Asistencia.js: cada elemento de `cursos`), para descargar/firmar
+    por separado en vez del documento consolidado de todos los cursos."""
+    contexto = {"mes_nombre": mes_nombre, "anio": anio, "fecha_emision": fecha_emision, "cursos": [curso]}
+    return informe_asistencia_docx.generar(contexto, ruta_salida, con_anexos=False)
 
 
 def generar_informe_gestion_docx(contexto: dict, ruta_salida: str | Path) -> Path:

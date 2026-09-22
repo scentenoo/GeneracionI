@@ -68,9 +68,9 @@ const ESQUEMA_SHEETS_ = {
     // el informe mensual (que muestra una sola foto por clase) y las
     // planeaciones viejas de antes de este campo no necesiten cambiar.
     'fotos_clase_drive_ids',
-    // Formato Diario Pedagógico: los tres momentos (JSON) y las dos
-    // columnas de toda la clase. `bloques` queda por compatibilidad.
-    'momentos', 'observaciones', 'avances',
+    // Formato Diario Pedagógico: los tres momentos (JSON) y la evaluación
+    // de toda la clase. `bloques` queda por compatibilidad.
+    'momentos', 'observaciones',
     // Revisión: pendiente / aprobado / devuelto.
     'estado', 'revisado_por', 'revisado_en', 'motivo_devolucion',
   ],

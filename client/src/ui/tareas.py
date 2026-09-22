@@ -11,9 +11,11 @@ resultado al hilo de Tk con `widget.after()`, que sí es seguro.
 
 from __future__ import annotations
 
+import copy
 import queue
 import sys
 import threading
+import time
 import traceback
 from typing import Callable
 
@@ -29,6 +31,19 @@ _cola: "queue.Queue[tuple]" = queue.Queue()
 _entrega_iniciada = False
 
 INTERVALO_MS = 50
+
+# Bloqueo global de licencia (ver spec de vigencia y api_client.LicenciaExpirada).
+# Cualquier pantalla puede toparse con esto en cualquier llamada al backend,
+# no solo el arranque o el login: registrarlo acá, en el único lugar por el
+# que pasan todas las llamadas, evita tener que instrumentar cada pantalla
+# una por una. Lo fija App.__init__ una sola vez; sin registrar, se cae al
+# manejo de error normal de quien haya llamado.
+_al_licencia_expirada: Callable[[Exception], None] | None = None
+
+
+def registrar_bloqueo_licencia(callback: Callable[[Exception], None]):
+    global _al_licencia_expirada
+    _al_licencia_expirada = callback
 
 
 def _bombear(root):
@@ -147,6 +162,15 @@ def en_segundo_plano(
     def correr():
         try:
             resultado = trabajo()
+        except api_client.LicenciaExpirada as exc:
+            # Tapa toda la ventana en vez de dejar que esta pantalla puntual
+            # la muestre como un error suyo — ver registrar_bloqueo_licencia.
+            if _al_licencia_expirada is not None:
+                _cola.put((root, _al_licencia_expirada, exc))
+            elif al_fallar is not None:
+                _cola.put((widget, al_fallar, exc))
+            else:
+                traceback.print_exc(file=sys.stderr)
         except Exception as exc:  # noqa: BLE001 — se lo pasamos tal cual al caller
             if al_fallar is not None:
                 _cola.put((widget, al_fallar, exc))
@@ -208,6 +232,13 @@ def en_segundo_plano_con_progreso(
 
         try:
             resultado = trabajo(reportar)
+        except api_client.LicenciaExpirada as exc:
+            if _al_licencia_expirada is not None:
+                _cola.put((root, _al_licencia_expirada, exc))
+            elif al_fallar is not None:
+                _cola.put((widget, al_fallar, exc))
+            else:
+                traceback.print_exc(file=sys.stderr)
         except Exception as exc:  # noqa: BLE001
             if al_fallar is not None:
                 _cola.put((widget, al_fallar, exc))
@@ -233,8 +264,31 @@ class Cache:
     `invalidar()` para que la próxima lectura vuelva a ir al backend.
     """
 
+    # Cuánto vale lo ya traído de "Revisar" antes de volver a pedirlo. Solo
+    # existe para que las dos pestañas que se arman a la vez al abrir la
+    # pantalla (Planeaciones e Informes) no pidan cada una lo mismo por
+    # separado; "Actualizar" siempre se salta esto.
+    _VIGENCIA_REVISION_S = 20
+
     def __init__(self):
         self._datos: dict[str, object] = {}
+        self._candado_revision = threading.Lock()
+        self._revision: dict[tuple, tuple[float, dict]] = {}
+
+    def revision_del_mes(self, token: str, mes: str, forzar: bool = False) -> dict:
+        """`api_client.revision_del_mes`, sin repetir el pedido si otra
+        pestaña acaba de hacerlo (o lo está haciendo justo ahora: el
+        candado hace que la segunda espere a la primera y use su
+        resultado en vez de lanzar otro viaje de ~3 s). Cada quien recibe su
+        propia copia, porque las pantallas editan lo que reciben."""
+        with self._candado_revision:
+            clave = (token, mes)
+            guardado = self._revision.get(clave)
+            if not forzar and guardado and time.monotonic() - guardado[0] < self._VIGENCIA_REVISION_S:
+                return copy.deepcopy(guardado[1])
+            datos = api_client.revision_del_mes(token, mes)
+            self._revision[clave] = (time.monotonic(), datos)
+            return copy.deepcopy(datos)
 
     def usuarios(self, token: str) -> list[dict]:
         if "usuarios" not in self._datos:
@@ -253,9 +307,12 @@ class Cache:
         """Sin argumentos borra todo; con claves borra solo esas."""
         if not claves:
             self._datos.clear()
+            self._revision.clear()
             return
         for clave in claves:
             self._datos.pop(clave, None)
+            if clave == "revision":
+                self._revision.clear()
 
     def precargar(self, sesion: dict):
         """Trae de una sola vez lo que después piden casi todas las

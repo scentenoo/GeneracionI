@@ -21,6 +21,7 @@ function escribirConfig_(clave, valor) {
   } else {
     sheet.appendRow([clave, valor]);
   }
+  invalidarCacheHojas_(SHEET_NAMES.CONFIG);
 }
 
 /**
@@ -84,6 +85,7 @@ function fijar_version(token, version, link_instalador, obligatoria) {
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
+  invalidarCacheHojas_();
   try {
     escribirConfig_('version_actual', nueva);
     if (link_instalador !== undefined && link_instalador !== null) {

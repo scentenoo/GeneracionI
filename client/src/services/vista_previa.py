@@ -98,6 +98,7 @@ def planeacion_para_subir(contexto: dict, fotos_clase_paths: list[str]) -> dict:
     salida = _carpeta_temporal() / f"subir_{uuid.uuid4().hex[:8]}.docx"
     try:
         docx_generator.generar_planeacion_docx(contexto, fotos_clase_paths, salida)
+        pdf_converter.recalcular_campos(salida)
         datos = salida.read_bytes()
     finally:
         try:
@@ -143,6 +144,7 @@ def informe_para_subir(contexto: dict) -> dict:
     salida = _carpeta_temporal() / f"subir_informe_{uuid.uuid4().hex[:8]}.docx"
     try:
         docx_generator.generar_informe_mensual_docx(contexto, salida)
+        pdf_converter.recalcular_campos(salida)
         datos = salida.read_bytes()
     finally:
         try:

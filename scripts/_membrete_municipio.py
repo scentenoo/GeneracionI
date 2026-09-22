@@ -48,20 +48,38 @@ _CORREO_EDUCACION = "seceducacion@sanpedrodelosmilagros-antioquia.gov.co"
 _FUENTE_INSTITUCION = "Century Gothic"
 
 
-def agregar_campo_word_(paragraph, codigo_campo):
+def agregar_campo_word_(paragraph, codigo_campo, texto_cache="1"):
     """PAGE / NUMPAGES no son texto fijo: hay que insertar el campo de Word
-    a mano, python-docx no tiene una función para esto."""
-    run = paragraph.add_run()
-    inicio = OxmlElement("w:fldChar")
-    inicio.set(qn("w:fldCharType"), "begin")
-    instruccion = OxmlElement("w:instrText")
-    instruccion.set(qn("xml:space"), "preserve")
-    instruccion.text = codigo_campo
-    fin = OxmlElement("w:fldChar")
-    fin.set(qn("w:fldCharType"), "end")
-    run._r.append(inicio)
-    run._r.append(instruccion)
-    run._r.append(fin)
+    a mano, python-docx no tiene una función para esto.
+
+    Al campo le hacía falta el `fldChar` "separate" y un resultado en caché
+    (`texto_cache`) antes del "end" — sin eso el campo no tiene nada que
+    mostrar hasta que alguien lo recalcule. Word lo recalcula solo (al
+    abrir, imprimir o exportar a PDF), pero el visor web de Google Drive
+    nunca lo hace: ahí el número de página salía en blanco ("Página  de "),
+    aunque en Word se viera perfecto."""
+    def _run_con(tipo=None, instruccion=None, texto=None):
+        r = paragraph.add_run()
+        if tipo:
+            fc = OxmlElement("w:fldChar")
+            fc.set(qn("w:fldCharType"), tipo)
+            r._r.append(fc)
+        if instruccion is not None:
+            it = OxmlElement("w:instrText")
+            it.set(qn("xml:space"), "preserve")
+            it.text = instruccion
+            r._r.append(it)
+        if texto is not None:
+            t = OxmlElement("w:t")
+            t.text = texto
+            r._r.append(t)
+        return r
+
+    _run_con(tipo="begin")
+    _run_con(instruccion=f" {codigo_campo} ")
+    _run_con(tipo="separate")
+    _run_con(texto=texto_cache)
+    _run_con(tipo="end")
 
 
 def armar_membrete_(doc, titulo_documento, codigo_tramite=None, version_tramite=None, correo=_CORREO_GOBIERNO):

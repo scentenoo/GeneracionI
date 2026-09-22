@@ -41,6 +41,7 @@ function guardar_horas_gestion(token, datos, fotos) {
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
+  invalidarCacheHojas_();
   try {
     const fotoId = guardarArchivoBase64_(
       ['Fotos de horas de gestión'],
@@ -235,6 +236,7 @@ function editar_horas_gestion(token, id, cambios, fotos) {
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
+  invalidarCacheHojas_();
   try {
     const cambiosFiltrados = {};
     Object.keys(cambios).forEach((campo) => {
@@ -270,9 +272,10 @@ function eliminar_horas_gestion(token, id) {
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
+  invalidarCacheHojas_();
   try {
     trasharSiExiste_(fila.foto_drive_id);
-    getSheet_(SHEET_NAMES.HORAS_GESTION).deleteRow(fila._row);
+    eliminarFila_(SHEET_NAMES.HORAS_GESTION, fila);
     return { ok: true };
   } finally {
     lock.releaseLock();

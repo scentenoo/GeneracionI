@@ -240,7 +240,14 @@ function revisar_planeacion(token, id, aprobar, motivo) {
   });
   registrarRevision_('planeacion', id, aprobar ? 'aprobado' : 'devuelto',
     aprobar ? '' : String(motivo).trim(), sesion.nombre);
-  return { ok: true, estado: aprobar ? ESTADO_APROBADO : ESTADO_DEVUELTO };
+  // El historial ya actualizado viaja en la misma respuesta: el cliente lo
+  // necesita para dejar al día la hoja final del documento, y pedirlo
+  // aparte era otro viaje entero (~3 s) justo después de este.
+  return {
+    ok: true,
+    estado: aprobar ? ESTADO_APROBADO : ESTADO_DEVUELTO,
+    historial: historialDe_('planeacion', String(id)),
+  };
 }
 
 function revisar_informe(token, curso_id, mes, aprobar, motivo) {
@@ -268,7 +275,11 @@ function revisar_informe(token, curso_id, mes, aprobar, motivo) {
   });
   registrarRevision_('informe', `${curso_id}|${mes}`, aprobar ? 'aprobado' : 'devuelto',
     aprobar ? '' : String(motivo).trim(), sesion.nombre);
-  return { ok: true, estado: aprobar ? ESTADO_APROBADO : ESTADO_DEVUELTO };
+  return {
+    ok: true,
+    estado: aprobar ? ESTADO_APROBADO : ESTADO_DEVUELTO,
+    historial: historialDe_('informe', `${curso_id}|${mes}`),
+  };
 }
 
 /**

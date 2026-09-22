@@ -82,6 +82,7 @@ function importar_estudiantes(token, curso_id, csv) {
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
+  invalidarCacheHojas_();
   try {
     const fichas = readAllRows_(SHEET_NAMES.ESTUDIANTES);
     const inscripciones = readAllRows_(SHEET_NAMES.INSCRIPCIONES);
@@ -158,6 +159,7 @@ function modificar_grupo(token, curso_id, cambios) {
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
+  invalidarCacheHojas_();
   try {
     let hechos = 0;
 
@@ -179,7 +181,7 @@ function modificar_grupo(token, curso_id, cambios) {
                String(i.curso_id) === String(curso_id)
       );
       if (inscripcion) {
-        getSheet_(SHEET_NAMES.INSCRIPCIONES).deleteRow(inscripcion._row);
+        eliminarFila_(SHEET_NAMES.INSCRIPCIONES, inscripcion);
         hechos++;
       }
     });

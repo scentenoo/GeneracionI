@@ -2,6 +2,7 @@
 secreto que maneja el cliente es la URL del backend, que ya vive detrás de
 login() con su propio token (ver spec sección 2)."""
 
+import datetime
 import os
 import sys
 from pathlib import Path
@@ -20,7 +21,7 @@ BACKEND_URL = os.environ.get("GENERACIONI_BACKEND_URL") or _URL_PRODUCCION
 # Este número sube RECIÉN cuando se va a repartir un instalador nuevo, no
 # cada vez que se cambia código. El orden es: subir esto, compilar, subir
 # el .exe a Drive, y recién ahí publicar desde «Versión de la app».
-APP_VERSION = "2.2.0"
+APP_VERSION = "2.3.0"
 
 
 def comparar_versiones(a: str, b: str) -> int:
@@ -56,3 +57,17 @@ def _base_dir() -> Path:
 TEMPLATES_DIR = _base_dir() / "templates"
 DICCIONARIO_DIR = _base_dir() / "client" / "assets" / "diccionario"
 TEMA_JSON = _base_dir() / "client" / "assets" / "tema_generacion_i.json"
+
+
+# Vigencia contractual del servicio — mismo límite que Licencia.js valida en
+# el backend, que es la fuente de verdad (el reloj de esta computadora se
+# puede atrasar a mano). Acá sirve para no ni intentar el viaje al servidor
+# cuando la respuesta ya se sabe (ver main.py); si alguien igual fuerza el
+# reloj hacia atrás, el próximo viaje al backend vuelve bloqueado desde ahí,
+# con el mismo aviso.
+FECHA_EXPIRACION_LICENCIA = datetime.datetime(2026, 10, 5, 23, 59, 59)
+
+MENSAJE_LICENCIA_EXPIRADA = (
+    "El periodo de servicio pactado ha finalizado. Por favor, contacte al "
+    "proveedor del software para gestionar la renovación o el soporte técnico."
+)

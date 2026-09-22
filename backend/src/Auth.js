@@ -38,6 +38,18 @@ function usuarioNormalizado_(usuario) {
   return String(usuario === undefined || usuario === null ? '' : usuario).trim().toLowerCase();
 }
 
+/**
+ * Whitelist de roles que el backend reconoce (endurecimiento RBAC): un rol
+ * fuera de docente/directivo/ambos —una celda tocada a mano, un typo, una
+ * fila vieja con un valor que ya no se usa— degrada al rol por defecto en
+ * vez de propagarse tal cual a la sesión. Nada de esto habilita un
+ * privilegio nuevo: es la misma whitelist que ya exigían crear_usuario y
+ * editar_usuario, aplicada también en el login.
+ */
+function normalizarRol_(rol) {
+  return Object.values(ROLES).includes(rol) ? rol : ROLES.DOCENTE;
+}
+
 function login(usuario, password) {
   const buscado = usuarioNormalizado_(usuario);
   const fila = readRowsWhere_(
@@ -53,10 +65,15 @@ function login(usuario, password) {
     id: fila.id,
     nombre: fila.nombre,
     usuario: fila.usuario,
-    rol: fila.rol,
+    rol: normalizarRol_(fila.rol),
     // El backend siempre revalida es_admin contra la Sheet en las acciones
     // sensibles (ver requireAdministrador_) — esto es solo para que el
     // cliente sepa qué botones mostrar, no es la fuente de verdad.
+    //
+    // `=== true` a propósito (no "truthy"): cualquier valor anómalo que no
+    // sea el booleano true —una celda con "TRUE" en texto, un 1, vacío—
+    // fuerza es_admin=false en vez de propagarlo. El privilegio de admin no
+    // se deduce de una cadena de rol, es esta bandera aparte y nada más.
     es_admin: fila.es_admin === true,
   };
   CacheService.getScriptCache().put(`session:${token}`, JSON.stringify(sesion), SESSION_TTL_SECONDS);

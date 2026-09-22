@@ -16,36 +16,95 @@ function getHeaders_(sheet) {
   return sheet.getRange(1, 1, 1, lastCol).getValues()[0];
 }
 
-/** Lee toda la pestaña y la devuelve como array de objetos {columna: valor}. */
-function readAllRows_(sheetName) {
+// Contenido de cada pestaña ya leído en ESTA ejecución. Una acción típica
+// (revisar una planeación, por ejemplo) leía Usuarios, Config, Cursos y
+// Planeaciones varias veces cada una —esAdministrador_, puedeRevisarCurso_,
+// leerConfig_, findRowById_ + updateRowById_...—, y cada lectura completa
+// de una pestaña cuesta una ida y vuelta al motor de Sheets. Con esto se
+// lee una vez por pestaña y las demás salen de memoria.
+//
+// Vive y muere con la ejecución (cada doPost arranca de cero), y cualquier
+// escritura la invalida: nunca devuelve algo más viejo que lo último que
+// esta misma ejecución escribió. Lo que otra ejecución escriba mientras
+// tanto solo se ve al invalidar de nuevo — por eso cada `waitLock` llama a
+// invalidarCacheHojas_() apenas obtiene el candado.
+const _hojasCache_ = {};
+
+/**
+ * Sin argumentos: olvida todo lo leído (y los últimos ids entregados) —
+ * para llamar justo después de tomar un LockService, cuando otra ejecución
+ * pudo haber escrito mientras se esperaba. Con un nombre: solo esa pestaña,
+ * después de escribirle.
+ */
+function invalidarCacheHojas_(sheetName) {
+  if (sheetName) {
+    delete _hojasCache_[sheetName];
+    return;
+  }
+  Object.keys(_hojasCache_).forEach((k) => { delete _hojasCache_[k]; });
+  Object.keys(_ultimoIdCache_).forEach((k) => { delete _ultimoIdCache_[k]; });
+}
+
+/** {headers, values} de la pestaña: encabezado y datos en UNA sola lectura. */
+function leerHoja_(sheetName) {
+  let hoja = _hojasCache_[sheetName];
+  if (hoja) return hoja;
+
   const sheet = getSheet_(sheetName);
   const lastRow = sheet.getLastRow();
-  const headers = getHeaders_(sheet);
-  if (lastRow < 2 || headers.length === 0) return [];
+  const lastCol = sheet.getLastColumn();
+  if (lastRow < 1 || lastCol === 0) {
+    hoja = { headers: [], values: [] };
+  } else {
+    const todo = sheet.getRange(1, 1, lastRow, lastCol).getValues();
+    hoja = { headers: todo[0], values: todo.slice(1) };
+  }
+  _hojasCache_[sheetName] = hoja;
+  return hoja;
+}
 
-  const values = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
-  return values.map((row, i) => {
-    const obj = { _row: i + 2 }; // fila real en la hoja, útil para updates
-    headers.forEach((h, colIdx) => {
-      obj[h] = row[colIdx];
-    });
-    return obj;
-  });
+function filaComoObjeto_(headers, valores, filaReal) {
+  const obj = { _row: filaReal }; // fila real en la hoja, útil para updates
+  for (let c = 0; c < headers.length; c++) {
+    obj[headers[c]] = valores[c];
+  }
+  return obj;
+}
+
+/** Lee toda la pestaña y la devuelve como array de objetos {columna: valor}. */
+function readAllRows_(sheetName) {
+  const { headers, values } = leerHoja_(sheetName);
+  if (values.length === 0 || headers.length === 0) return [];
+  return values.map((row, i) => filaComoObjeto_(headers, row, i + 2));
 }
 
 function readRowsWhere_(sheetName, predicate) {
-  return readAllRows_(sheetName).filter(predicate);
+  const { headers, values } = leerHoja_(sheetName);
+  if (values.length === 0 || headers.length === 0) return [];
+  const encontradas = [];
+  values.forEach((row, i) => {
+    const obj = filaComoObjeto_(headers, row, i + 2);
+    if (predicate(obj)) encontradas.push(obj);
+  });
+  return encontradas;
 }
 
 function findRowById_(sheetName, id) {
-  const rows = readAllRows_(sheetName);
-  return rows.find((r) => String(r.id) === String(id)) || null;
+  const { headers, values } = leerHoja_(sheetName);
+  const idCol = headers.indexOf('id');
+  if (idCol === -1) return null;
+  const buscado = String(id);
+  // Arma el objeto solo de la fila que coincide, no de toda la pestaña.
+  for (let i = 0; i < values.length; i++) {
+    if (String(values[i][idCol]) === buscado) return filaComoObjeto_(headers, values[i], i + 2);
+  }
+  return null;
 }
 
 /** Agrega una fila nueva; genera id incremental si no viene definido. */
 function appendRow_(sheetName, obj) {
   const sheet = getSheet_(sheetName);
-  const headers = getHeaders_(sheet);
+  const headers = leerHoja_(sheetName).headers;
   if (headers.length === 0) {
     throw new Error(`La pestaña "${sheetName}" no tiene encabezados`);
   }
@@ -56,6 +115,7 @@ function appendRow_(sheetName, obj) {
 
   const row = headers.map((h) => (obj[h] !== undefined ? obj[h] : ''));
   sheet.appendRow(row);
+  invalidarCacheHojas_(sheetName);
   return obj;
 }
 
@@ -95,7 +155,14 @@ function eliminarFilasDonde_(sheetName, predicate) {
     .map((f) => f._row)
     .sort((a, b) => b - a)
     .forEach((fila) => sheet.deleteRow(fila));
+  invalidarCacheHojas_(sheetName);
   return filas.length;
+}
+
+/** Borra una fila que el caller ya tiene leída (con su `_row`). */
+function eliminarFila_(sheetName, fila) {
+  getSheet_(sheetName).deleteRow(fila._row);
+  invalidarCacheHojas_(sheetName);
 }
 
 /**
@@ -110,9 +177,10 @@ function eliminarFilasDonde_(sheetName, predicate) {
  */
 function setCampoDeFila_(sheetName, fila, campo, valor) {
   const sheet = getSheet_(sheetName);
-  const col = getHeaders_(sheet).indexOf(campo);
+  const col = leerHoja_(sheetName).headers.indexOf(campo);
   if (col === -1) return false;
   sheet.getRange(fila._row, col + 1).setValue(valor);
+  invalidarCacheHojas_(sheetName);
   return true;
 }
 
@@ -123,7 +191,7 @@ function setCampoDeFila_(sheetName, fila, campo, valor) {
  */
 function updateRowById_(sheetName, id, cambios) {
   const sheet = getSheet_(sheetName);
-  const headers = getHeaders_(sheet);
+  const headers = leerHoja_(sheetName).headers;
   const row = findRowById_(sheetName, id);
   if (!row) throw new Error(`No se encontró id=${id} en "${sheetName}"`);
 
@@ -141,6 +209,7 @@ function updateRowById_(sheetName, id, cambios) {
   });
   if (cambiosReales.length > 0) {
     sheet.getRange(row._row, 1, 1, headers.length).setValues([nuevaFila]);
+    invalidarCacheHojas_(sheetName);
   }
   return cambiosReales;
 }

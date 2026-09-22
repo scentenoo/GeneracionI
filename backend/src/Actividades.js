@@ -54,6 +54,7 @@ function guardar_actividad(token, datos, fotos) {
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
+  invalidarCacheHojas_();
   try {
     let fotoId = '';
     if (fotos && fotos.foto) {
@@ -103,6 +104,7 @@ function editar_actividad(token, id, datos, fotos) {
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
+  invalidarCacheHojas_();
   try {
     const cambios = {
       curso_id: curso.id,
@@ -159,9 +161,10 @@ function eliminar_actividad(token, id) {
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
+  invalidarCacheHojas_();
   try {
     trasharSiExiste_(fila.foto_drive_id);
-    getSheet_(SHEET_NAMES.ACTIVIDADES).deleteRow(fila._row);
+    eliminarFila_(SHEET_NAMES.ACTIVIDADES, fila);
     return { ok: true };
   } finally {
     lock.releaseLock();

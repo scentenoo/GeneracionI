@@ -41,6 +41,14 @@ class SesionExpirada(ApiError):
     """El token de sesión venció o es inválido — hay que loguearse de nuevo."""
 
 
+class LicenciaExpirada(ApiError):
+    """El periodo de servicio pactado venció (ver Licencia.js en el backend,
+    fuente de verdad de esto — no el reloj de esta computadora). Aparte de
+    ApiError para que tareas.py la reconozca y tape toda la ventana con el
+    aviso fijo, en vez de dejar que la pantalla que la disparó la muestre
+    como un error cualquiera."""
+
+
 class SinConexion(ApiError):
     """No se pudo llegar al servidor: sin internet, o Google no responde.
 
@@ -59,7 +67,7 @@ _SOLO_LECTURA = frozenset({
     "login", "version_actual", "listar_cursos", "listar_todos_los_cursos",
     "listar_usuarios", "obtener_planeaciones", "obtener_planeacion",
     "obtener_foto_planeacion", "revision_del_mes", "mis_devoluciones",
-    "historial_revision",
+    "historial_revision", "obtener_documento_planeacion", "obtener_documento_informe",
     "obtener_estado_mes", "obtener_estudiantes", "buscar_estudiantes",
     "obtener_horas_gestion", "obtener_actividades", "generar_informe_mensual",
     "obtener_informe_mensual", "obtener_avance_sugerido", "obtener_dashboard_directivo",
@@ -76,6 +84,10 @@ _SOLO_LECTURA = frozenset({
     # es tan seguro como reintentar cualquiera de esas lecturas sueltas.
     "batch",
 })
+
+
+# Acciones que aprueban o devuelven algo: siempre contestan {ok, estado, ...}.
+_ACCIONES_DE_REVISION = frozenset({"revisar_planeacion", "revisar_informe", "revisar_hora_gestion"})
 
 
 class _RespuestaTransitoria(Exception):
@@ -188,6 +200,8 @@ def _una_llamada(action: str, params, on_progress: Callable[[int, int], None] | 
 
     if not body.get("ok"):
         error = body.get("error", "Error desconocido")
+        if body.get("licencia_expirada"):
+            raise LicenciaExpirada(error)
         if "sesión" in error.lower() or "sesion" in error.lower():
             raise SesionExpirada(error)
         raise ApiError(error)
@@ -204,6 +218,25 @@ def _una_llamada(action: str, params, on_progress: Callable[[int, int], None] | 
         raise _RespuestaTransitoria(
             ApiError("El servidor respondió algo inesperado al iniciar sesión.\n\nIntente de nuevo.")
         )
+    if action == "mis_devoluciones" and not (
+        isinstance(data, list) and all(isinstance(d, dict) for d in data)
+    ):
+        # Mismo cruce de respuestas: era una lista de textos (el `data` de
+        # otra petición) y el chequeo periódico de devoluciones reventaba
+        # con "'str' object has no attribute 'get'". Es de solo lectura, así
+        # que se reintenta sin riesgo.
+        raise _RespuestaTransitoria(
+            ApiError("El servidor respondió algo inesperado al traer las devoluciones.\n\nIntente de nuevo.")
+        )
+    if action in _ACCIONES_DE_REVISION and not (isinstance(data, dict) and "estado" in data):
+        # Mismo cruce de respuestas: sin este chequeo, `resultado["estado"]`
+        # explotaba con un KeyError feo. No se reintenta (es una escritura:
+        # quizás sí se guardó), así que sube tal cual y la pantalla avisa
+        # que actualice la lista para ver cómo quedó de verdad.
+        raise _RespuestaTransitoria(ApiError(
+            "El servidor respondió algo inesperado.\n\n"
+            "Actualice la lista para ver cómo quedó la revisión."
+        ))
     if action == "obtener_foto_horas_externas" and not (isinstance(data, dict) and "base64" in data):
         # Mismo cruce de respuestas que el de login: bajo carga, esto puede
         # traer el `data` de OTRA petición en vuelo. Sin este chequeo
@@ -297,7 +330,9 @@ def guardar_documento_planeacion(
     """Sube a Drive el .docx de la planeación, que es lo que el informe
     mensual enlaza en la columna «LINK A PLANEACION».
 
-    archivo: {"base64": ..., "mimeType": ...}"""
+    archivo: {"base64": ..., "mimeType": ...}. Con `"en_sitio": True` el
+    backend pisa el contenido del mismo archivo en vez de recrearlo (más
+    rápido, y el id de Drive no cambia); si no puede, cae a recrearlo."""
     return _call("guardar_documento_planeacion", token, planeacion_id, archivo, on_progress=on_progress)
 
 
@@ -321,6 +356,13 @@ def obtener_foto_planeacion(token: str, id_: int) -> list[dict]:
     """Las fotos de clase de una planeación (1 a 3), en base64, para
     regenerar su .docx al editarla. Lista vacía si no tiene fotos."""
     return _call("obtener_foto_planeacion", token, id_)
+
+
+def obtener_documento_planeacion(token: str, id_: int) -> dict | None:
+    """El .docx ya archivado de la planeación, en base64 — para
+    actualizarle solo la hoja de historial al aprobar/devolver sin
+    regenerar todo el documento. None si todavía no tiene uno archivado."""
+    return _call("obtener_documento_planeacion", token, id_)
 
 
 def editar_planeacion(
@@ -513,8 +555,16 @@ def guardar_documento_informe(
     archivado y el revisor lo pueda abrir directo.
 
     archivo: {"base64": ..., "mimeType": ...} — puede pesar bastante si el
-    mes tuvo varias clases con fotos, de ahí on_progress."""
+    mes tuvo varias clases con fotos, de ahí on_progress. `"en_sitio": True`
+    igual que en guardar_documento_planeacion."""
     return _call("guardar_documento_informe", token, curso_id, mes, archivo, on_progress=on_progress)
+
+
+def obtener_documento_informe(token: str, curso_id: int, mes: str) -> dict | None:
+    """El .docx ya archivado del informe, en base64 — para actualizarle
+    solo la hoja de historial al aprobar/devolver. None si todavía no tiene
+    uno archivado."""
+    return _call("obtener_documento_informe", token, curso_id, mes)
 
 
 def guardar_informe_mensual(
@@ -574,11 +624,13 @@ def directivos_sin_curso_del_mes(token: str, mes: str) -> list[dict]:
 
 def revisar_planeacion(token: str, id_: int, aprobar: bool, motivo: str = "") -> dict:
     """El revisor del curso aprueba o devuelve una planeación. Devolver
-    necesita motivo."""
+    necesita motivo. Responde {ok, estado, historial}: el historial ya
+    incluye esta acción."""
     return _call("revisar_planeacion", token, id_, aprobar, motivo)
 
 
 def revisar_informe(token: str, curso_id, mes: str, aprobar: bool, motivo: str = "") -> dict:
+    """Igual que revisar_planeacion, para el informe de un curso y mes."""
     return _call("revisar_informe", token, curso_id, mes, aprobar, motivo)
 
 

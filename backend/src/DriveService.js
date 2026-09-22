@@ -35,6 +35,32 @@ function reemplazarArchivo_(rutaCarpetas, fileIdExistente, base64Data, mimeType,
 }
 
 /**
+ * Cambia el CONTENIDO de un archivo que ya existe, sin moverlo, sin
+ * renombrarlo y conservando su id y sus permisos. Devuelve true si pudo.
+ *
+ * Es lo que usa la revisión (aprobar/devolver) para dejar al día la hoja de
+ * historial del documento: `reemplazarArchivo_` en cambio manda el viejo a
+ * la papelera, busca la carpeta nivel por nivel, crea el archivo nuevo y le
+ * vuelve a poner el permiso de "quien tenga el link" — varios segundos de
+ * Drive de más para cambiar una sola página, y el id cambia (el "Abrir" que
+ * alguien ya tiene abierto se rompe).
+ *
+ * Necesita el servicio avanzado de Drive (appsscript.json). Si no está
+ * habilitado, o algo falla, devuelve false y el caller cae al camino de
+ * siempre: nunca es peor que antes.
+ */
+function actualizarContenidoEnSitio_(fileId, base64Data, mimeType) {
+  if (!fileId || typeof Drive === 'undefined') return false;
+  try {
+    const blob = Utilities.newBlob(Utilities.base64Decode(base64Data), mimeType);
+    Drive.Files.update({}, fileId, blob);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
  * Manda un archivo a la papelera si existe el id. No revienta si ya no
  * está o no es accesible — eso no tiene por qué frenar el borrado o el
  * reemplazo que lo llamó. Compartido por los `eliminar_*` (planeación,
